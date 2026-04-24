@@ -3,7 +3,7 @@
   <defs>
     <style>
       .w-letter { fill: #E8E8E8; font-family: Arial, sans-serif; font-size: 48px; font-weight: 700; }
-      .bg-circle { fill: #6B8E4E; }
+      .bg-circle { fill: #111111; }
     </style>
   </defs>
 
