@@ -208,7 +208,7 @@ class ConfigUpdate(BaseModel):
 @app.get("/landing", response_class=HTMLResponse)
 async def landing(request: Request):
     """Public landing page."""
-    return templates.TemplateResponse("landing.html", {"request": request})
+    return templates.TemplateResponse(request, "landing.html")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -344,8 +344,7 @@ async def home(request: Request, conn=Depends(get_db)):
         "scheduler": scheduler.running,
     }
 
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "index.html", context={
         "metrics": result,
         "waste_by_type": waste_by_type,
         "recent_activity": recent_activity,
@@ -463,8 +462,7 @@ async def dashboard(request: Request, conn=Depends(get_db)):
     daily_burn = float(inaction_row['daily_burn']) if inaction_row else 0
     first_detection = inaction_row['first_detection'] if inaction_row else None
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "dashboard.html", context={
         "kpis": kpis,
         "waste_trend": waste_trend,
         "waste_by_resource": waste_by_resource,
@@ -542,8 +540,7 @@ async def recommendations(
 
     cursor.close()
 
-    return templates.TemplateResponse("recommendations.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "recommendations.html", context={
         "recommendations": recommendations,
         "ec2_recs": ec2_recs,
         "ebs_recs": ebs_recs,
@@ -605,8 +602,7 @@ async def history(
 
     cursor.close()
 
-    return templates.TemplateResponse("history.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "history.html", context={
         "actions": actions,
         "success_count": success_count,
         "failed_count": failed_count,
@@ -641,8 +637,7 @@ async def settings(request: Request, conn=Depends(get_db)):
     stats = cursor.fetchone()
     cursor.close()
 
-    return templates.TemplateResponse("settings.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "settings.html", context={
         "config": config,
         "stats": stats
     })
@@ -824,8 +819,7 @@ async def cloud_resources(
     snapshots.sort(key=lambda x: x['start_time'] or '', reverse=True)
     buckets.sort(key=lambda x: x['name'])
 
-    return templates.TemplateResponse("cloud_resources.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "cloud_resources.html", context={
         "tab": tab,
         "instances": instances,
         "volumes": volumes,
