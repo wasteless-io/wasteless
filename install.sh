@@ -156,8 +156,8 @@ print_step "Tous les prerequis sont satisfaits"
 print_header "2/7 - Configuration de l'environnement Python"
 
 if [ -d "venv" ]; then
-    # Verifier que le venv n'est pas corrompu
-    if ! venv/bin/python3 -c "import pip" &> /dev/null; then
+    # Verifier que le venv n'est pas corrompu (python + pip valides)
+    if ! venv/bin/python3 -c "import pip" &> /dev/null || ! venv/bin/pip --version &> /dev/null; then
         print_warning "Environnement virtuel corrompu detecte — recreation automatique"
         rm -rf venv
         python3 -m venv venv
@@ -357,7 +357,7 @@ print_header "6/7 - Installation de l'interface web"
 
 # Environnement virtuel UI
 if [ -d "ui/venv" ]; then
-    if ! ui/venv/bin/python3 -c "import pip" &> /dev/null; then
+    if ! ui/venv/bin/python3 -c "import pip" &> /dev/null || ! ui/venv/bin/pip --version &> /dev/null; then
         print_warning "Environnement virtuel UI corrompu — recreation automatique"
         rm -rf ui/venv
         python3 -m venv ui/venv
@@ -374,8 +374,28 @@ ui/venv/bin/pip install --upgrade pip -q
 ui/venv/bin/pip install -r ui/requirements.txt -q
 print_step "Dependances UI installees"
 
-# Fichier ui/.env auto-genere depuis le root .env (deja source)
-if [ ! -f "ui/.env" ]; then
+# Fichier ui/.env — toujours mis a jour pour reflechir le chemin courant
+CURRENT_PATH="$(pwd)"
+if [ -f "ui/.env" ]; then
+    UPDATED=0
+    # Mettre a jour WASTELESS_BACKEND_PATH si le projet a ete deplace
+    STORED_PATH=$(grep '^WASTELESS_BACKEND_PATH=' ui/.env | cut -d= -f2)
+    if [ "$STORED_PATH" != "$CURRENT_PATH" ]; then
+        sed -i '' "s|^WASTELESS_BACKEND_PATH=.*|WASTELESS_BACKEND_PATH=$CURRENT_PATH|" ui/.env
+        UPDATED=1
+    fi
+    # Synchroniser le mot de passe DB depuis le root .env
+    STORED_PW=$(grep '^DB_PASSWORD=' ui/.env | cut -d= -f2)
+    if [ "$STORED_PW" != "$DB_PASSWORD" ]; then
+        sed -i '' "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" ui/.env
+        UPDATED=1
+    fi
+    if [ $UPDATED -eq 1 ]; then
+        print_step "ui/.env synchronise avec la configuration courante"
+    else
+        print_step "Configuration UI existante conservee"
+    fi
+else
     cat > ui/.env << UIENV
 # WasteLess UI Configuration - Generated: $(date)
 DB_HOST=${DB_HOST:-localhost}
@@ -383,15 +403,13 @@ DB_PORT=${DB_PORT:-5432}
 DB_NAME=${DB_NAME:-wasteless}
 DB_USER=${DB_USER:-wasteless}
 DB_PASSWORD=${DB_PASSWORD}
-WASTELESS_BACKEND_PATH=$(pwd)
+WASTELESS_BACKEND_PATH=$CURRENT_PATH
 STREAMLIT_SERVER_PORT=8888
 STREAMLIT_SERVER_ADDRESS=localhost
 LOG_LEVEL=INFO
 UIENV
     chmod 600 ui/.env
     print_step "Configuration UI creee (ui/.env)"
-else
-    print_step "Configuration UI existante conservee"
 fi
 
 # Alias wasteless → pointe vers wasteless.sh (CLI racine)
