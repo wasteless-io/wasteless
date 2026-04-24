@@ -33,11 +33,6 @@ def check_dependencies():
         missing.append('pandas')
 
     try:
-        import streamlit
-    except ImportError:
-        missing.append('streamlit')
-
-    try:
         import psycopg2
     except ImportError:
         missing.append('psycopg2-binary')
