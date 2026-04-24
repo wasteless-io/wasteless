@@ -290,6 +290,25 @@ print_info "Demarrage de PostgreSQL via Docker..."
 
 if docker ps | grep -q wasteless-postgres; then
     print_warning "PostgreSQL deja en cours d'execution"
+elif docker ps -a | grep -q wasteless-postgres; then
+    print_warning "Conteneur wasteless-postgres existant detecte (arrete) — tentative de redemarrage..."
+    if ! docker start wasteless-postgres > /dev/null 2>&1; then
+        print_warning "Redemarrage echoue (volumes invalides) — suppression et recreation du conteneur..."
+        docker rm wasteless-postgres > /dev/null
+        docker compose up -d postgres
+        print_step "PostgreSQL recree et demarre"
+    else
+        print_step "PostgreSQL redemarre"
+    fi
+
+    # Attendre que PostgreSQL soit pret
+    print_info "Attente de la disponibilite de PostgreSQL..."
+    for i in {1..30}; do
+        if docker exec wasteless-postgres pg_isready -U wasteless &> /dev/null; then
+            break
+        fi
+        sleep 1
+    done
 else
     docker compose up -d postgres
     print_step "PostgreSQL demarre"
