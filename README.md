@@ -58,9 +58,9 @@ python3 src/detectors/ec2_idle.py          # Detect waste
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
-│                      ui/  (FastAPI)                      │
-│         Dashboard · Recommendations · History            │
-│                    :8888                                 │
+│                      ui/  (FastAPI)                     │
+│         Dashboard · Recommendations · History           │
+│                    :8888                                │
 └─────────────────────────────────────────────────────────┘
 ```
 
