@@ -1,0 +1,548 @@
+{% extends "base.html" %}
+
+{% block title %}Recommendations - Wasteless.io{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+    <h1 style="margin-bottom: 0;">Recommendations</h1>
+    <button type="button" onclick="syncWithAWS()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" id="syncBtn">
+        <span id="syncIcon">&#8635;</span> Sync AWS
+    </button>
+</div>
+
+<!-- Filters + Summary -->
+<div class="card mb-1" style="padding: 0.75rem;">
+    <form method="get" action="/recommendations">
+        <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Min Savings</label>
+                <input type="number" name="min_savings" class="form-input" style="padding: 0.4rem; width: 80px;" value="{{ min_savings }}" min="0" max="1000" step="5">
+            </div>
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Min Confidence</label>
+                <input type="number" name="min_confidence" class="form-input" style="padding: 0.4rem; width: 70px;" value="{{ min_confidence }}" min="0" max="1" step="0.1">
+            </div>
+            <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
+            <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
+                <span><strong>{{ recommendations|length }}</strong> recommendations</span>
+                <span class="text-success">Savings: <strong>{{ "%.2f"|format(total_savings) }}</strong> €/mo</span>
+                <span><strong>{{ "%.0f"|format(avg_confidence * 100) }}%</strong> conf.</span>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Tabs -->
+<div class="card" style="padding: 0.75rem;">
+    <!-- Tab nav -->
+    <div style="display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1rem;">
+        <button id="tab-btn-ec2" onclick="switchTab('ec2')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--primary); margin-bottom: -2px;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--primary);">EC2 Instances <span style="background: var(--primary); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ec2_recs|length }}</span></span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--primary); opacity: 0.7; margin-top: 2px;">AUTOMATED</span>
+        </button>
+        <button id="tab-btn-ebs" onclick="switchTab('ebs')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">EBS Volumes <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ebs_recs|length }}</span></span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL</span>
+        </button>
+        <button id="tab-btn-eip" onclick="switchTab('eip')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Elastic IPs <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ eip_recs|length }}</span></span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL</span>
+        </button>
+        <button id="tab-btn-snap" onclick="switchTab('snap')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Snapshots <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ snap_recs|length }}</span></span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
+        </button>
+    </div>
+
+    <form id="actionsForm">
+        <!-- Action buttons — AUTOMATED (EC2 + EBS) -->
+        <div id="actions-automated" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600);">0 selected</span>
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="button" id="approveBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-success" style="padding: 0.4rem 0.75rem;">
+                    &#9654; Approve Selected
+                </button>
+                <button type="button" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
+                    Reject
+                </button>
+            </div>
+        </div>
+        <!-- Manual notice — EBS / EIP / Snapshots -->
+        <div id="actions-manual" style="display: none; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; gap: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 0.6rem 1rem; flex: 1;">
+                <span style="font-size: 1rem;">&#9998;</span>
+                <span><strong>Manual action required</strong> — delete these resources directly from the <a id="awsConsoleLink" href="https://console.aws.amazon.com/ec2/v2/home" target="_blank" style="color: var(--primary);">AWS Console</a>.</span>
+            </div>
+            <span id="manualSelectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
+            <button type="button" id="markReviewedBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" disabled>
+                Mark as Reviewed
+            </button>
+        </div>
+
+        <!-- EC2 Tab -->
+        <div id="tab-ec2">
+            {% if ec2_recs %}
+            <div class="table-container">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-ec2" onclick="toggleAll('ec2')"></th>
+                            <th style="padding: 0.5rem;">Instance</th>
+                            <th style="padding: 0.5rem;">Type</th>
+                            <th style="padding: 0.5rem;">Action</th>
+                            <th style="padding: 0.5rem;">Why act?</th>
+                            <th style="padding: 0.5rem;">Running for</th>
+                            <th style="padding: 0.5rem;">Avg CPU</th>
+                            <th style="padding: 0.5rem;">Monthly cost</th>
+                            <th style="padding: 0.5rem;">After action</th>
+                            <th style="padding: 0.5rem;">Savings</th>
+                            <th style="padding: 0.5rem;">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in ec2_recs %}
+                        {% set current_cost = rec.monthly_cost or 0 %}
+                        {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                        {% set after_cost = current_cost - savings %}
+                        {% set savings_pct = (savings / current_cost * 100) if current_cost > 0 else 100 %}
+                        <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id[:20] }}</code></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                {% if rec.recommendation_type == 'stop_instance' %}
+                                <span class="badge badge-warning">Stop</span>
+                                {% elif rec.recommendation_type == 'terminate_instance' %}
+                                <span class="badge badge-danger">Terminate</span>
+                                {% else %}
+                                <span class="badge badge-info">Downsize</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{% if rec.recommendation_type == 'stop_instance' %}CPU avg below {{ "%.1f"|format(rec.cpu_avg or 0) }}% for 7d{% elif rec.recommendation_type == 'terminate_instance' %}Stopped, still billing EBS{% else %}Underutilized — {{ "%.1f"|format(rec.cpu_avg or 0) }}% avg CPU{% endif %}</span></td>
+                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(current_cost) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                {% if rec.recommendation_type in ['stop_instance', 'terminate_instance'] %}
+                                <span class="text-success">0.00</span>
+                                {% else %}
+                                <span>{{ "%.2f"|format(after_cost) }}</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <span style="font-size: 0.7rem; color: var(--success);">({{ "%.0f"|format(savings_pct) }}%)</span>
+                                </div>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No idle EC2 instance recommendations</div>
+            {% endif %}
+        </div>
+
+        <!-- EBS Tab -->
+        <div id="tab-ebs" style="display: none;">
+            {% if ebs_recs %}
+            <div class="table-container">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-ebs" onclick="toggleAll('ebs')"></th>
+                            <th style="padding: 0.5rem;">Volume ID</th>
+                            <th style="padding: 0.5rem;">Name</th>
+                            <th style="padding: 0.5rem;">Size / Type</th>
+                            <th style="padding: 0.5rem;">Unattached for</th>
+                            <th style="padding: 0.5rem;">Region</th>
+                            <th style="padding: 0.5rem;">Why delete?</th>
+                            <th style="padding: 0.5rem;">Monthly cost</th>
+                            <th style="padding: 0.5rem;">Savings</th>
+                            <th style="padding: 0.5rem;">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in ebs_recs %}
+                        {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                        <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ebs" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_name or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem; white-space: nowrap;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span> <span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">Not attached to any instance</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <span style="font-size: 0.7rem; color: var(--success);">(100%)</span>
+                                </div>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No orphaned EBS volume recommendations</div>
+            {% endif %}
+        </div>
+
+        <!-- Elastic IPs Tab -->
+        <div id="tab-eip" style="display: none;">
+            {% if eip_recs %}
+            <div class="table-container">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-eip" onclick="toggleAll('eip')"></th>
+                            <th style="padding: 0.5rem;">Allocation ID</th>
+                            <th style="padding: 0.5rem;">Public IP</th>
+                            <th style="padding: 0.5rem;">Idle for</th>
+                            <th style="padding: 0.5rem;">Region</th>
+                            <th style="padding: 0.5rem;">Why release?</th>
+                            <th style="padding: 0.5rem;">Monthly cost</th>
+                            <th style="padding: 0.5rem;">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in eip_recs %}
+                        {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                        <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-eip" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">Not associated to any instance</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: var(--success);"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No unassociated Elastic IP recommendations</div>
+            {% endif %}
+        </div>
+
+        <!-- Snapshots Tab -->
+        <div id="tab-snap" style="display: none;">
+            {% if snap_recs %}
+            <div class="table-container">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-snap" onclick="toggleAll('snap')"></th>
+                            <th style="padding: 0.5rem;">Snapshot ID</th>
+                            <th style="padding: 0.5rem;">Description</th>
+                            <th style="padding: 0.5rem;">Size</th>
+                            <th style="padding: 0.5rem;">Snapshot age</th>
+                            <th style="padding: 0.5rem;">Region</th>
+                            <th style="padding: 0.5rem;">Why review?</th>
+                            <th style="padding: 0.5rem;">Monthly cost</th>
+                            <th style="padding: 0.5rem;">Savings</th>
+                            <th style="padding: 0.5rem;">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in snap_recs %}
+                        {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                        <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-snap" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.snap_description or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
+                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">Old snapshot — verify before deleting</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <span style="font-size: 0.7rem; color: var(--success);">(100%)</span>
+                                </div>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No old snapshot recommendations</div>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+{% if not recommendations %}
+{% set filters_active = min_savings > 0 or min_confidence > 0 %}
+<div class="card mt-1" style="padding: 2.5rem; text-align: center;">
+    {% if filters_active %}
+        <div style="font-size: 2rem; margin-bottom: 0.75rem;">🔍</div>
+        <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations match your filters</p>
+        <p class="text-muted" style="margin-bottom: 1.25rem; font-size: 0.9rem;">Try relaxing the filters to see more results.</p>
+        <a href="/recommendations" class="btn btn-outline" style="padding: 0.4rem 1rem;">Reset filters</a>
+    {% else %}
+        <div style="margin-bottom: 0.75rem;"></div>
+        <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations yet</p>
+        <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">Either everything looks healthy, or the collector hasn't run yet.</p>
+        <div style="display: inline-block; text-align: left; background: var(--gray-100); border-radius: 8px; padding: 1rem 1.5rem; font-size: 0.85rem;">
+            <p style="margin: 0 0 0.5rem; font-weight: 600; color: var(--gray-700);">Run the pipeline to collect data:</p>
+            <code style="display: block;">wasteless collect</code>
+        </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentTab = 'ec2';
+
+    const ALL_TABS = ['ec2', 'ebs', 'eip', 'snap'];
+
+    function switchTab(tab) {
+        currentTab = tab;
+        // Show/hide panels
+        ALL_TABS.forEach(t => {
+            const panel = document.getElementById('tab-' + t);
+            if (panel) panel.style.display = t === tab ? '' : 'none';
+        });
+        // Update tab button styles
+        ALL_TABS.forEach(t => {
+            const btn = document.getElementById('tab-btn-' + t);
+            if (!btn) return;
+            const labelSpan  = btn.querySelector(':scope > span:first-child');
+            const badgeSpan  = btn.querySelector(':scope > span:first-child > span');
+            const sublabel   = btn.querySelector(':scope > span:last-child');
+            if (t === tab) {
+                btn.style.borderBottom = '2px solid var(--primary)';
+                if (labelSpan) labelSpan.style.color = 'var(--primary)';
+                if (badgeSpan) badgeSpan.style.background = 'var(--primary)';
+                if (sublabel)  sublabel.style.color = 'var(--primary)';
+            } else {
+                btn.style.borderBottom = '2px solid transparent';
+                if (labelSpan) labelSpan.style.color = 'var(--gray-600)';
+                if (badgeSpan) badgeSpan.style.background = 'var(--gray-400)';
+                if (sublabel)  sublabel.style.color = 'var(--gray-500)';
+                // Uncheck selectAll of inactive tab
+                const sa = document.getElementById('selectAll-' + t);
+                if (sa) sa.checked = false;
+            }
+        });
+        // Show automated vs manual action bar
+        const isAutomated = tab === 'ec2';
+        document.getElementById('actions-automated').style.display = isAutomated ? 'flex' : 'none';
+        document.getElementById('actions-manual').style.display    = isAutomated ? 'none' : 'flex';
+
+        updateSelectedCount();
+    }
+
+    function toggleAll(tab) {
+        const checkboxes = document.querySelectorAll('.rec-checkbox-' + tab);
+        const selectAll = document.getElementById('selectAll-' + tab);
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        updateSelectedCount();
+    }
+
+    function toggleRow(row, event) {
+        if (event.target.type === 'checkbox') return;
+        const checkbox = row.querySelector('.rec-checkbox');
+        checkbox.checked = !checkbox.checked;
+        updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+        const count = document.querySelectorAll('.rec-checkbox-' + currentTab + ':checked').length;
+        if (currentTab === 'ec2') {
+            document.getElementById('selectedCount').textContent = count + ' selected';
+            const approveBtn = document.querySelector('#actions-automated .btn-success');
+            const rejectBtn  = document.querySelector('#actions-automated .btn-outline');
+            if (approveBtn) { approveBtn.disabled = count === 0; approveBtn.style.opacity = count === 0 ? '0.4' : '1'; approveBtn.style.cursor = count === 0 ? 'not-allowed' : 'pointer'; }
+            if (rejectBtn)  { rejectBtn.disabled  = count === 0; rejectBtn.style.opacity  = count === 0 ? '0.4' : '1'; rejectBtn.style.cursor  = count === 0 ? 'not-allowed' : 'pointer'; }
+        } else {
+            const manualCount = document.getElementById('manualSelectedCount');
+            if (manualCount) manualCount.textContent = count + ' selected';
+            const btn = document.getElementById('markReviewedBtn');
+            if (btn) { btn.disabled = count === 0; btn.style.opacity = count === 0 ? '0.4' : '1'; btn.style.cursor = count === 0 ? 'pointer' : 'pointer'; }
+        }
+    }
+
+    function getSelectedIds() {
+        const checkboxes = document.querySelectorAll('.rec-checkbox:checked');
+        return Array.from(checkboxes).map(cb => parseInt(cb.value));
+    }
+
+    async function executeAction(action, dryRun = true) {
+        const ids = getSelectedIds();
+        if (ids.length === 0) {
+            alert('Please select at least one recommendation');
+            return;
+        }
+
+        const actionText = action === 'approve' ? 'approve' : 'reject';
+        if (!confirm('Are you sure you want to ' + actionText + ' ' + ids.length + ' recommendation(s)?')) {
+            return;
+        }
+
+        try {
+            const response = await api('/api/actions', {
+                method: 'POST',
+                body: JSON.stringify({
+                    recommendation_ids: ids,
+                    action: action,
+                    dry_run: dryRun
+                })
+            });
+
+            console.log('API Response:', response);  // Debug log
+            const successCount = response.results.filter(r => r.success).length;
+
+            // Remove successful rows from table instantly
+            response.results.forEach(result => {
+                console.log('Processing result:', result);  // Debug log
+                if (result.success) {
+                    // Use String() to ensure type match with checkbox value attribute
+                    const checkbox = document.querySelector(`input.rec-checkbox[value="${String(result.recommendation_id)}"]`);
+                    console.log('Found checkbox:', checkbox);  // Debug log
+                    if (checkbox) {
+                        const row = checkbox.closest('tr');
+                        if (row) {
+                            row.remove();
+                            console.log('Removed row for rec_id:', result.recommendation_id);
+                        }
+                    }
+                } else {
+                    console.log('Action failed for rec_id:', result.recommendation_id, 'Error:', result.error);
+                }
+            });
+
+            // Update counters immediately
+            updateSelectedCount();
+            updateSummary();
+
+            // Show empty message if no rows left in current tab
+            const tabEl = document.getElementById('tab-' + currentTab);
+            const remainingRows = tabEl.querySelectorAll('.rec-checkbox').length;
+            if (remainingRows === 0) {
+                const tc = tabEl.querySelector('.table-container');
+                if (tc) tc.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--gray-500);">No more recommendations in this tab</div>';
+            }
+
+            // Show success message
+            showToast(successCount + '/' + ids.length + ' actions completed successfully!', 'success');
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    function updateSummary() {
+        const count = document.querySelectorAll('.rec-checkbox').length;
+        const countSpan = document.querySelector('.card.mb-1 strong');
+        if (countSpan) countSpan.textContent = count;
+    }
+
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            background: ${type === 'success' ? 'var(--success)' : 'var(--danger)'};
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    async function syncWithAWS() {
+        const btn = document.getElementById('syncBtn');
+        const icon = document.getElementById('syncIcon');
+
+        // Disable button and show loading
+        btn.disabled = true;
+        icon.style.animation = 'spin 1s linear infinite';
+        btn.innerHTML = '<span id="syncIcon" style="animation: spin 1s linear infinite;">&#8635;</span> Syncing...';
+
+        try {
+            const response = await api('/api/sync-aws', { method: 'POST' });
+
+            if (response.obsolete > 0) {
+                alert(`Sync complete!\n\n${response.obsolete} recommendation(s) marked as obsolete.\n${response.synced} instance(s) updated.\n\nPage will refresh.`);
+                refreshData();
+            } else {
+                alert(`Sync complete!\n\nAll ${response.total_checked} recommendations are up to date.`);
+                btn.disabled = false;
+                btn.innerHTML = '<span id="syncIcon">&#8635;</span> Sync AWS';
+            }
+        } catch (error) {
+            alert('Sync error: ' + error.message);
+            btn.disabled = false;
+            btn.innerHTML = '<span id="syncIcon">&#8635;</span> Sync AWS';
+        }
+    }
+</script>
+<style>
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wasteless - Open Source Cloud Cost Optimization</title>
+    <meta name="description" content="Automatically detect and remediate idle AWS resources. Save up to 40% on your cloud bill with our open-source FinOps platform.">
+    <link rel="icon" href="/static/images/favicon.svg" type="image/svg+xml">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --black: #000000;
+            --white: #ffffff;
+            --gray-50: #fafafa;
+            --gray-100: #f4f4f5;
+            --gray-200: #e4e4e7;
+            --gray-300: #d4d4d8;
+            --gray-400: #a1a1aa;
+            --gray-500: #71717a;
+            --gray-600: #52525b;
+            --gray-700: #3f3f46;
+            --gray-800: #27272a;
+            --gray-900: #18181b;
+            --success: #22c55e;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--gray-900);
+            line-height: 1.6;
+            background: var(--white);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Navbar */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--gray-200);
+            z-index: 1000;
+        }
+
+        .navbar .container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+        }
+
+        .logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--black);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--gray-600);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--black);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--black);
+            color: var(--white);
+        }
+
+        .btn-primary:hover {
+            background: var(--gray-800);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--gray-300);
+            color: var(--gray-700);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--black);
+            color: var(--black);
+        }
+
+        .btn-lg {
+            padding: 14px 28px;
+            font-size: 1rem;
+        }
+
+        /* Hero */
+        .hero {
+            padding: 140px 0 80px;
+            text-align: center;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: var(--gray-100);
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--gray-600);
+            margin-bottom: 24px;
+        }
+
+        .hero-badge .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -1.5px;
+            margin-bottom: 20px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--gray-600);
+            max-width: 600px;
+            margin: 0 auto 32px;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .hero-image {
+            margin-top: 60px;
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .hero-image img {
+            width: 100%;
+            display: block;
+        }
+
+        /* Stats */
+        .stats {
+            padding: 60px 0;
+            background: var(--gray-50);
+            border-top: 1px solid var(--gray-200);
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            text-align: center;
+        }
+
+        .stat-item h3 {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--black);
+            margin-bottom: 8px;
+        }
+
+        .stat-item p {
+            color: var(--gray-500);
+            font-size: 0.95rem;
+        }
+
+        /* Problem */
+        .problem {
+            padding: 100px 0;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-header h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin-bottom: 16px;
+        }
+
+        .section-header p {
+            font-size: 1.1rem;
+            color: var(--gray-500);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .problem-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .problem-card {
+            padding: 32px;
+            background: var(--white);
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .problem-card .icon {
+            width: 48px;
+            height: 48px;
+            background: var(--gray-100);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 1.5rem;
+        }
+
+        .problem-card h3 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--danger);
+            margin-bottom: 8px;
+        }
+
+        .problem-card p {
+            color: var(--gray-600);
+            font-size: 0.95rem;
+        }
+
+        /* How it works */
+        .how-it-works {
+            padding: 100px 0;
+            background: var(--black);
+            color: var(--white);
+        }
+
+        .how-it-works .section-header h2 {
+            color: var(--white);
+        }
+
+        .how-it-works .section-header p {
+            color: var(--gray-400);
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+        }
+
+        .step {
+            text-align: center;
+        }
+
+        .step-number {
+            width: 48px;
+            height: 48px;
+            background: var(--white);
+            color: var(--black);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.25rem;
+            margin: 0 auto 20px;
+        }
+
+        .step h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .step p {
+            color: var(--gray-400);
+            font-size: 0.95rem;
+        }
+
+        /* Features */
+        .features {
+            padding: 100px 0;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .feature-card {
+            padding: 28px;
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--gray-300);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        .feature-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .feature-card p {
+            color: var(--gray-500);
+            font-size: 0.9rem;
+        }
+
+        /* Differentiators */
+        .differentiators {
+            padding: 100px 0;
+            background: var(--gray-50);
+        }
+
+        .diff-table {
+            max-width: 700px;
+            margin: 0 auto;
+            background: var(--white);
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+            overflow: hidden;
+        }
+
+        .diff-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .diff-table th,
+        .diff-table td {
+            padding: 16px 24px;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .diff-table th {
+            background: var(--gray-50);
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .diff-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .diff-table td:first-child {
+            font-weight: 500;
+        }
+
+        .check {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .cross {
+            color: var(--gray-400);
+        }
+
+        /* Integrations */
+        .integrations {
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .integrations h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .integrations p {
+            color: var(--gray-500);
+            margin-bottom: 40px;
+        }
+
+        .integration-logos {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 48px;
+            flex-wrap: wrap;
+            opacity: 0.7;
+        }
+
+        .integration-logos span {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--gray-500);
+        }
+
+        /* Pricing */
+        .pricing {
+            padding: 100px 0;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .pricing-card {
+            padding: 40px;
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+        }
+
+        .pricing-card.featured {
+            border-color: var(--black);
+            position: relative;
+        }
+
+        .pricing-card.featured::before {
+            content: 'Popular';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--black);
+            color: var(--white);
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .pricing-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .pricing-card .price {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .pricing-card .price span {
+            font-size: 1rem;
+            font-weight: 400;
+            color: var(--gray-500);
+        }
+
+        .pricing-card .description {
+            color: var(--gray-500);
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+
+        .pricing-card ul {
+            list-style: none;
+            margin-bottom: 32px;
+        }
+
+        .pricing-card li {
+            padding: 8px 0;
+            font-size: 0.95rem;
+            color: var(--gray-600);
+        }
+
+        .pricing-card li::before {
+            content: '~';
+            margin-right: 10px;
+            color: var(--gray-400);
+        }
+
+        .pricing-card .btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* CTA */
+        .cta {
+            padding: 100px 0;
+            background: var(--black);
+            color: var(--white);
+            text-align: center;
+        }
+
+        .cta h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin-bottom: 16px;
+        }
+
+        .cta p {
+            color: var(--gray-400);
+            font-size: 1.1rem;
+            margin-bottom: 32px;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .cta .btn-primary {
+            background: var(--white);
+            color: var(--black);
+        }
+
+        .cta .btn-primary:hover {
+            background: var(--gray-200);
+        }
+
+        .cta .btn-outline {
+            border-color: var(--gray-600);
+            color: var(--white);
+        }
+
+        .cta .btn-outline:hover {
+            border-color: var(--white);
+        }
+
+        /* Footer */
+        .footer {
+            padding: 60px 0 40px;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr repeat(3, 1fr);
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .footer-brand .logo {
+            margin-bottom: 12px;
+            display: inline-block;
+        }
+
+        .footer-brand p {
+            color: var(--gray-500);
+            font-size: 0.9rem;
+        }
+
+        .footer-col h4 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--gray-400);
+            margin-bottom: 16px;
+        }
+
+        .footer-col ul {
+            list-style: none;
+        }
+
+        .footer-col li {
+            margin-bottom: 10px;
+        }
+
+        .footer-col a {
+            color: var(--gray-600);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .footer-col a:hover {
+            color: var(--black);
+        }
+
+        .footer-bottom {
+            padding-top: 24px;
+            border-top: 1px solid var(--gray-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-bottom p {
+            color: var(--gray-400);
+            font-size: 0.85rem;
+        }
+
+        .footer-social {
+            display: flex;
+            gap: 16px;
+        }
+
+        .footer-social a {
+            color: var(--gray-400);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .footer-social a:hover {
+            color: var(--black);
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .hero h1 {
+                font-size: 2.25rem;
+            }
+
+            .hero p {
+                font-size: 1rem;
+            }
+
+            .stats-grid,
+            .problem-grid,
+            .steps,
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .pricing-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-header h2 {
+                font-size: 2rem;
+            }
+
+            .cta h2 {
+                font-size: 2rem;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate {
+            animation: fadeInUp 0.6s ease forwards;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="logo">WASTELESS</a>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+                <li><a href="https://github.com/wastelessio/wasteless" target="_blank">GitHub</a></li>
+                <li><a href="/dashboard" class="btn btn-primary">Get Started</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-badge">
+                <span class="dot"></span>
+                Open Source
+            </div>
+            <h1>Stop Wasting Money on Idle Cloud Resources</h1>
+            <p>Open-source FinOps platform that automatically detects and remediates cloud waste. Cut your AWS bill by up to 40%.</p>
+            <div class="hero-cta">
+                <a href="/dashboard" class="btn btn-primary btn-lg">Start Free</a>
+                <a href="#how-it-works" class="btn btn-outline btn-lg">See How It Works</a>
+            </div>
+            <div class="hero-image">
+                <img src="/static/images/dashboard-preview.png" alt="Wasteless Dashboard" onerror="this.parentElement.innerHTML='<div style=&quot;padding:60px;background:var(--gray-100);text-align:center;color:var(--gray-400)&quot;>Dashboard Preview</div>'">
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h3>up to 40%</h3>
+                    <p>Potential savings on cloud costs</p>
+                </div>
+                <div class="stat-item">
+                    <h3>5 min</h3>
+                    <p>Setup with existing AWS credentials</p>
+                </div>
+                <div class="stat-item">
+                    <h3>24/7</h3>
+                    <p>Continuous monitoring</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem -->
+    <section class="problem">
+        <div class="container">
+            <div class="section-header">
+                <h2>Your Cloud is Bleeding Money</h2>
+                <p>Most organizations are unaware of how much they waste on unused resources.</p>
+            </div>
+            <div class="problem-grid">
+                <div class="problem-card">
+                    <div class="icon">$</div>
+                    <h3>35%</h3>
+                    <p>of cloud spend is wasted on idle or underutilized resources</p>
+                </div>
+                <div class="problem-card">
+                    <div class="icon">~</div>
+                    <h3>8+ hrs</h3>
+                    <p>spent weekly on manual detection and cleanup tasks</p>
+                </div>
+                <div class="problem-card">
+                    <div class="icon">!</div>
+                    <h3>90%</h3>
+                    <p>of teams don't act on optimization recommendations</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <h2>Detect. Recommend. Remediate.</h2>
+                <p>A simple three-step process to eliminate cloud waste.</p>
+            </div>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Detect</h3>
+                    <p>Continuously monitors CPU, memory, and network metrics across all your EC2 instances.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Analyze</h3>
+                    <p>Smart confidence scoring identifies true waste vs. legitimate low-usage workloads.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Remediate</h3>
+                    <p>One-click stop or terminate with dry-run mode for safety. Full audit trail included.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-header">
+                <h2>Everything You Need</h2>
+                <p>Powerful features to take control of your cloud costs.</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Real-time Dashboard</h3>
+                    <p>KPIs, savings metrics, and recommendations overview.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Smart Recommendations</h3>
+                    <p>Confidence-scored actions with estimated monthly savings.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Dry-Run Mode</h3>
+                    <p>Test actions safely before executing in production.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Auto-Sync</h3>
+                    <p>Background sync every 5 minutes with your AWS account.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Action History</h3>
+                    <p>Complete audit trail of all remediations and changes.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Cloud Inventory</h3>
+                    <p>Live view of all EC2 instances across regions.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Differentiators -->
+    <section class="differentiators">
+        <div class="container">
+            <div class="section-header">
+                <h2>Why Wasteless?</h2>
+                <p>Open-source, self-hosted, and built for engineers.</p>
+            </div>
+            <div class="diff-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th>Wasteless</th>
+                            <th>Others</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Open Source</td>
+                            <td class="check">Yes</td>
+                            <td class="cross">No</td>
+                        </tr>
+                        <tr>
+                            <td>Self-Hosted</td>
+                            <td class="check">Yes</td>
+                            <td class="cross">No</td>
+                        </tr>
+                        <tr>
+                            <td>Auto-Remediation</td>
+                            <td class="check">Built-in</td>
+                            <td class="cross">Manual only</td>
+                        </tr>
+                        <tr>
+                            <td>No Vendor Lock-in</td>
+                            <td class="check">Yes</td>
+                            <td class="cross">No</td>
+                        </tr>
+                        <tr>
+                            <td>Setup Time</td>
+                            <td class="check">5 minutes</td>
+                            <td class="cross">Days/Weeks</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Integrations -->
+    <section class="integrations">
+        <div class="container">
+            <h2>Built for Modern Infrastructure</h2>
+            <p>Integrates with the tools you already use.</p>
+            <div class="integration-logos">
+                <span>AWS</span>
+                <span>PostgreSQL</span>
+                <span>Python</span>
+                <span>FastAPI</span>
+                <span>Docker</span>
+            </div>
+            <p style="margin-top: 24px; color: var(--gray-400); font-size: 0.9rem;">Azure, GCP, and Kubernetes coming soon</p>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pricing" id="pricing">
+        <div class="container">
+            <div class="section-header">
+                <h2>100% Free During Beta</h2>
+                <p>We're building in public. Use everything for free while we iterate.</p>
+            </div>
+            <div style="max-width: 500px; margin: 0 auto;">
+                <div class="pricing-card featured" style="text-align: center;">
+                    <h3>Open Source</h3>
+                    <div class="price">Free</div>
+                    <p class="description">Self-hosted, unlimited, forever</p>
+                    <ul style="text-align: left; margin-bottom: 24px;">
+                        <li>Unlimited EC2 instances</li>
+                        <li>All features included</li>
+                        <li>Auto-remediation</li>
+                        <li>Full source code access</li>
+                        <li>Community support via GitHub</li>
+                    </ul>
+                    <a href="/dashboard" class="btn btn-primary" style="width: 100%; justify-content: center;">Start Free Now</a>
+                </div>
+
+                <!-- Waitlist -->
+                <div style="margin-top: 40px; padding: 32px; background: var(--gray-50); border-radius: 12px; text-align: center;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 8px;">Want a managed cloud version?</h3>
+                    <p style="color: var(--gray-500); font-size: 0.9rem; margin-bottom: 20px;">Join the waitlist. We'll notify you when it's ready.</p>
+                    <form id="waitlist-form" style="display: flex; gap: 8px; max-width: 400px; margin: 0 auto;">
+                        <input type="email" placeholder="you@company.com" required
+                               style="flex: 1; padding: 12px 16px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.9rem;">
+                        <button type="submit" class="btn btn-primary">Join</button>
+                    </form>
+                    <p id="waitlist-message" style="margin-top: 12px; font-size: 0.85rem; color: var(--success); display: none;"></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta">
+        <div class="container">
+            <h2>Start Saving Today</h2>
+            <p>Deploy in 5 minutes. See your first savings in hours.</p>
+            <div class="cta-buttons">
+                <a href="/dashboard" class="btn btn-primary btn-lg">Get Started Free</a>
+                <a href="https://github.com/wastelessio/wasteless" class="btn btn-outline btn-lg" target="_blank">Star on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a href="/" class="logo">WASTELESS</a>
+                    <p>Cloud cost optimization, automated.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Product</h4>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#pricing">Pricing</a></li>
+                        <li><a href="/dashboard">Dashboard</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="https://github.com/wastelessio/wasteless" target="_blank">Documentation</a></li>
+                        <li><a href="https://github.com/wastelessio/wasteless" target="_blank">GitHub</a></li>
+                        <li><a href="#">Changelog</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Company</h4>
+                    <ul>
+                        <li><a href="#">About</a></li>
+                        <li><a href="#">Contact</a></li>
+                        <li><a href="#">Privacy</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Wasteless. All rights reserved.</p>
+                <div class="footer-social">
+                    <a href="https://github.com/wastelessio/wasteless" target="_blank">GitHub</a>
+                    <a href="#">Twitter</a>
+                    <a href="#">LinkedIn</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Waitlist form handler
+        document.getElementById('waitlist-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = this.querySelector('input[type="email"]').value;
+            const message = document.getElementById('waitlist-message');
+            const btn = this.querySelector('button');
+
+            btn.textContent = '...';
+            btn.disabled = true;
+
+            // Store in localStorage for MVP (replace with API call later)
+            try {
+                const waitlist = JSON.parse(localStorage.getItem('wasteless_waitlist') || '[]');
+                if (!waitlist.includes(email)) {
+                    waitlist.push(email);
+                    localStorage.setItem('wasteless_waitlist', JSON.stringify(waitlist));
+                }
+
+                // Show success
+                message.textContent = "You're on the list! We'll be in touch.";
+                message.style.display = 'block';
+                this.querySelector('input').value = '';
+                btn.textContent = 'Joined';
+            } catch (err) {
+                message.textContent = 'Something went wrong. Try again.';
+                message.style.color = 'var(--danger)';
+                message.style.display = 'block';
+                btn.textContent = 'Join';
+                btn.disabled = false;
+            }
+        });
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

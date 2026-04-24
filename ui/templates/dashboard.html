@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Wasteless.io{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom: 1rem;">
+    <h1 style="margin-bottom: 0.25rem;">Dashboard</h1>
+</div>
+
+<!-- KPIs Row 1 — Financial View -->
+<div class="card mb-1" style="padding: 1rem;">
+    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-400); font-weight: 600; margin-bottom: 0.75rem;">Financial Overview</div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem;">
+        <!-- Monthly Waste -->
+        <div style="text-align: center;">
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+                <span style="background: var(--warning); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">&#9888;</span>
+            </div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--warning);">{{ "%.2f"|format(kpis.potential_monthly or 0) }} <span style="font-size: 0.9rem; font-weight: 400;">€</span></div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Monthly Waste</div>
+            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">{{ "%.0f"|format((kpis.potential_monthly or 0) * 12) }} €/year</div>
+        </div>
+
+        <!-- Savings Realized -->
+        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+                <span style="background: {% if (kpis.cumulative_savings or 0) > 0 %}var(--success){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">&#10003;</span>
+            </div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: {% if (kpis.cumulative_savings or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(kpis.cumulative_savings or 0) }} <span style="font-size: 0.9rem; font-weight: 400;">€</span></div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Savings Realized</div>
+            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">Since launch</div>
+        </div>
+
+        <!-- ROI -->
+        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
+            {% set roi = ((kpis.cumulative_savings or 0) / (kpis.potential_monthly or 1) * 100) %}
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+                <span style="background: {% if roi >= 50 %}var(--success){% elif roi > 0 %}var(--primary){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 700;">ROI</span>
+            </div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: {% if roi >= 50 %}var(--success){% elif roi > 0 %}var(--primary){% else %}var(--gray-400){% endif %};">{{ "%.0f"|format(roi) }}<span style="font-size: 0.9rem; font-weight: 400;"> %</span></div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Capture Rate</div>
+            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">Saved / Waste identified</div>
+        </div>
+
+        <!-- Last Scan -->
+        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
+            {% if kpis.last_analysis %}
+            {% set hours_ago = ((now() - kpis.last_analysis).total_seconds() / 3600) | int %}
+            {% set days_ago = (hours_ago / 24) | int %}
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+                <span style="background: {% if hours_ago < 24 %}var(--success){% elif hours_ago < 48 %}var(--warning){% else %}var(--danger){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">&#128337;</span>
+            </div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--gray-800);">{{ kpis.last_analysis.strftime('%H:%M') }}</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Last Scan</div>
+            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">
+                {{ kpis.last_analysis.strftime('%d %b') }} · {% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}
+            </div>
+            {% else %}
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+                <span style="background: var(--gray-300); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">&#128337;</span>
+            </div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--gray-400);">—</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Last Scan</div>
+            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">No scan yet</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- KPIs Row 2 — Operational View -->
+<div class="card mb-1" style="padding: 1rem;">
+    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-400); font-weight: 600; margin-bottom: 0.75rem;">Operational Status</div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
+        <!-- Resources Monitored -->
+        <div style="text-align: center;">
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--gray-800);">{{ kpis.waste_count or 0 }}</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Resources Monitored</div>
+            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">waste detected</div>
+        </div>
+
+        <!-- Actions Pending -->
+        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
+            <div style="font-size: 1.75rem; font-weight: 700; color: {% if (kpis.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ kpis.pending_count or 0 }}</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Actions Pending</div>
+            <div style="margin-top: 0.35rem;">
+                {% if (kpis.pending_count or 0) > 0 %}
+                <a href="/recommendations" style="font-size: 0.78rem; color: var(--primary); text-decoration: none; font-weight: 500;">Review &rarr;</a>
+                {% else %}
+                <span style="font-size: 0.8rem; color: var(--gray-400);">All clear</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Success Rate -->
+        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
+            <div style="font-size: 1.75rem; font-weight: 700; color: {% if (kpis.success_rate or 0) >= 80 %}var(--success){% elif (kpis.success_rate or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ "%.0f"|format(kpis.success_rate or 0) }}<span style="font-size: 0.9rem; font-weight: 400;"> %</span></div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Success Rate</div>
+            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">of executed actions</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem;">
+
+    <!-- Cost by Resource Type (donut) -->
+    <div class="card" style="padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <div>
+                <h3 style="margin: 0; font-size: 1rem;">Cost by Resource Type</h3>
+                <span style="font-size: 0.75rem; color: var(--gray-500);">Monthly waste distribution</span>
+            </div>
+            <span style="font-size: 0.78rem; color: var(--gray-400);">€/mo</span>
+        </div>
+        {% if waste_by_resource %}
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: center;">
+            <div style="height: 180px; position: relative;">
+                <canvas id="costByResourceChart"></canvas>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                {% set colors = ['#667eea', '#ed8936', '#f56565', '#48bb78', '#805ad5'] %}
+                {% set total_eur = waste_by_resource | sum(attribute='total_eur') %}
+                {% for item in waste_by_resource %}
+                {% set pct = ((item.total_eur or 0) / total_eur * 100) if total_eur > 0 else 0 %}
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="width: 10px; height: 10px; border-radius: 50%; background: {{ colors[loop.index0 % 5] }}; flex-shrink: 0;"></span>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 0.8rem; color: var(--gray-700); font-weight: 500;">
+                            {% if item.resource_type == 'ebs_snapshot' %}Snapshots
+                            {% elif item.resource_type == 'ebs_volume' %}EBS Volumes
+                            {% elif item.resource_type == 'ec2_instance' %}EC2 Instances
+                            {% elif item.resource_type == 'elastic_ip' %}Elastic IPs
+                            {% else %}{{ item.resource_type | replace('_',' ') | title }}{% endif %}
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--gray-500);">{{ "%.2f"|format(item.total_eur or 0) }} € · {{ "%.0f"|format(pct) }}%</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div style="height: 180px; display: flex; align-items: center; justify-content: center;">
+            <p class="text-muted" style="margin: 0;">No data yet</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- B: Daily Burn Rate -->
+    <div class="card" style="padding: 1rem; display: flex; flex-direction: column;">
+        <div style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem;">Daily Burn Rate</h3>
+            <span style="font-size: 0.75rem; color: var(--gray-500);">Current unresolved waste</span>
+        </div>
+        <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center;">
+            <div style="font-size: 2.25rem; font-weight: 700; color: {% if daily_burn > 1 %}var(--danger){% elif daily_burn > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">
+                {{ "%.2f"|format(daily_burn) }} <span style="font-size: 1rem; font-weight: 400; color: var(--gray-500);">€/day</span>
+            </div>
+            <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem;">
+                {{ "%.2f"|format(daily_burn * 30) }} €/mo · {{ "%.0f"|format(daily_burn * 365) }} €/yr
+            </div>
+        </div>
+        {% if waste_trend %}
+        <div style="height: 50px; position: relative; margin-top: 0.5rem;">
+            <canvas id="burnSparkline"></canvas>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- D: Age Distribution -->
+    <div class="card" style="padding: 1rem;">
+        <div style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem;">Age Distribution</h3>
+            <span style="font-size: 0.75rem; color: var(--gray-500);">How long resources have been wasting</span>
+        </div>
+        {% if age_distribution %}
+        {% set max_cnt = age_distribution | map(attribute='cnt') | max %}
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem;">
+            {% for bucket in age_distribution %}
+            {% set color = 'var(--success)' if bucket.min_age <= 30 else ('var(--warning)' if bucket.min_age <= 90 else 'var(--danger)') %}
+            {% set pct = (bucket.cnt / max_cnt * 100) if max_cnt > 0 else 0 %}
+            <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.2rem;">
+                    <span style="color: var(--gray-700); font-weight: 500;">{{ bucket.age_bucket }}</span>
+                    <span style="color: var(--gray-500);">{{ bucket.cnt }} res · {{ "%.2f"|format(bucket.total_eur) }} €/mo</span>
+                </div>
+                <div style="height: 8px; background: var(--gray-100); border-radius: 4px; overflow: hidden;">
+                    <div style="height: 100%; width: {{ pct }}%; background: {{ color }}; border-radius: 4px; transition: width 0.3s;"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="height: 140px; display: flex; align-items: center; justify-content: center;">
+            <p class="text-muted" style="margin: 0;">No data yet</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ROI Summary -->
+<div class="card mt-1" style="padding: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <h3 style="margin: 0; font-size: 1rem;">ROI Summary</h3>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; font-size: 0.85rem;">
+        <!-- Total Saved -->
+        <div style="text-align: center; padding: 0.75rem; background: rgba(72, 187, 120, 0.1); border-radius: 8px;">
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--success);">{{ "%.2f"|format(kpis.cumulative_savings or 0) }} €</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600);">Total Saved</div>
+        </div>
+        <!-- Potential if acted -->
+        <div style="text-align: center; padding: 0.75rem; background: rgba(237, 137, 54, 0.1); border-radius: 8px;">
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--warning);">{{ "%.2f"|format((kpis.potential_monthly or 0) * 12) }} €</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600);">Potential/year</div>
+        </div>
+        <!-- Capture Rate -->
+        <div style="text-align: center; padding: 0.75rem; background: rgba(102, 126, 234, 0.1); border-radius: 8px;">
+            {% set total_identified = (kpis.cumulative_savings or 0) + (kpis.potential_monthly or 0) %}
+            {% set capture_rate = ((kpis.cumulative_savings or 0) / total_identified * 100) if total_identified > 0 else 0 %}
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">{{ "%.0f"|format(capture_rate) }}%</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600);">Capture Rate</div>
+        </div>
+        <!-- Actions Executed -->
+        <div style="text-align: center; padding: 0.75rem; background: rgba(160, 174, 192, 0.1); border-radius: 8px;">
+            {% set total_actions = (100 / (kpis.success_rate or 1)) * (kpis.success_rate or 0) / 100 if kpis.success_rate else 0 %}
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--gray-600);">{{ kpis.waste_count or 0 }} / {{ "%.0f"|format(kpis.waste_count or 0) }}</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600);">Pending / Total</div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card mt-1" style="padding: 0.75rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; gap: 1.5rem; font-size: 0.85rem;">
+            <a href="/recommendations" style="text-decoration: none; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">&#8594;</span>
+                <strong>Review Recommendations</strong>
+            </a>
+            <a href="/history" style="text-decoration: none; color: var(--gray-600); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--gray-300); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">&#128196;</span>
+                View History
+            </a>
+            <a href="/settings" style="text-decoration: none; color: var(--gray-600); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--gray-300); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">&#9881;</span>
+                Settings
+            </a>
+        </div>
+        <button onclick="refreshData()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Refresh</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/chart.umd.min.js"></script>
+<script>
+{% if waste_by_resource %}
+// Cost by Resource Type — donut
+new Chart(document.getElementById('costByResourceChart'), {
+    type: 'doughnut',
+    data: {
+        labels: [{% for item in waste_by_resource %}'{{ item.resource_type }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for item in waste_by_resource %}{{ "%.4f"|format(item.total_eur or 0) }}{% if not loop.last %},{% endif %}{% endfor %}],
+            backgroundColor: ['#667eea', '#ed8936', '#f56565', '#48bb78', '#805ad5'],
+            borderWidth: 0,
+            hoverOffset: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '68%',
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: ctx => ` ${ctx.parsed.toFixed(2)} €/mo`
+                }
+            }
+        }
+    }
+});
+{% endif %}
+
+{% if waste_trend %}
+// B — Daily Burn Rate sparkline
+new Chart(document.getElementById('burnSparkline'), {
+    type: 'line',
+    data: {
+        labels: [{% for item in waste_trend %}'{{ item.date }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for item in waste_trend %}{{ "%.4f"|format((item.total_waste or 0) / 30) }}{% if not loop.last %},{% endif %}{% endfor %}],
+            borderColor: '#ed8936',
+            backgroundColor: 'rgba(237,137,54,0.1)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 0,
+            borderWidth: 1.5
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false, beginAtZero: true } }
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

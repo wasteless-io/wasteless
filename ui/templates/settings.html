@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Wasteless.io{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Settings & Configuration</h1>
+    <p>Manage auto-remediation policies and safeguards</p>
+</div>
+
+<!-- Execution Mode -->
+<div class="card mb-2" style="padding: 1rem;">
+    <h3 style="margin: 0 0 1rem 0;">Execution Mode</h3>
+
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; font-size: 0.85rem;">
+        <!-- Dry-Run Mode (Safe) -->
+        <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if config.get('dry_run', True) %}var(--success){% else %}var(--gray-200){% endif %}; background: {% if config.get('dry_run', True) %}rgba(72, 187, 120, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(!document.getElementById('dryRunToggle').checked) { document.getElementById('dryRunToggle').checked = true; toggleDryRun(true); }">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                <span style="background: {% if config.get('dry_run', True) %}var(--success){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
+                    {% if config.get('dry_run', True) %}&#10003;{% else %}&#128274;{% endif %}
+                </span>
+                <div>
+                    <strong style="font-size: 1rem;">Dry-Run</strong>
+                    {% if config.get('dry_run', True) %}
+                    <span class="badge badge-success" style="margin-left: 0.5rem;">Active</span>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Actions are simulated only. No real changes to your AWS infrastructure. Safe for testing.</p>
+        </div>
+
+        <!-- Production Mode -->
+        <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if not config.get('dry_run', True) %}var(--danger){% else %}var(--gray-200){% endif %}; background: {% if not config.get('dry_run', True) %}rgba(245, 101, 101, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(document.getElementById('dryRunToggle').checked) { toggleDryRun(false); }">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                <span style="background: {% if not config.get('dry_run', True) %}var(--danger){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
+                    {% if not config.get('dry_run', True) %}&#10003;{% else %}&#9889;{% endif %}
+                </span>
+                <div>
+                    <strong style="font-size: 1rem;">Production</strong>
+                    {% if not config.get('dry_run', True) %}
+                    <span class="badge badge-danger" style="margin-left: 0.5rem;">Active</span>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Real AWS API calls will be executed. Instances will actually be stopped or terminated.</p>
+        </div>
+    </div>
+    <input type="checkbox" id="dryRunToggle" style="display: none;"
+        {% if config.get('dry_run', True) %}checked{% endif %}>
+</div>
+
+<!-- Auto-Remediation Controls -->
+<div class="card mb-2" style="padding: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0;">Auto-Remediation</h3>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="text-muted" style="font-size: 0.8rem;">Buffer:</span>
+                <input type="number" id="dryRunDays" class="form-input" style="width: 60px; padding: 0.3rem; text-align: center;"
+                    value="{{ config.get('auto_remediation', {}).get('dry_run_days', 7) }}"
+                    min="0" max="30">
+                <span class="text-muted" style="font-size: 0.8rem;">days</span>
+                <button onclick="updateConfig('dry_run_days', parseInt(document.getElementById('dryRunDays').value))"
+                    class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; font-size: 0.85rem;">
+        <!-- Manual Mode -->
+        <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if not config.get('auto_remediation', {}).get('enabled', False) %}var(--primary){% else %}var(--gray-200){% endif %}; background: {% if not config.get('auto_remediation', {}).get('enabled', False) %}rgba(102, 126, 234, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(confirm('Switch to Manual mode?')) { document.getElementById('autoRemediationToggle').checked = false; updateConfig('auto_remediation_enabled', false); }">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                <span style="background: {% if not config.get('auto_remediation', {}).get('enabled', False) %}var(--primary){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
+                    {% if not config.get('auto_remediation', {}).get('enabled', False) %}&#10003;{% else %}&#9654;{% endif %}
+                </span>
+                <div>
+                    <strong style="font-size: 1rem;">Manual Mode</strong>
+                    {% if not config.get('auto_remediation', {}).get('enabled', False) %}
+                    <span class="badge badge-info" style="margin-left: 0.5rem;">Active</span>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">You review and approve each action before execution. Recommended for getting started.</p>
+        </div>
+
+        <!-- Auto Mode -->
+        <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if config.get('auto_remediation', {}).get('enabled', False) %}var(--danger){% else %}var(--gray-200){% endif %}; background: {% if config.get('auto_remediation', {}).get('enabled', False) %}rgba(245, 101, 101, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(confirm('WARNING: Enable Auto-Remediation? Actions will run automatically without approval.')) { document.getElementById('autoRemediationToggle').checked = true; updateConfig('auto_remediation_enabled', true); }">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                <span style="background: {% if config.get('auto_remediation', {}).get('enabled', False) %}var(--danger){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
+                    {% if config.get('auto_remediation', {}).get('enabled', False) %}&#10003;{% else %}&#9889;{% endif %}
+                </span>
+                <div>
+                    <strong style="font-size: 1rem;">Auto Mode</strong>
+                    {% if config.get('auto_remediation', {}).get('enabled', False) %}
+                    <span class="badge badge-danger" style="margin-left: 0.5rem;">Active</span>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Actions execute automatically after buffer period. Ensure whitelist is configured first.</p>
+        </div>
+    </div>
+    <input type="checkbox" id="autoRemediationToggle" style="display: none;"
+        {% if config.get('auto_remediation', {}).get('enabled', False) %}checked{% endif %}>
+</div>
+
+<!-- Whitelist -->
+<div class="card mb-2" style="padding: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0;">Protected Resources</h3>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" id="newInstanceId" class="form-input" style="width: 200px; padding: 0.4rem;" placeholder="i-1234567890abcdef0">
+            <button onclick="addToWhitelist()" class="btn btn-primary" style="padding: 0.4rem 0.75rem;">+ Add</button>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; font-size: 0.85rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem;">ID</span>
+                <strong>Instance IDs</strong>
+                {% set instance_ids = config.get('whitelist', {}).get('instance_ids', []) %}
+                <span class="badge badge-info" style="margin-left: auto;">{{ instance_ids|length }}</span>
+            </div>
+            {% if instance_ids %}
+            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                {% for instance_id in instance_ids %}
+                <span style="background: var(--gray-100); padding: 0.3rem 0.6rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.4rem; border: 1px solid var(--gray-200);">
+                    <code style="font-size: 0.75rem;">{{ instance_id }}</code>
+                    <button onclick="removeFromWhitelist('{{ instance_id }}')" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1rem; line-height: 1; padding: 0;" title="Remove">&times;</button>
+                </span>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted" style="margin: 0; font-style: italic;">No instances protected yet</p>
+            {% endif %}
+        </div>
+
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="background: var(--success); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65rem;">TAG</span>
+                <strong>Auto-Protected Tags</strong>
+            </div>
+            <p class="text-muted" style="margin: 0 0 0.5rem 0; font-size: 0.8rem;">Instances with these AWS tags are automatically protected:</p>
+            {% set tags = config.get('whitelist', {}).get('tags', []) %}
+            {% if tags %}
+            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                {% for tag in tags %}
+                <span style="background: #c6f6d5; padding: 0.3rem 0.6rem; border-radius: 6px; border: 1px solid #9ae6b4;">
+                    <code style="font-size: 0.75rem; color: #22543d;">{{ tag.get('key') }}={{ tag.get('value') }}</code>
+                </span>
+                {% endfor %}
+            </div>
+            <p class="text-muted" style="margin: 0.5rem 0 0 0; font-size: 0.75rem;">Edit <code>config/remediation.yaml</code> to modify</p>
+            {% else %}
+            <p class="text-muted" style="margin: 0; font-style: italic;">No tags configured</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Help -->
+<details class="card" style="padding: 1rem;">
+    <summary style="cursor: pointer; font-weight: 600; font-size: 0.9rem;">Need help? Click to expand</summary>
+    <div style="margin-top: 1rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; font-size: 0.85rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="background: var(--success); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">1</span>
+                <strong>Start Safe</strong>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Keep dry-run mode ON and auto-remediation OFF when getting started.</p>
+        </div>
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="background: var(--warning); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">2</span>
+                <strong>Protect Critical</strong>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Add production instances to whitelist before enabling auto-remediation.</p>
+        </div>
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
+                <strong>Set Buffer</strong>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Use dry-run period (7+ days) to review recommendations before execution.</p>
+        </div>
+    </div>
+</details>
+
+<div class="text-right mt-2">
+    <button onclick="refreshData()" class="btn btn-outline">Refresh Settings</button>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function toggleDryRun(enabled) {
+        const message = enabled
+            ? 'Dry-run mode will be enabled. Actions will be simulated.'
+            : 'WARNING: Disabling dry-run mode means REAL AWS actions will be executed. Are you sure?';
+
+        if (!enabled && !confirm(message)) {
+            document.getElementById('dryRunToggle').checked = true;
+            return;
+        }
+
+        try {
+            await api('/api/config', {
+                method: 'POST',
+                body: JSON.stringify({ key: 'dry_run', value: enabled })
+            });
+            alert(enabled ? 'Dry-run mode enabled (safe)' : 'Production mode enabled - be careful!');
+            refreshData();
+        } catch (error) {
+            alert('Error: ' + error.message);
+            document.getElementById('dryRunToggle').checked = !enabled;
+        }
+    }
+
+    async function updateConfig(key, value) {
+        try {
+            await api('/api/config', {
+                method: 'POST',
+                body: JSON.stringify({ key, value })
+            });
+            alert('Configuration saved!');
+            refreshData();
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+
+    async function addToWhitelist() {
+        const instanceId = document.getElementById('newInstanceId').value.trim();
+        if (!instanceId) {
+            alert('Please enter an instance ID');
+            return;
+        }
+
+        try {
+            await api('/api/whitelist?instance_id=' + instanceId + '&action=add', { method: 'POST' });
+            alert('Added to whitelist!');
+            refreshData();
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+
+    async function removeFromWhitelist(instanceId) {
+        if (!confirm('Remove ' + instanceId + ' from whitelist?')) return;
+
+        try {
+            await api('/api/whitelist?instance_id=' + instanceId + '&action=remove', { method: 'POST' });
+            alert('Removed from whitelist!');
+            refreshData();
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+</script>
+{% endblock %}

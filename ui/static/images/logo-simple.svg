@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 80" width="400" height="80">
+  <defs>
+    <style>
+      .waste-text { fill: #E8E8E8; font-family: Arial, sans-serif; font-size: 48px; font-weight: 700; }
+      .less-text { fill: #6B8E4E; font-family: Arial, sans-serif; font-size: 48px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <!-- "waste" in light gray -->
+  <text x="10" y="55" class="waste-text">waste</text>
+
+  <!-- "less" in green -->
+  <text x="180" y="55" class="less-text">less</text>
+</svg>

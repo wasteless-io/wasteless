@@ -1,0 +1,43 @@
+auto_remediation:
+  enabled: false
+  dry_run_days: 7
+protection:
+  min_instance_age_days: 30
+  min_idle_days: 14
+  min_confidence_score: 0.8
+  max_instances_per_run: 3
+whitelist:
+  instance_ids: []
+  tags:
+  - key: Environment
+    value: Production
+  - key: Critical
+    value: 'true'
+schedule:
+  enabled: false
+  allowed_days:
+  - Saturday
+  - Sunday
+  allowed_hours:
+  - 2
+  - 3
+  - 4
+  timezone: UTC
+notifications:
+  email: ''
+  slack_webhook: ''
+  notify_before_action: true
+  notify_after_action: true
+  notify_on_error: true
+rollback:
+  enabled: true
+  retention_days: 7
+  auto_delete_after_verification: false
+logging:
+  level: INFO
+  audit_all_decisions: true
+  log_dry_run_results: true
+aws:
+  region: us-east-1
+  assume_role_arn: ''
+dry_run: true

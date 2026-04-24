@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+
+{% block title %}Cloud Resources - Wasteless.io{% endblock %}
+
+{% block content %}
+<style>
+.tab-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 1rem;
+}
+.tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn:hover { color: var(--text-primary); }
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+.tab-count {
+    display: inline-block;
+    background: var(--bg-secondary);
+    border-radius: 10px;
+    padding: 0 6px;
+    font-size: 0.75rem;
+    margin-left: 4px;
+    font-weight: 600;
+}
+</style>
+
+<div class="page-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+    <h1 style="margin-bottom: 0;">Cloud Resources</h1>
+    <button onclick="location.reload()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
+        <span>&#8635;</span> Refresh
+    </button>
+</div>
+
+<!-- Tab navigation -->
+<div class="tab-nav">
+    <button class="tab-btn" id="tab-ec2" onclick="switchTab('ec2')">
+        EC2 Instances <span class="tab-count">{{ ec2_count }}</span>
+    </button>
+    <button class="tab-btn" id="tab-volumes" onclick="switchTab('volumes')">
+        EBS Volumes <span class="tab-count">{{ vol_count }}</span>
+    </button>
+    <button class="tab-btn" id="tab-ips" onclick="switchTab('ips')">
+        Elastic IPs <span class="tab-count">{{ ip_count }}</span>
+    </button>
+    <button class="tab-btn" id="tab-vpcs" onclick="switchTab('vpcs')">
+        VPCs <span class="tab-count">{{ vpc_count }}</span>
+    </button>
+    <button class="tab-btn" id="tab-snapshots" onclick="switchTab('snapshots')">
+        Snapshots <span class="tab-count">{{ snap_count }}</span>
+    </button>
+    <button class="tab-btn" id="tab-s3" onclick="switchTab('s3')">
+        S3 Buckets <span class="tab-count">{{ s3_count }}</span>
+    </button>
+</div>
+
+<!-- Filters -->
+<div class="card mb-1" style="padding: 0.75rem;">
+    <form method="get" action="/cloud-resources">
+        <input type="hidden" name="tab" id="current-tab" value="{{ tab }}">
+        <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+
+            <!-- State filter: EC2 only -->
+            <div class="form-group" id="state-filter-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">State</label>
+                <select name="state_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                    <option value="all" {% if state_filter == 'all' %}selected{% endif %}>All States</option>
+                    <option value="running"    {% if state_filter == 'running'    %}selected{% endif %}>Running</option>
+                    <option value="stopped"    {% if state_filter == 'stopped'    %}selected{% endif %}>Stopped</option>
+                    <option value="terminated" {% if state_filter == 'terminated' %}selected{% endif %}>Terminated</option>
+                </select>
+            </div>
+
+            <!-- Region filter: all tabs -->
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Region</label>
+                <select name="region_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                    <option value="all" {% if region_filter == 'all' %}selected{% endif %}>All Regions</option>
+                    {% for region in regions %}
+                    <option value="{{ region }}" {% if region_filter == region %}selected{% endif %}>{{ region }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
+
+            <!-- EC2 summary counters -->
+            <div id="ec2-counters" style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
+                <span><strong>{{ ec2_count }}</strong> instances</span>
+                <span class="text-success"><strong>{{ running_count }}</strong> running</span>
+                <span class="text-muted"><strong>{{ stopped_count }}</strong> stopped</span>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- ===== TAB: EC2 Instances ===== -->
+<div id="panel-ec2">
+{% if instances %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Instance ID</th>
+                    <th style="padding: 0.5rem;">Name</th>
+                    <th style="padding: 0.5rem;">Type</th>
+                    <th style="padding: 0.5rem;">State</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                    <th style="padding: 0.5rem;">Public IP</th>
+                    <th style="padding: 0.5rem;">Private IP</th>
+                    <th style="padding: 0.5rem;">Launch Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for inst in instances %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ inst.instance_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ inst.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ inst.type }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if inst.state == 'running' %}<span class="badge badge-success">running</span>
+                        {% elif inst.state == 'stopped' %}<span class="badge badge-warning">stopped</span>
+                        {% elif inst.state == 'terminated' %}<span class="badge badge-danger">terminated</span>
+                        {% elif inst.state == 'pending' %}<span class="badge badge-info">pending</span>
+                        {% else %}<span class="badge">{{ inst.state }}</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ inst.region }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ inst.public_ip }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ inst.private_ip }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if inst.launch_time %}<span style="font-size: 0.8rem;">{{ inst.launch_time.strftime('%Y-%m-%d %H:%M') }}</span>
+                        {% else %}<span class="text-muted">-</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No instances found matching your filters</p>
+</div>
+{% endif %}
+</div>
+
+<!-- ===== TAB: EBS Volumes ===== -->
+<div id="panel-volumes" style="display:none">
+{% if volumes %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Volume ID</th>
+                    <th style="padding: 0.5rem;">Name</th>
+                    <th style="padding: 0.5rem;">Size</th>
+                    <th style="padding: 0.5rem;">Type</th>
+                    <th style="padding: 0.5rem;">State</th>
+                    <th style="padding: 0.5rem;">Attached to</th>
+                    <th style="padding: 0.5rem;">Region / AZ</th>
+                    <th style="padding: 0.5rem;">Encrypted</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vol in volumes %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ vol.volume_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ vol.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ vol.size_gb }} GiB</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ vol.type }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if vol.state == 'in-use' %}<span class="badge badge-success">in-use</span>
+                        {% elif vol.state == 'available' %}<span class="badge badge-warning">available</span>
+                        {% else %}<span class="badge">{{ vol.state }}</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if vol.attached_to != '-' %}<code style="font-size: 0.75rem;">{{ vol.attached_to }}</code>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ vol.az }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if vol.encrypted %}<span class="badge badge-success">yes</span>
+                        {% else %}<span class="badge badge-danger">no</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No volumes found</p>
+</div>
+{% endif %}
+</div>
+
+<!-- ===== TAB: Elastic IPs ===== -->
+<div id="panel-ips" style="display:none">
+{% if ips %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Allocation ID</th>
+                    <th style="padding: 0.5rem;">Public IP</th>
+                    <th style="padding: 0.5rem;">Private IP</th>
+                    <th style="padding: 0.5rem;">Associated to</th>
+                    <th style="padding: 0.5rem;">Status</th>
+                    <th style="padding: 0.5rem;">Domain</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ip in ips %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ ip.allocation_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ ip.public_ip }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if ip.private_ip != '-' %}<code style="font-size: 0.75rem;">{{ ip.private_ip }}</code>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if ip.instance_id != '-' %}<code style="font-size: 0.75rem;">{{ ip.instance_id }}</code>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if ip.associated %}<span class="badge badge-success">associated</span>
+                        {% else %}<span class="badge badge-warning">unassociated</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ ip.domain }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ ip.region }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No Elastic IPs found</p>
+</div>
+{% endif %}
+</div>
+
+<!-- ===== TAB: VPCs ===== -->
+<div id="panel-vpcs" style="display:none">
+{% if vpcs %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">VPC ID</th>
+                    <th style="padding: 0.5rem;">Name</th>
+                    <th style="padding: 0.5rem;">CIDR Block</th>
+                    <th style="padding: 0.5rem;">State</th>
+                    <th style="padding: 0.5rem;">Default</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vpc in vpcs %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ vpc.vpc_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ vpc.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ vpc.cidr }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if vpc.state == 'available' %}<span class="badge badge-success">available</span>
+                        {% else %}<span class="badge">{{ vpc.state }}</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if vpc.is_default %}<span class="badge badge-info">default</span>
+                        {% else %}<span class="text-muted" style="font-size:0.8rem;">—</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ vpc.region }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No VPCs found</p>
+</div>
+{% endif %}
+</div>
+
+<!-- ===== TAB: Snapshots ===== -->
+<div id="panel-snapshots" style="display:none">
+{% if snapshots %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Snapshot ID</th>
+                    <th style="padding: 0.5rem;">Description</th>
+                    <th style="padding: 0.5rem;">Volume ID</th>
+                    <th style="padding: 0.5rem;">Size</th>
+                    <th style="padding: 0.5rem;">State</th>
+                    <th style="padding: 0.5rem;">Date</th>
+                    <th style="padding: 0.5rem;">Encrypted</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for snap in snapshots %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ snap.snapshot_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.description[:40] }}{% if snap.description|length > 40 %}…{% endif %}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if snap.volume_id != '-' %}<code style="font-size: 0.75rem;">{{ snap.volume_id }}</code>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.size_gb }} GiB</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if snap.state == 'completed' %}<span class="badge badge-success">completed</span>
+                        {% elif snap.state == 'pending' %}<span class="badge badge-info">pending</span>
+                        {% else %}<span class="badge badge-danger">{{ snap.state }}</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if snap.start_time %}<span style="font-size: 0.8rem;">{{ snap.start_time.strftime('%Y-%m-%d') }}</span>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if snap.encrypted %}<span class="badge badge-success">yes</span>
+                        {% else %}<span class="badge badge-danger">no</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.region }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No snapshots found</p>
+</div>
+{% endif %}
+</div>
+
+<!-- ===== TAB: S3 Buckets ===== -->
+<div id="panel-s3" style="display:none">
+{% if buckets %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Bucket Name</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                    <th style="padding: 0.5rem;">Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bucket in buckets %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ bucket.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ bucket.region }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if bucket.created %}<span style="font-size: 0.8rem;">{{ bucket.created.strftime('%Y-%m-%d') }}</span>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No S3 buckets found</p>
+</div>
+{% endif %}
+</div>
+
+<script>
+function switchTab(tab) {
+    ['ec2', 'volumes', 'ips', 'vpcs', 'snapshots', 's3'].forEach(t => {
+        document.getElementById('panel-' + t).style.display = t === tab ? '' : 'none';
+        document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+    });
+    document.getElementById('current-tab').value = tab;
+    document.getElementById('state-filter-group').style.display = tab === 'ec2' ? '' : 'none';
+    document.getElementById('ec2-counters').style.display = tab === 'ec2' ? '' : 'none';
+}
+
+switchTab('{{ tab }}');
+</script>
+{% endblock %}

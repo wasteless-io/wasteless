@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}History - Wasteless.io{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom: 1rem;">
+    <h1 style="margin-bottom: 0.25rem;">Action History</h1>
+</div>
+
+<!-- Filters + Summary in one row -->
+<div class="card mb-1" style="padding: 0.75rem;">
+    <form method="get" action="/history">
+        <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Status</label>
+                <select name="status_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                    <option value="All" {% if status_filter == 'All' %}selected{% endif %}>All</option>
+                    <option value="success" {% if status_filter == 'success' %}selected{% endif %}>Success</option>
+                    <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Type</label>
+                <select name="action_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                    <option value="All" {% if action_filter == 'All' %}selected{% endif %}>All</option>
+                    <option value="stop" {% if action_filter == 'stop' %}selected{% endif %}>Stop</option>
+                    <option value="terminate" {% if action_filter == 'terminate' %}selected{% endif %}>Terminate</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Days</label>
+                <input type="number" name="days_back" class="form-input" style="padding: 0.4rem; width: 60px;" value="{{ days_back }}" min="1" max="90">
+            </div>
+            <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
+            <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem;">
+                <span><strong>{{ actions|length }}</strong> actions</span>
+                <span class="text-success"><strong>{{ success_count }}</strong> success</span>
+                <span class="text-danger"><strong>{{ failed_count }}</strong> failed</span>
+                <span><strong>EUR {{ "%.2f"|format(total_savings) }}</strong>/mo saved</span>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Actions Table -->
+{% if actions %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">ID</th>
+                    <th style="padding: 0.5rem;">Instance</th>
+                    <th style="padding: 0.5rem;">Action</th>
+                    <th style="padding: 0.5rem;">Status</th>
+                    <th style="padding: 0.5rem;">Mode</th>
+                    <th style="padding: 0.5rem;">Date</th>
+                    <th style="padding: 0.5rem;">Savings</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for action in actions %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;">{{ action.id }}</td>
+                    <td style="padding: 0.4rem 0.5rem;"><code>{{ action.resource_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;">{{ action.action_type }}</td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if action.action_status == 'success' %}
+                        <span class="badge badge-success">Success</span>
+                        {% elif action.action_status == 'failed' %}
+                        <span class="badge badge-danger">Failed</span>
+                        {% else %}
+                        <span class="badge badge-info">{{ action.action_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if action.dry_run %}
+                        <span class="badge badge-info">Dry-Run</span>
+                        {% else %}
+                        <span class="badge badge-warning">Prod</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;" class="text-muted">{{ action.action_date.strftime('%d/%m/%y %H:%M') if action.action_date else '-' }}</td>
+                    <td style="padding: 0.4rem 0.5rem;">EUR {{ "%.2f"|format(action.estimated_monthly_savings_eur or 0) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <p class="text-muted text-center">No actions found</p>
+</div>
+{% endif %}
+{% endblock %}
