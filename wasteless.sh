@@ -67,7 +67,7 @@ _start() {
     _ensure_cron
 
     echo ""
-    echo -e "  ${YELLOW}Starting WasteLess in background...${NC}"
+    echo -e "  ${YELLOW}Starting WasteLess...${NC}"
     echo ""
 
     export PYTHONUNBUFFERED=1
@@ -79,29 +79,46 @@ _start() {
     echo "$UVICORN_PID" > "$PID_FILE"
     disown "$UVICORN_PID"
 
-    echo -e "  PID ${UVICORN_PID} — browser will open automatically when ready."
+    # Inline spinner — waits in the foreground up to 30s so nothing prints after the prompt
+    SPIN=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    SLEN=${#SPIN[@]}
+    i=0
+    while [ $i -lt 30 ]; do
+        if curl -s -o /dev/null "http://localhost:$PORT/" 2>/dev/null; then
+            printf "\r  ${GREEN}✓ Ready → http://localhost:%s${NC}                    \n" "$PORT"
+            echo ""
+            echo -e "  ${CYAN}wasteless logs${NC}     View server logs"
+            echo -e "  ${CYAN}wasteless stop${NC}     Stop the server"
+            echo ""
+            command -v open &>/dev/null && open "http://localhost:$PORT"
+            command -v xdg-open &>/dev/null && xdg-open "http://localhost:$PORT" &>/dev/null
+            return 0
+        fi
+        printf "\r  %s  Starting up... (%ds)" "${SPIN[$((i % SLEN))]}" "$i"
+        sleep 1
+        i=$((i + 1))
+    done
+
+    # Still not ready — hand off cleanly, no background terminal output
+    printf "\r  ${YELLOW}⚠  Still starting — first run may take a minute${NC}         \n"
     echo ""
+    echo -e "  PID ${UVICORN_PID}"
     echo -e "  ${CYAN}wasteless logs${NC}     View server logs"
     echo -e "  ${CYAN}wasteless stop${NC}     Stop the server"
     echo ""
 
-    # Background watcher: open browser when server responds
+    # Background: open browser silently when ready (no terminal output)
     (
-        i=0
-        while [ $i -lt 120 ]; do
+        j=$i
+        while [ $j -lt 120 ]; do
             sleep 1
             if curl -s -o /dev/null "http://localhost:$PORT/" 2>/dev/null; then
-                printf "  \033[0;32m✅ Ready → http://localhost:%s\033[0m\n\n" "$PORT"
                 command -v open &>/dev/null && open "http://localhost:$PORT"
                 command -v xdg-open &>/dev/null && xdg-open "http://localhost:$PORT" &>/dev/null
                 exit 0
             fi
-            i=$((i + 1))
-            if [ $i -eq 30 ]; then
-                printf "  \033[1;33mStill starting... (first run may take a minute)\033[0m\n"
-            fi
+            j=$((j + 1))
         done
-        printf "  \033[1;33m⚠  Server did not respond after 120s — run: wasteless logs\033[0m\n"
     ) &
     disown $!
 }
@@ -118,16 +135,26 @@ _stop() {
     fi
     rm -f "$COLLECT_LOCK_FILE"
 
+    STOPPED=0
     if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
         if kill -0 "$PID" 2>/dev/null; then
             kill "$PID"
-            rm -f "$PID_FILE"
-            echo -e "${GREEN}WasteLess stopped (PID $PID)${NC}"
-        else
-            echo "WasteLess is not running"
-            rm -f "$PID_FILE"
+            STOPPED=1
         fi
+        rm -f "$PID_FILE"
+    fi
+
+    # Tuer tous les process encore sur le port (enfants uvicorn --reload)
+    PORT="${WASTELESS_PORT:-8888}"
+    PORT_PIDS=$(lsof -ti:"$PORT" 2>/dev/null)
+    if [ -n "$PORT_PIDS" ]; then
+        echo "$PORT_PIDS" | xargs kill 2>/dev/null
+        STOPPED=1
+    fi
+
+    if [ "$STOPPED" -eq 1 ]; then
+        echo -e "${GREEN}WasteLess stopped${NC}"
     else
         echo "WasteLess is not running"
     fi
@@ -186,58 +213,23 @@ _collect() {
     echo -e "${BOLD}WasteLess — Collect & Detect${NC}"
     echo ""
 
-    echo -e "${CYAN}[1/6]${NC} Collecting CloudWatch metrics..."
-    if python3 src/collectors/aws_cloudwatch.py; then
-        echo -e "${GREEN}[OK]${NC} Metrics collected"
-    else
-        echo -e "${RED}[ERROR]${NC} Collector failed"
-        exit 1
-    fi
+    _run_step() {
+        local label="$1" cmd="$2"
+        echo -e "$label"
+        if python3 $cmd; then
+            echo -e "${GREEN}[OK]${NC} Done"
+        else
+            echo -e "${YELLOW}[WARN]${NC} Step failed — continuing"
+        fi
+        echo ""
+    }
 
-    echo ""
-    echo -e "${CYAN}[2/6]${NC} Detecting idle EC2 instances..."
-    if python3 src/detectors/ec2_idle.py; then
-        echo -e "${GREEN}[OK]${NC} Detection complete"
-    else
-        echo -e "${RED}[ERROR]${NC} Detector failed"
-        exit 1
-    fi
-
-    echo ""
-    echo -e "${CYAN}[3/6]${NC} Detecting stopped EC2 instances..."
-    if python3 src/detectors/ec2_stopped.py; then
-        echo -e "${GREEN}[OK]${NC} Detection complete"
-    else
-        echo -e "${RED}[ERROR]${NC} Detector failed"
-        exit 1
-    fi
-
-    echo ""
-    echo -e "${CYAN}[4/6]${NC} Detecting orphaned EBS volumes..."
-    if python3 src/detectors/ebs_orphan.py; then
-        echo -e "${GREEN}[OK]${NC} Detection complete"
-    else
-        echo -e "${RED}[ERROR]${NC} Detector failed"
-        exit 1
-    fi
-
-    echo ""
-    echo -e "${CYAN}[5/6]${NC} Detecting unassociated Elastic IPs..."
-    if python3 src/detectors/eip_orphan.py; then
-        echo -e "${GREEN}[OK]${NC} Detection complete"
-    else
-        echo -e "${RED}[ERROR]${NC} Detector failed"
-        exit 1
-    fi
-
-    echo ""
-    echo -e "${CYAN}[6/6]${NC} Detecting old EBS snapshots..."
-    if python3 src/detectors/snapshot_orphan.py; then
-        echo -e "${GREEN}[OK]${NC} Detection complete"
-    else
-        echo -e "${RED}[ERROR]${NC} Detector failed"
-        exit 1
-    fi
+    _run_step "${CYAN}[1/6]${NC} Collecting CloudWatch metrics..."    "src/collectors/aws_cloudwatch.py"
+    _run_step "${CYAN}[2/6]${NC} Detecting idle EC2 instances..."     "src/detectors/ec2_idle.py"
+    _run_step "${CYAN}[3/6]${NC} Detecting stopped EC2 instances..."  "src/detectors/ec2_stopped.py"
+    _run_step "${CYAN}[4/6]${NC} Detecting orphaned EBS volumes..."   "src/detectors/ebs_orphan.py"
+    _run_step "${CYAN}[5/6]${NC} Detecting unassociated Elastic IPs..." "src/detectors/eip_orphan.py"
+    _run_step "${CYAN}[6/6]${NC} Detecting old EBS snapshots..."      "src/detectors/snapshot_orphan.py"
 
     echo ""
     echo -e "${GREEN}Done!${NC} Open ${BOLD}http://localhost:8888/recommendations${NC} to review."
@@ -254,14 +246,15 @@ _ensure_cron() {
     fi
 
     (
+        SELF="$SCRIPT_DIR/wasteless.sh"
         while true; do
-            "$SCRIPT_DIR/wasteless.sh" collect >> "$LOG_FILE" 2>&1
-            sleep 5
+            "$SELF" collect >> "$LOG_FILE" 2>&1
+            sleep 300
         done
     ) &
     echo $! > "$COLLECTOR_PID_FILE"
     disown $!
-    echo -e "  ${CYAN}Auto-collection started (every 5s)${NC}"
+    echo -e "  ${CYAN}Auto-collection started (every 5 min)${NC}"
 }
 
 # ---------------------------------------------------------------------------
