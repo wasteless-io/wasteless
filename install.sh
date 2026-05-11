@@ -2,7 +2,11 @@
 #
 # WasteLess - Script d'installation automatique
 #
-# Usage: ./install.sh
+# Usage: ./install.sh [--verbose|-v]
+#
+# Options:
+#   -v, --verbose    Affiche la sortie detaillee de chaque commande
+#   -h, --help       Affiche cette aide
 #
 # Ce script configure automatiquement l'environnement WasteLess:
 # - Verifie les prerequis (Python, Docker, AWS CLI)
@@ -13,6 +17,8 @@
 #
 
 set -e  # Exit on error
+
+VERBOSE=0
 
 # =============================================================================
 # COULEURS ET FORMATAGE
@@ -60,6 +66,36 @@ check_command() {
     fi
 }
 
+silence() {
+    if [ $VERBOSE -eq 1 ]; then
+        "$@"
+    else
+        "$@" &>/dev/null
+    fi
+}
+
+print_verbose() {
+    [ $VERBOSE -eq 1 ] && echo -e "  ${CYAN}»${NC} $1"
+}
+
+# =============================================================================
+# ARGUMENTS
+# =============================================================================
+for arg in "$@"; do
+    case "$arg" in
+        -v|--verbose) VERBOSE=1 ;;
+        -h|--help)
+            echo "Usage: ./install.sh [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  -v, --verbose    Affiche la sortie detaillee des commandes"
+            echo "  -h, --help       Affiche cette aide"
+            exit 0
+            ;;
+        *) echo "Option inconnue: $arg"; echo "Usage: ./install.sh [-v|--verbose]"; exit 1 ;;
+    esac
+done
+
 # =============================================================================
 # BANNIERE
 # =============================================================================
@@ -76,6 +112,9 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 echo -e "${BOLD}Version 1.0 - Installation automatique${NC}"
+if [ $VERBOSE -eq 1 ]; then
+    echo -e "${CYAN}Mode verbose active — sortie detaillee des commandes${NC}"
+fi
 echo ""
 
 # =============================================================================
@@ -125,6 +164,17 @@ else
     MISSING_DEPS=1
 fi
 
+# uv (optionnel mais recommande — installations atomiques, 10-100x plus rapide)
+if check_command uv; then
+    UV_VERSION=$(uv --version 2>&1 | head -1)
+    print_step "uv detecte ($UV_VERSION) — installations atomiques activees"
+    USE_UV=1
+else
+    print_warning "uv non trouve (optionnel) — utilisation de pip"
+    print_info "Installez uv: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    USE_UV=0
+fi
+
 # AWS CLI (optionnel mais recommande)
 if check_command aws; then
     print_step "AWS CLI detecte"
@@ -155,26 +205,47 @@ print_step "Tous les prerequis sont satisfaits"
 # =============================================================================
 print_header "2/7 - Configuration de l'environnement Python"
 
+create_venv() {
+    local path="$1"
+    if [ $USE_UV -eq 1 ]; then
+        uv venv "$path"
+    else
+        python3 -m venv "$path"
+    fi
+}
+
+install_deps() {
+    local venv_path="$1"
+    local req_file="$2"
+    local quiet_opt=$([ $VERBOSE -eq 0 ] && echo "-q" || echo "")
+    if [ $USE_UV -eq 1 ]; then
+        uv pip install --python "$venv_path/bin/python3" -r "$req_file" $quiet_opt
+    else
+        "$venv_path/bin/pip" install --upgrade pip $quiet_opt
+        "$venv_path/bin/pip" install -r "$req_file" $quiet_opt
+    fi
+}
+
 if [ -d "venv" ]; then
-    # Verifier que le venv n'est pas corrompu (python + pip valides)
-    if ! venv/bin/python3 -c "import pip" &> /dev/null || ! venv/bin/pip --version &> /dev/null; then
+    # Verifier que le venv n'est pas corrompu (python valide)
+    if ! venv/bin/python3 -c "import sys" &> /dev/null; then
         print_warning "Environnement virtuel corrompu detecte — recreation automatique"
         rm -rf venv
-        python3 -m venv venv
+        create_venv venv
         print_step "Environnement virtuel recree"
     else
         print_warning "Environnement virtuel existant detecte"
         read -p "Voulez-vous le recreer? (o/N): " RECREATE_VENV
         if [[ "$RECREATE_VENV" =~ ^[Oo]$ ]]; then
             rm -rf venv
-            python3 -m venv venv
+            create_venv venv
             print_step "Environnement virtuel recree"
         else
             print_step "Environnement virtuel conserve"
         fi
     fi
 else
-    python3 -m venv venv
+    create_venv venv
     print_step "Environnement virtuel cree"
 fi
 
@@ -182,8 +253,9 @@ fi
 source venv/bin/activate
 print_step "Environnement virtuel active"
 
-pip install --upgrade pip -q
-pip install -r requirements.txt -q
+PIP_OPT=$([ $VERBOSE -eq 0 ] && echo "-q" || echo "")
+print_verbose "installation des dependances (requirements.txt)"
+install_deps venv requirements.txt
 print_step "Dependances Python installees"
 
 # =============================================================================
@@ -292,9 +364,9 @@ if docker ps | grep -q wasteless-postgres; then
     print_warning "PostgreSQL deja en cours d'execution"
 elif docker ps -a | grep -q wasteless-postgres; then
     print_warning "Conteneur wasteless-postgres existant detecte (arrete) — tentative de redemarrage..."
-    if ! docker start wasteless-postgres > /dev/null 2>&1; then
+    if ! silence docker start wasteless-postgres; then
         print_warning "Redemarrage echoue (volumes invalides) — suppression et recreation du conteneur..."
-        docker rm wasteless-postgres > /dev/null
+        silence docker rm wasteless-postgres
         docker compose up -d postgres
         print_step "PostgreSQL recree et demarre"
     else
@@ -336,15 +408,29 @@ fi
 # =============================================================================
 print_header "5/7 - Initialisation du schema de base de donnees"
 
-# Executer les migrations
-print_info "Application des migrations..."
+# Compter les migrations avant de commencer
+MIGRATION_COUNT=0
+for migration in sql/ec2_metrics.sql sql/migrations/*.sql; do
+    [ -f "$migration" ] && MIGRATION_COUNT=$((MIGRATION_COUNT + 1))
+done
 
-# Init.sql est automatiquement execute par Docker
-# Appliquer les migrations supplementaires
+print_info "Application de $MIGRATION_COUNT migration(s)..."
+
+MIGRATION_NUM=0
 for migration in sql/ec2_metrics.sql sql/migrations/*.sql; do
     if [ -f "$migration" ]; then
-        docker exec -i wasteless-postgres psql -U wasteless -d wasteless < "$migration" &> /dev/null || true
-        print_step "Migration appliquee: $(basename $migration)"
+        MIGRATION_NUM=$((MIGRATION_NUM + 1))
+        MIGRATION_NAME=$(basename "$migration")
+        echo -ne "  ${BLUE}[${MIGRATION_NUM}/${MIGRATION_COUNT}]${NC} ${MIGRATION_NAME}..."
+        START_TIME=$(date +%s)
+        if [ $VERBOSE -eq 1 ]; then
+            echo ""
+            docker exec -i wasteless-postgres psql -U wasteless -d wasteless < "$migration" || true
+        else
+            docker exec -i wasteless-postgres psql -U wasteless -d wasteless < "$migration" &>/dev/null || true
+        fi
+        ELAPSED=$(( $(date +%s) - START_TIME ))
+        echo -e " ${GREEN}OK${NC} (${ELAPSED}s)"
     fi
 done
 
@@ -357,21 +443,21 @@ print_header "6/7 - Installation de l'interface web"
 
 # Environnement virtuel UI
 if [ -d "ui/venv" ]; then
-    if ! ui/venv/bin/python3 -c "import pip" &> /dev/null || ! ui/venv/bin/pip --version &> /dev/null; then
+    if ! ui/venv/bin/python3 -c "import sys" &> /dev/null; then
         print_warning "Environnement virtuel UI corrompu — recreation automatique"
         rm -rf ui/venv
-        python3 -m venv ui/venv
+        create_venv ui/venv
         print_step "Environnement virtuel UI recree"
     else
         print_step "Environnement virtuel UI deja present"
     fi
 else
-    python3 -m venv ui/venv
+    create_venv ui/venv
     print_step "Environnement virtuel UI cree"
 fi
 
-ui/venv/bin/pip install --upgrade pip -q
-ui/venv/bin/pip install -r ui/requirements.txt -q
+print_verbose "installation des dependances UI (ui/requirements.txt)"
+install_deps ui/venv ui/requirements.txt
 print_step "Dependances UI installees"
 
 # Fichier ui/.env — toujours mis a jour pour reflechir le chemin courant
@@ -449,11 +535,11 @@ print_header "7/7 - Verification de l'installation"
 
 # Test de connexion DB
 print_info "Test de connexion a la base de donnees..."
-if python3 -c "
+if silence python3 -c "
 from src.core.database import health_check
 import sys
 sys.exit(0 if health_check() else 1)
-" 2>/dev/null; then
+"; then
     print_step "Connexion base de donnees OK"
 else
     print_warning "Test de connexion echoue (normal si premiere installation)"
@@ -461,12 +547,12 @@ fi
 
 # Test des modules
 print_info "Verification des modules..."
-if python3 -c "
+if silence python3 -c "
 from src.core.config import RemediationConfig
 config = RemediationConfig.from_yaml('config/remediation.yaml')
 assert config.enabled == False, 'Auto-remediation should be disabled'
 print('OK')
-" 2>/dev/null; then
+"; then
     print_step "Modules Python OK"
     print_step "Auto-remediation desactivee (securite)"
 else
@@ -475,7 +561,8 @@ fi
 
 # Tests unitaires
 print_info "Execution des tests unitaires..."
-if ./venv/bin/pytest tests/unit/test_validation.py -q 2>/dev/null; then
+PYTEST_OPT=$([ $VERBOSE -eq 0 ] && echo "-q" || echo "-v")
+if silence ./venv/bin/pytest tests/unit/test_validation.py $PYTEST_OPT; then
     print_step "Tests unitaires OK"
 else
     print_warning "Certains tests ont echoue"
