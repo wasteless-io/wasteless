@@ -148,6 +148,9 @@ class RemediationConfig:
         except yaml.YAMLError as e:
             raise ConfigurationError(f"Invalid YAML in {config_path}: {e}")
 
+        if config is None:
+            return cls()
+
         auto_rem = config.get('auto_remediation', {})
         protection = config.get('protection', {})
         whitelist = config.get('whitelist', {})
