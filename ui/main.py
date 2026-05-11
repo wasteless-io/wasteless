@@ -148,6 +148,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️ Database connection failed: {e}")
 
+    # Initial AWS connectivity check (avoids "Not checked" on first page load)
+    from datetime import datetime as _dt
+    _aws_status["reachable"] = check_aws_reachable()
+    _aws_status["checked_at"] = _dt.now()
+    print(f"{'✅' if _aws_status['reachable'] else '⚠️'} AWS connectivity: {'OK' if _aws_status['reachable'] else 'not reachable'}")
+
     # Start scheduler for auto-sync (every 5 minutes)
     scheduler.add_job(sync_aws_job, 'interval', minutes=5, id='aws_sync')
     scheduler.start()
