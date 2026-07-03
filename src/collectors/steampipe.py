@@ -66,8 +66,10 @@ def run_query(sql: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> List[Dict[str
         )
 
     try:
+        # '--' terminates flag parsing: SQL starting with a '-- comment'
+        # would otherwise be read as a flag by steampipe's CLI
         result = subprocess.run(
-            ['steampipe', 'query', sql, '--output', 'json'],
+            ['steampipe', 'query', '--output', 'json', '--', sql],
             capture_output=True,
             text=True,
             timeout=timeout,

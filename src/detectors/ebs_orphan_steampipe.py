@@ -13,7 +13,11 @@ Prerequisites: see src/collectors/steampipe.py
 
 import logging
 import sys
+from pathlib import Path
 from typing import Any, Dict, List
+
+# Allow running as a script: python3 src/detectors/ebs_orphan_steampipe.py
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from collectors.steampipe import SteampipeError, run_query_file
 from detectors.ebs_orphan import EBSOrphanDetector, _volume_monthly_cost
