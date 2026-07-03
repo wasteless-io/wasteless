@@ -2,11 +2,11 @@
 #
 # WasteLess - Script d'installation automatique
 #
-# Usage: ./install.sh [--verbose|-v]
+# Usage: ./install.sh [-q|--quiet]
 #
 # Options:
-#   -v, --verbose    Affiche la sortie detaillee de chaque commande
-#   -h, --help       Affiche cette aide
+#   -q, --quiet    Masque la sortie detaillee de chaque commande
+#   -h, --help     Affiche cette aide
 #
 # Ce script configure automatiquement l'environnement WasteLess:
 # - Verifie les prerequis (Python, Docker, AWS CLI)
@@ -18,7 +18,7 @@
 
 set -e  # Exit on error
 
-VERBOSE=0
+VERBOSE=1
 
 # =============================================================================
 # COULEURS ET FORMATAGE
@@ -83,16 +83,17 @@ print_verbose() {
 # =============================================================================
 for arg in "$@"; do
     case "$arg" in
-        -v|--verbose) VERBOSE=1 ;;
+        -q|--quiet) VERBOSE=0 ;;
+        -v|--verbose) VERBOSE=1 ;;  # rétrocompatibilité
         -h|--help)
             echo "Usage: ./install.sh [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  -v, --verbose    Affiche la sortie detaillee des commandes"
-            echo "  -h, --help       Affiche cette aide"
+            echo "  -q, --quiet    Masque la sortie detaillee des commandes"
+            echo "  -h, --help     Affiche cette aide"
             exit 0
             ;;
-        *) echo "Option inconnue: $arg"; echo "Usage: ./install.sh [-v|--verbose]"; exit 1 ;;
+        *) echo "Option inconnue: $arg"; echo "Usage: ./install.sh [-q|--quiet]"; exit 1 ;;
     esac
 done
 
