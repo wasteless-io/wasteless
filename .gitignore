@@ -7,6 +7,8 @@ __pycache__/
 
 # Virtual environments
 venv/
+venv
+venv.nosync/
 .venv/
 env/
 
@@ -20,3 +22,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude
+CLAUDE.md
+.claude/
