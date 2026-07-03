@@ -52,6 +52,12 @@
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Snapshots <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ snap_recs|length }}</span></span>
             <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
         </button>
+        {% if other_recs %}
+        <button id="tab-btn-other" onclick="switchTab('other')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Other <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ other_recs|length }}</span></span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
+        </button>
+        {% endif %}
     </div>
 
     <form id="actionsForm">
@@ -310,6 +316,55 @@
             <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No old snapshot recommendations</div>
             {% endif %}
         </div>
+
+        <!-- Other resource types (NAT gateways, load balancers, ...) -->
+        <div id="tab-other" style="display: none;">
+            {% if other_recs %}
+            <div class="table-container">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-other" onclick="toggleAll('other')"></th>
+                            <th style="padding: 0.5rem;">Resource</th>
+                            <th style="padding: 0.5rem;">Type</th>
+                            <th style="padding: 0.5rem;">Region</th>
+                            <th style="padding: 0.5rem;">Recommended action</th>
+                            <th style="padding: 0.5rem;">Savings</th>
+                            <th style="padding: 0.5rem;">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in other_recs %}
+                        {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                        <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-other" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;">{{ rec.volume_name or rec.resource_id }}</code></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.action_required }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span>
+                                </div>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No other recommendations</div>
+            {% endif %}
+        </div>
     </form>
 </div>
 
@@ -339,7 +394,7 @@
 <script>
     let currentTab = 'ec2';
 
-    const ALL_TABS = ['ec2', 'ebs', 'eip', 'snap'];
+    const ALL_TABS = ['ec2', 'ebs', 'eip', 'snap', 'other'];
 
     function switchTab(tab) {
         currentTab = tab;

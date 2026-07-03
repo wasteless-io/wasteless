@@ -543,9 +543,16 @@ async def recommendations(
     avg_confidence = sum(r['confidence_score'] or 0 for r in recommendations) / len(recommendations) if recommendations else 0
 
     ec2_recs  = [r for r in recommendations if r['resource_type'] == 'ec2_instance']
-    ebs_recs  = [r for r in recommendations if r['resource_type'] == 'ebs_volume']
+    # The EBS tab renders deletion semantics ("unattached", "why delete?"),
+    # so it only gets delete_volume recs; gp2 migrations go to Other
+    ebs_recs  = [r for r in recommendations if r['resource_type'] == 'ebs_volume'
+                 and r['recommendation_type'] == 'delete_volume']
     eip_recs  = [r for r in recommendations if r['resource_type'] == 'elastic_ip']
     snap_recs = [r for r in recommendations if r['resource_type'] == 'ebs_snapshot']
+    # Catch-all so recommendations from new detectors (NAT gateways, load
+    # balancers, gp2 migrations, ...) are never silently hidden
+    bucketed = {id(r) for r in ec2_recs + ebs_recs + eip_recs + snap_recs}
+    other_recs = [r for r in recommendations if id(r) not in bucketed]
 
     cursor.close()
 
@@ -555,6 +562,7 @@ async def recommendations(
         "ebs_recs": ebs_recs,
         "eip_recs": eip_recs,
         "snap_recs": snap_recs,
+        "other_recs": other_recs,
         "total_savings": total_savings,
         "avg_confidence": avg_confidence,
         "type_filter": type_filter,
