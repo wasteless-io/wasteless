@@ -100,6 +100,16 @@ class TestRunQuery:
 
     @patch('collectors.steampipe.is_available', return_value=True)
     @patch('collectors.steampipe.subprocess.run')
+    def test_sql_passed_after_flag_terminator(self, mock_run, _):
+        """SQL starting with '-- comment' must come after the '--' terminator,
+        or steampipe's CLI parses it as a flag."""
+        mock_run.return_value = _completed(json.dumps({'rows': []}))
+        run_query('-- a comment\nselect 1')
+        argv = mock_run.call_args[0][0]
+        assert argv[argv.index('--') + 1] == '-- a comment\nselect 1'
+
+    @patch('collectors.steampipe.is_available', return_value=True)
+    @patch('collectors.steampipe.subprocess.run')
     def test_unexpected_shape_raises(self, mock_run, _):
         mock_run.return_value = _completed(json.dumps({'rows': 'oops'}))
         with pytest.raises(SteampipeError):
