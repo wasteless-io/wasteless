@@ -70,6 +70,13 @@ def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
                 skipped += 1
                 continue  # Still backing a registered AMI — skip
 
+            # Managed by AWS Backup or Data Lifecycle Manager: their policies
+            # own the retention, deleting would break backup chains
+            tag_keys = {t['Key'] for t in snap.get('Tags', [])}
+            if tag_keys & {'aws:backup:source-resource', 'aws:dlm:lifecycle-policy-id'}:
+                skipped += 1
+                continue
+
             start_time = snap.get('StartTime')
             if not start_time:
                 continue

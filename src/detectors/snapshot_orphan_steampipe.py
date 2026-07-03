@@ -6,6 +6,10 @@ Same detection as snapshot_orphan.py, but the collection layer is SQL:
 sql/steampipe/snapshot_orphan.sql excludes AMI-backed snapshots with an
 anti-join, and sql/steampipe/ami_backed_snapshots.sql feeds the
 mark_ami_backed_obsolete() cleanup inherited from SnapshotOrphanDetector.
+
+Stricter than the boto3 version: also excludes snapshots whose source
+volume still exists (a live volume's backup is not an orphan). Both
+versions exclude AWS Backup / DLM-managed snapshots.
 save() and recommend() are inherited unchanged, so both detectors feed the
 same rows and dedupe via ON CONFLICT.
 
