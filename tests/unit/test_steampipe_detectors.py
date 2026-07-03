@@ -20,6 +20,7 @@ from detectors.ebs_gp2_migration import (
     EBSGp2MigrationDetector, GP2_TO_GP3_SAVINGS_EUR_PER_GIB
 )
 from detectors.elb_unused import ELBUnusedDetector, ELB_MONTHLY_COST_EUR
+from collectors.ec2_metrics_steampipe import rows_to_records
 
 
 def _bare(cls):
@@ -121,3 +122,29 @@ class TestBaseDetect:
         from detectors.steampipe_base import SteampipeWasteDetector
         with pytest.raises(NotImplementedError):
             _bare(SteampipeWasteDetector).map_rows([])
+
+
+class TestMetricsRowsToRecords:
+
+    def test_full_row(self):
+        records = rows_to_records([{
+            'instance_id': 'i-0abc',
+            'instance_type': 't3.micro',
+            'instance_name': 'web-1',
+            'instance_state': 'running',
+            'collection_date': '2026-07-01',
+            'cpu_avg': 2.34,
+            'cpu_max': 15.6,
+        }])
+        assert records == [
+            ('i-0abc', 't3.micro', 'web-1', 'running', '2026-07-01', 2.34, 15.6)
+        ]
+
+    def test_missing_optional_fields(self):
+        record = rows_to_records([{
+            'instance_id': 'i-1', 'collection_date': '2026-07-01',
+        }])[0]
+        assert record == ('i-1', '', '', '', '2026-07-01', None, None)
+
+    def test_empty_input(self):
+        assert rows_to_records([]) == []
