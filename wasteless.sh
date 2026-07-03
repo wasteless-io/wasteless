@@ -71,10 +71,7 @@ _start() {
     echo ""
 
     export PYTHONUNBUFFERED=1
-    nohup uvicorn main:app --host 0.0.0.0 --port "$PORT" --reload \
-        --reload-exclude 'venv/**' \
-        --reload-exclude '*.pyc' \
-        --reload-exclude '__pycache__/**' >> "$LOG_FILE" 2>&1 &
+    nohup uvicorn main:app --host 0.0.0.0 --port "$PORT" >> "$LOG_FILE" 2>&1 &
     UVICORN_PID=$!
     echo "$UVICORN_PID" > "$PID_FILE"
     disown "$UVICORN_PID"
