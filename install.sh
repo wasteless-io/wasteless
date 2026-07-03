@@ -559,6 +559,24 @@ else
     print_error "Erreur lors du chargement des modules"
 fi
 
+# Test credentials AWS
+print_info "Verification des credentials AWS..."
+if silence python3 -c "
+import boto3, sys, os
+try:
+    sts = boto3.client('sts', region_name=os.getenv('AWS_REGION', 'eu-west-1'))
+    identity = sts.get_caller_identity()
+    sys.exit(0)
+except Exception as e:
+    sys.exit(1)
+"; then
+    print_step "Credentials AWS valides"
+else
+    print_warning "Credentials AWS invalides ou inaccessibles"
+    print_info "Verifiez AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY dans .env"
+    print_info "Ou configurez vos credentials avec: aws configure"
+fi
+
 # Tests unitaires
 print_info "Execution des tests unitaires..."
 PYTEST_OPT=$([ $VERBOSE -eq 0 ] && echo "-q" || echo "-v")
@@ -620,3 +638,7 @@ echo -e "${YELLOW}${BOLD}Important:${NC}"
 echo "  L'auto-remediation est DESACTIVEE par defaut."
 echo "  Pour l'activer, modifiez config/remediation.yaml"
 echo ""
+
+# Demarrage automatique — pas besoin de sourcer le shell
+print_header "Demarrage de l'interface"
+./wasteless.sh || print_warning "Demarrage automatique echoue. Lancez manuellement: ./wasteless.sh"
