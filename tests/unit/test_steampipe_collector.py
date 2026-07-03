@@ -24,6 +24,8 @@ from collectors.steampipe import (
     QUERIES_DIR,
 )
 from detectors.ebs_orphan_steampipe import rows_to_volumes
+from detectors.eip_orphan_steampipe import rows_to_eips
+from detectors.snapshot_orphan_steampipe import rows_to_snapshots
 
 
 def _completed(stdout='', returncode=0, stderr=''):
@@ -124,8 +126,10 @@ class TestRunQueryFile:
             run_query_file('does_not_exist')
         assert 'not found' in str(exc_info.value)
 
-    def test_ebs_orphan_query_file_exists(self):
-        assert (QUERIES_DIR / 'ebs_orphan.sql').is_file()
+    def test_query_files_exist(self):
+        for name in ('ebs_orphan', 'eip_orphan',
+                     'snapshot_orphan', 'ami_backed_snapshots'):
+            assert (QUERIES_DIR / f'{name}.sql').is_file()
 
     @patch('collectors.steampipe.run_query')
     def test_passes_sql_content(self, mock_run_query):
@@ -165,3 +169,67 @@ class TestRowsToVolumes:
 
     def test_empty_input(self):
         assert rows_to_volumes([]) == []
+
+
+class TestRowsToEips:
+    """Tests for mapping Steampipe rows to detector EIP dicts."""
+
+    def test_full_row(self):
+        eips = rows_to_eips([{
+            'allocation_id': 'eipalloc-0abc',
+            'public_ip': '52.1.2.3',
+            'domain': 'vpc',
+            'region': 'eu-west-1',
+        }])
+        assert eips == [{
+            'allocation_id': 'eipalloc-0abc',
+            'public_ip': '52.1.2.3',
+            'domain': 'vpc',
+            'region': 'eu-west-1',
+            'monthly_cost': pytest.approx(3.36),
+        }]
+
+    def test_missing_optional_fields(self):
+        eip = rows_to_eips([{'allocation_id': 'eipalloc-1',
+                             'public_ip': None, 'domain': None}])[0]
+        assert eip['public_ip'] == ''
+        assert eip['domain'] == 'vpc'
+        assert eip['region'] == ''
+
+    def test_empty_input(self):
+        assert rows_to_eips([]) == []
+
+
+class TestRowsToSnapshots:
+    """Tests for mapping Steampipe rows to detector snapshot dicts."""
+
+    def test_full_row(self):
+        snaps = rows_to_snapshots([{
+            'snapshot_id': 'snap-0abc',
+            'description': 'weekly backup',
+            'volume_id': 'vol-1',
+            'size_gb': 50,
+            'state': 'completed',
+            'start_time': '2025-01-01T00:00:00Z',
+            'age_days': 200,
+            'encrypted': False,
+            'region': 'eu-west-3',
+        }])
+        snap = snaps[0]
+        assert snap['snapshot_id'] == 'snap-0abc'
+        assert snap['age_days'] == 200
+        assert snap['start_time'] == '2025-01-01T00:00:00Z'
+        # 50 GiB at 0.046 EUR/GiB/month
+        assert snap['monthly_cost'] == pytest.approx(2.30)
+
+    def test_missing_optional_fields(self):
+        snap = rows_to_snapshots([{'snapshot_id': 'snap-1',
+                                   'size_gb': None, 'age_days': None}])[0]
+        assert snap['size_gb'] == 0
+        assert snap['monthly_cost'] == 0.0
+        assert snap['age_days'] == 0
+        assert snap['description'] == ''
+        assert snap['encrypted'] is False
+
+    def test_empty_input(self):
+        assert rows_to_snapshots([]) == []
