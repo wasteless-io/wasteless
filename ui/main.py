@@ -131,7 +131,10 @@ def check_aws_reachable() -> bool:
     """Quick AWS connectivity check via STS."""
     try:
         import boto3
-        boto3.client('sts').get_caller_identity()
+        from botocore.config import Config
+        # Short timeouts: this runs during startup and must never block the app
+        cfg = Config(connect_timeout=3, read_timeout=3, retries={'max_attempts': 1})
+        boto3.client('sts', config=cfg).get_caller_identity()
         return True
     except Exception:
         return False
