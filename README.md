@@ -221,6 +221,19 @@ cd ui && ./start.sh
 cd ui && python run_tests.py
 ```
 
+### Adding a new detector
+
+1. Write the Steampipe query in `sql/steampipe/<name>.sql`.
+2. Subclass `SteampipeWasteDetector` in `src/detectors/<name>.py` — only
+   `map_rows()` is needed (see `vpc_unused.py` for a minimal example).
+3. **Declare the `recommendation_type` in
+   `ui/utils/action_registry.py`** with a conscious execution mode:
+   `boto3` (direct EC2 automation), `remediator` (backend safeguards
+   pipeline) or `manual` (approval records the decision, execution stays
+   human). The guard test in `ui/tests/test_action_registry.py` fails on
+   undeclared types.
+4. Add `map_rows()` unit tests in `tests/unit/test_steampipe_detectors.py`.
+
 ---
 
 ## Roadmap
