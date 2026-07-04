@@ -165,6 +165,11 @@ class ResourceRemediator:
             self.verify_still_wasteful(state, resource_id, region)
 
             # Safeguards
+            if not self.safeguards.is_action_enabled(self.action_type):
+                raise SafeguardException(
+                    f"Action '{self.action_type}' disabled by config "
+                    f"(auto_remediation.actions) — execute manually"
+                )
             confidence = self._get_recommendation_confidence(recommendation_id)
             if self.safeguards.is_whitelisted(resource_id, state.get('tags', {})):
                 raise SafeguardException(f"{resource_id} is whitelisted")

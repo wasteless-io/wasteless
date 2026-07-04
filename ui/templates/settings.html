@@ -103,6 +103,30 @@
         {% if config.get('auto_remediation', {}).get('enabled', False) %}checked{% endif %}>
 </div>
 
+<!-- Per-action automation toggles -->
+<div class="card mb-2" style="padding: 1rem;">
+    <h3 style="margin: 0 0 0.25rem 0;">Automated Actions</h3>
+    <p class="text-muted" style="margin: 0 0 1rem 0; font-size: 0.85rem;">
+        Choose which action types Wasteless may execute on AWS. Disabled types
+        stay in Recommendations but approving them only records your decision
+        — execution stays manual.
+    </p>
+    {% set action_toggles = config.get('auto_remediation', {}).get('actions', {}) or {} %}
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem 1.5rem;">
+        {% for action in automatable_actions %}
+        <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid var(--gray-200); border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+            <input type="checkbox"
+                   {% if action_toggles.get(action.type, True) %}checked{% endif %}
+                   onchange="updateConfig('action:{{ action.type }}', this.checked)">
+            <code style="font-size: 0.8rem;">{{ action.type }}</code>
+            <span class="badge badge-info" style="margin-left: auto; font-size: 0.65rem;">
+                {% if action.mode == 'remediator' %}safeguards + rollback{% else %}direct{% endif %}
+            </span>
+        </label>
+        {% endfor %}
+    </div>
+</div>
+
 <!-- Whitelist -->
 <div class="card mb-2" style="padding: 1rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">

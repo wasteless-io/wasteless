@@ -1,6 +1,12 @@
 auto_remediation:
   enabled: false
-  dry_run_days: 7
+  dry_run_days: 0
+  actions:
+    stop_instance: true
+    terminate_instance: true
+    migrate_gp2_to_gp3: true
+    delete_nat_gateway: false
+    delete_load_balancer: true
 protection:
   min_instance_age_days: 30
   min_idle_days: 14
@@ -40,4 +46,4 @@ logging:
 aws:
   region: us-east-1
   assume_role_arn: ''
-dry_run: true
+dry_run: false

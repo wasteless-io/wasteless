@@ -113,6 +113,14 @@ class TestRemediateFlow:
         assert result['success'] is False
         r.execute_action.assert_not_called()
 
+    def test_action_disabled_by_toggle_blocked(self):
+        r = self._remediator_with_state({'volume_type': 'gp2', 'tags': {}})
+        r.safeguards.is_action_enabled.return_value = False
+        result = r.remediate('vol-1', recommendation_id=1, region='eu-west-3')
+        assert result['success'] is False
+        assert 'disabled by config' in result['error']
+        r.execute_action.assert_not_called()
+
     def test_real_run_blocked_when_auto_remediation_disabled(self):
         r = self._remediator_with_state({'volume_type': 'gp2', 'tags': {}},
                                         dry_run=False)

@@ -311,6 +311,25 @@ class ConfigManager:
         config['auto_remediation']['enabled'] = enabled
         return self.save_config(config)
 
+    def get_action_enabled(self, action_type: str) -> bool:
+        """Per-action opt-out (auto_remediation.actions.<type>).
+
+        Missing key = enabled: the global flags stay the master gates.
+        """
+        config = self.load_config()
+        actions = config.get('auto_remediation', {}).get('actions', {}) or {}
+        return actions.get(action_type, True)
+
+    def set_action_enabled(self, action_type: str, enabled: bool) -> bool:
+        """Enable or disable automation for one action type."""
+        config = self.load_config()
+        if 'auto_remediation' not in config:
+            config['auto_remediation'] = {}
+        if not isinstance(config['auto_remediation'].get('actions'), dict):
+            config['auto_remediation']['actions'] = {}
+        config['auto_remediation']['actions'][action_type] = bool(enabled)
+        return self.save_config(config)
+
     def get_dry_run(self) -> bool:
         """Check if dry-run mode is enabled (default: True for safety)"""
         config = self.load_config()

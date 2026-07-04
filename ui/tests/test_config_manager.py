@@ -81,6 +81,23 @@ class TestConfigManager(unittest.TestCase):
         # Delete temp file
         Path(self.temp_config.name).unlink(missing_ok=True)
 
+    def test_action_enabled_defaults_to_true(self):
+        """A type absent from auto_remediation.actions is enabled."""
+        self.assertTrue(self.config_manager.get_action_enabled('stop_instance'))
+
+    def test_set_and_get_action_enabled(self):
+        """Disabling then re-enabling one action type persists."""
+        self.assertTrue(
+            self.config_manager.set_action_enabled('delete_nat_gateway', False))
+        self.assertFalse(
+            self.config_manager.get_action_enabled('delete_nat_gateway'))
+        # other types untouched
+        self.assertTrue(self.config_manager.get_action_enabled('stop_instance'))
+        self.assertTrue(
+            self.config_manager.set_action_enabled('delete_nat_gateway', True))
+        self.assertTrue(
+            self.config_manager.get_action_enabled('delete_nat_gateway'))
+
     def test_load_config(self):
         """Test loading configuration."""
         config = self.config_manager.load_config()

@@ -1,6 +1,12 @@
 auto_remediation:
   enabled: false
   dry_run_days: 0
+  actions:
+    stop_instance: true
+    terminate_instance: true
+    migrate_gp2_to_gp3: true
+    delete_nat_gateway: true
+    delete_load_balancer: true
 protection:
   min_instance_age_days: 30
   min_idle_days: 14
