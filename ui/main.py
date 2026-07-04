@@ -434,7 +434,10 @@ async def home(request: Request, conn=Depends(get_db)):
         "scheduler": scheduler.running,
     }
 
+    from utils.reports import llm_narrative_available
+
     return templates.TemplateResponse(request, "index.html", context={
+        "llm_enabled": llm_narrative_available(),
         "metrics": result,
         "waste_by_type": waste_by_type,
         "recent_activity": recent_activity,
@@ -1024,6 +1027,29 @@ def reports_narrative(
     narrative = generate_narrative(collect_digest_data(conn, start_date, end_date),
                                    conn=conn)
     return JSONResponse({"narrative": narrative})
+
+
+@app.get("/api/briefing/today")
+def briefing_today(conn=Depends(get_db), refresh: bool = False):
+    """Today's AI briefing for the home page, cached one row per day.
+
+    The AI only comments; every number in the briefing data is computed
+    from the database. Sync route on purpose: the LLM call blocks up to
+    30s on a cache miss and must run in the threadpool, not on the event
+    loop. Returns {"briefing": null} when the LLM is disabled or fails —
+    the card hides itself.
+    """
+    from utils.reports import get_or_create_briefing
+    briefing = get_or_create_briefing(conn, refresh=refresh)
+    if not briefing:
+        return JSONResponse({"briefing": None})
+    return JSONResponse({
+        "briefing": briefing["content"],
+        "model": briefing["model"],
+        "generated_at": briefing["created_at"].isoformat()
+                        if briefing["created_at"] else None,
+        "cached": briefing["cached"],
+    })
 
 
 @app.get("/logs", response_class=HTMLResponse)
