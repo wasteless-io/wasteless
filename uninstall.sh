@@ -107,6 +107,17 @@ else
     print_skip "Aucun processus WasteLess en cours"
 fi
 
+# Filet de securite: instances uvicorn lancees sans fichier PID (demarrage manuel,
+# ancienne version des scripts) survivent au bloc precedent — on tue par port.
+UI_PORT="${WASTELESS_PORT:-8888}"
+SURVIVORS=$(pgrep -f "uvicorn main:app.*--port $UI_PORT" 2>/dev/null || true)
+if [ -n "$SURVIVORS" ]; then
+    kill $SURVIVORS 2>/dev/null || true
+    sleep 1
+    pkill -9 -f "uvicorn main:app.*--port $UI_PORT" 2>/dev/null || true
+    print_step "Instance(s) uvicorn survivante(s) arretee(s) (PID: $(echo $SURVIVORS | tr '\n' ' '))"
+fi
+
 # Supprimer le fichier de log daemon
 LOG_FILE="$HOME/.wasteless.log"
 if [ -f "$LOG_FILE" ]; then
