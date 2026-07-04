@@ -17,8 +17,12 @@ import sys
 import json
 import logging
 from datetime import date
+from pathlib import Path
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
+
+# Allow running as a script: python3 src/detectors/eip_orphan.py
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dotenv import load_dotenv
 import psycopg2
@@ -204,6 +208,10 @@ class EIPOrphanDetector:
 
         waste_ids = self.save(eips)
         rec_count = self.recommend(waste_ids)
+
+        # AI insights (no-op unless WASTELESS_LLM_MODEL is configured)
+        from core.llm import enrich_recommendations
+        enrich_recommendations(self.conn)
 
         print(f"\nRecommendations created: {rec_count}")
         print("View at http://localhost:8888/recommendations\n")

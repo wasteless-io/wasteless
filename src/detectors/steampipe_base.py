@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 import psycopg2
 
 from collectors.steampipe import run_query_file
+from core.llm import enrich_recommendations
 
 load_dotenv()
 
@@ -174,6 +175,9 @@ class SteampipeWasteDetector:
 
         waste_ids = self.save(items)
         rec_count = self.recommend(waste_ids, items)
+        insights = enrich_recommendations(self.conn)
+        if insights:
+            print(f"AI insights generated:   {insights}")
 
         print(f"\nRecommendations created: {rec_count}")
         print("View at http://localhost:8888/recommendations\n")

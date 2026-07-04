@@ -37,6 +37,7 @@
       action_required TEXT,
       estimated_monthly_savings_eur DECIMAL(12, 4),
       status VARCHAR(20) DEFAULT 'pending',
+      ai_insight TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       applied_at TIMESTAMP
   );

@@ -17,7 +17,11 @@ import sys
 import json
 import logging
 from datetime import datetime, date
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
+
+# Allow running as a script: python3 src/detectors/ec2_idle.py
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dotenv import load_dotenv
 import psycopg2
@@ -522,6 +526,10 @@ class EC2IdleDetector:
 
         # Generate recommendations
         recommendations_count = self.generate_recommendations(waste_ids)
+
+        # AI insights (no-op unless WASTELESS_LLM_MODEL is configured)
+        from core.llm import enrich_recommendations
+        enrich_recommendations(self.conn)
 
         print("\n" + "=" * 70)
         print("DETECTION SUMMARY")

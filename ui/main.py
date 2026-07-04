@@ -519,7 +519,8 @@ async def recommendations(
             w.metadata->>'name' as volume_name,
             w.metadata->>'public_ip' as public_ip,
             COALESCE((w.metadata->>'age_days')::integer, CURRENT_DATE - w.detection_date) as age_days,
-            w.metadata->>'description' as snap_description
+            w.metadata->>'description' as snap_description,
+            r.ai_insight
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         WHERE r.status = 'pending'

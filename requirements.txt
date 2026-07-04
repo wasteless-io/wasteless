@@ -6,6 +6,10 @@ python-dotenv>=1.0.0
 pyyaml>=6.0.1
 click>=8.1.7
 
+# Optional — AI insights on recommendations (any litellm provider).
+# Wasteless works without it; see .env.template (WASTELESS_LLM_MODEL).
+# litellm>=1.40
+
 # Testing
 pytest>=8.0.0
 pytest-cov>=4.1.0
