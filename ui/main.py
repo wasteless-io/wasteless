@@ -447,8 +447,17 @@ async def home(request: Request, conn=Depends(get_db)):
     })
 
 
+# Trend chart ranges: key → (days back, granularity, subtitle)
+TREND_RANGES = {
+    "7d":  (7,   "day",   "Last 7 days · 30-day linear forecast"),
+    "30d": (30,  "day",   "Last 30 days · 30-day linear forecast"),
+    "90d": (90,  "day",   "Last 90 days · 30-day linear forecast"),
+    "1y":  (365, "month", "Last 12 months · 6-month linear forecast"),
+}
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, conn=Depends(get_db)):
+async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     """Executive dashboard with KPIs and charts."""
     cursor = conn.cursor()
 
@@ -514,15 +523,33 @@ async def dashboard(request: Request, conn=Depends(get_db)):
     """)
     inaction_row = cursor.fetchone()
 
-    # Trend: daily active-waste totals from waste_snapshots (stable history
-    # written by detector runs + one-shot backfill), last 30 days
-    cursor.execute("""
-        SELECT snapshot_date as date, COALESCE(SUM(total_eur), 0) as total_waste
-        FROM waste_snapshots
-        WHERE snapshot_date >= CURRENT_DATE - INTERVAL '30 days'
-        GROUP BY snapshot_date
-        ORDER BY snapshot_date
-    """)
+    # Trend: active-waste totals from waste_snapshots (stable history written
+    # by detector runs + one-shot backfill). Daily points for 7d/30d/90d,
+    # monthly averages for 1y.
+    if trend not in TREND_RANGES:
+        trend = "30d"
+    trend_days, trend_granularity, trend_subtitle = TREND_RANGES[trend]
+    if trend_granularity == "month":
+        cursor.execute("""
+            SELECT date_trunc('month', snapshot_date)::date as date,
+                   AVG(daily_total) as total_waste
+            FROM (
+                SELECT snapshot_date, COALESCE(SUM(total_eur), 0) as daily_total
+                FROM waste_snapshots
+                WHERE snapshot_date >= CURRENT_DATE - %s * INTERVAL '1 day'
+                GROUP BY snapshot_date
+            ) d
+            GROUP BY 1
+            ORDER BY 1
+        """, (trend_days,))
+    else:
+        cursor.execute("""
+            SELECT snapshot_date as date, COALESCE(SUM(total_eur), 0) as total_waste
+            FROM waste_snapshots
+            WHERE snapshot_date >= CURRENT_DATE - %s * INTERVAL '1 day'
+            GROUP BY snapshot_date
+            ORDER BY snapshot_date
+        """, (trend_days,))
     waste_trend = cursor.fetchall()
 
     # Age distribution: how long resources have actually been wasting.
@@ -568,6 +595,9 @@ async def dashboard(request: Request, conn=Depends(get_db)):
     return templates.TemplateResponse(request, "dashboard.html", context={
         "kpis": kpis,
         "waste_trend": waste_trend,
+        "trend_range": trend,
+        "trend_granularity": trend_granularity,
+        "trend_subtitle": trend_subtitle,
         "waste_by_resource": waste_by_resource,
         "age_distribution": age_distribution,
         "daily_burn": daily_burn,
