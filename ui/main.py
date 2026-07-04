@@ -588,7 +588,7 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
 
     # Waste cost by resource type (kept for ROI summary) — active waste
     cursor.execute("""
-        SELECT resource_type, SUM(monthly_waste_eur) as total_eur
+        SELECT resource_type, SUM(monthly_waste_eur) as total_eur, COUNT(*) as cnt
         FROM active_waste
         GROUP BY resource_type
         ORDER BY total_eur DESC
