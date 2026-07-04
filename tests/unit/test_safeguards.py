@@ -250,3 +250,43 @@ class TestSafeguardsMaxInstances:
         """Count over limit should fail."""
         with pytest.raises(SafeguardException):
             safeguards.check_max_instances_limit(5)
+
+
+class TestSafeguardsSchedule:
+    """Tests for schedule check, including the enabled flag."""
+
+    def _safeguards(self, schedule):
+        config = {'schedule': schedule}
+        with patch.object(Safeguards, '_load_config', return_value=config):
+            return Safeguards()
+
+    def test_disabled_schedule_always_passes(self):
+        """schedule.enabled=false must bypass day/hour restrictions."""
+        sg = self._safeguards({
+            'enabled': False,
+            'allowed_days': ['Saturday', 'Sunday'],
+            'allowed_hours': [2, 3, 4],
+        })
+        assert sg.check_schedule() is True
+
+    def test_missing_enabled_key_defaults_to_disabled(self):
+        sg = self._safeguards({
+            'allowed_days': ['Saturday'], 'allowed_hours': [2],
+        })
+        assert sg.check_schedule() is True
+
+    def test_enabled_schedule_blocks_wrong_day(self):
+        sg = self._safeguards({
+            'enabled': True,
+            'allowed_days': ['NoSuchDay'],
+            'allowed_hours': [],
+        })
+        with pytest.raises(SafeguardException) as exc_info:
+            sg.check_schedule()
+        assert "Outside allowed schedule" in str(exc_info.value)
+
+    def test_enabled_schedule_without_restrictions_passes(self):
+        sg = self._safeguards({
+            'enabled': True, 'allowed_days': [], 'allowed_hours': [],
+        })
+        assert sg.check_schedule() is True
