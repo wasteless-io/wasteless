@@ -17,6 +17,7 @@ from remediators.resource_remediator import (
     Gp2MigrationRemediator,
     LoadBalancerRemediator,
     NATGatewayRemediator,
+    VolumeDeleteRemediator,
     REMEDIATORS_BY_RECOMMENDATION,
 )
 
@@ -68,6 +69,71 @@ class TestVerifyStillWasteful:
     def test_nat_gateway_passes(self):
         r = _bare(NATGatewayRemediator)
         r.verify_still_wasteful({'state': 'available'}, 'nat-1', 'eu-west-3')
+
+
+class TestVolumeDelete:
+
+    def _available(self):
+        return {'volume_id': 'vol-1', 'volume_type': 'gp3', 'size_gb': 8,
+                'state': 'available', 'az': 'eu-west-3a',
+                'attachments': [], 'tags': {}}
+
+    def test_available_volume_passes(self):
+        r = _bare(VolumeDeleteRemediator)
+        r.verify_still_wasteful(self._available(), 'vol-1', 'eu-west-3')
+
+    def test_attached_volume_blocks(self):
+        r = _bare(VolumeDeleteRemediator)
+        state = dict(self._available(), state='in-use',
+                     attachments=['i-0abc'])
+        with pytest.raises(SafeguardException) as exc_info:
+            r.verify_still_wasteful(state, 'vol-1', 'eu-west-3')
+        assert 'i-0abc' in str(exc_info.value)
+        assert 'not deleting' in str(exc_info.value)
+
+    def test_snapshot_created_before_delete(self):
+        """Snapshot-first is the whole safety story: order matters."""
+        r = _bare(VolumeDeleteRemediator)
+        calls = []
+        ec2 = MagicMock()
+        ec2.create_snapshot.side_effect = lambda **kw: (
+            calls.append('snapshot'), {'SnapshotId': 'snap-rollback1'})[1]
+        ec2.delete_volume.side_effect = lambda **kw: calls.append('delete')
+        with patch('remediators.resource_remediator.boto3') as mock_boto3:
+            mock_boto3.client.return_value = ec2
+            r.execute_action('vol-1', 'eu-west-3', self._available())
+        assert calls == ['snapshot', 'delete']
+        # the rollback row gets the EBS snapshot id merged in
+        merged = [c for c in r.conn.cursor.return_value.execute.call_args_list
+                  if 'rollback_snapshots' in str(c)]
+        assert len(merged) == 1
+        assert 'snap-rollback1' in str(merged[0])
+
+    def test_rollback_snapshot_tagged(self):
+        r = _bare(VolumeDeleteRemediator)
+        ec2 = MagicMock()
+        ec2.create_snapshot.return_value = {'SnapshotId': 'snap-1'}
+        with patch('remediators.resource_remediator.boto3') as mock_boto3:
+            mock_boto3.client.return_value = ec2
+            r.execute_action('vol-1', 'eu-west-3', self._available())
+        tags = ec2.create_snapshot.call_args.kwargs['TagSpecifications'][0]['Tags']
+        assert {'Key': 'wasteless:rollback', 'Value': 'true'} in tags
+        assert {'Key': 'wasteless:source-volume', 'Value': 'vol-1'} in tags
+
+    def test_dry_run_never_calls_aws(self):
+        r = _bare(VolumeDeleteRemediator)
+        r.get_resource_state = MagicMock(return_value=self._available())
+        r.execute_action = MagicMock()
+        r._get_recommendation_confidence = MagicMock(return_value=0.95)
+        r._log_action = MagicMock(return_value=42)
+        r._create_rollback_snapshot = MagicMock(return_value=7)
+        result = r.remediate('vol-1', recommendation_id=1, region='eu-west-3')
+        assert result['success'] is True
+        r.execute_action.assert_not_called()
+
+    def test_registered_for_delete_volume(self):
+        assert REMEDIATORS_BY_RECOMMENDATION['delete_volume'] \
+            is VolumeDeleteRemediator
 
 
 class TestRemediateFlow:
@@ -175,10 +241,12 @@ class TestRegistry:
 
     def test_all_new_recommendation_types_covered(self):
         assert set(REMEDIATORS_BY_RECOMMENDATION) == {
-            'migrate_gp2_to_gp3', 'delete_nat_gateway', 'delete_load_balancer'
+            'migrate_gp2_to_gp3', 'delete_volume',
+            'delete_nat_gateway', 'delete_load_balancer'
         }
 
     def test_rollback_flags(self):
         assert Gp2MigrationRemediator.can_rollback is True
+        assert VolumeDeleteRemediator.can_rollback is True  # snapshot-first
         assert NATGatewayRemediator.can_rollback is False
         assert LoadBalancerRemediator.can_rollback is False

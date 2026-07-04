@@ -4,6 +4,7 @@ Generic resource remediators for Wasteless.
 
 Extends remediation beyond EC2 instances:
 - Gp2MigrationRemediator   — modify gp2 volumes to gp3 (online, reversible)
+- VolumeDeleteRemediator   — delete orphaned volumes (snapshot-first, rollback real)
 - NATGatewayRemediator     — delete unused NAT gateways (irreversible)
 - LoadBalancerRemediator   — delete load balancers with no targets (irreversible)
 
@@ -273,6 +274,88 @@ class Gp2MigrationRemediator(ResourceRemediator):
         ec2.modify_volume(VolumeId=resource_id, VolumeType='gp3')
 
 
+class VolumeDeleteRemediator(ResourceRemediator):
+    """Delete an orphaned EBS volume — snapshot-first, so the rollback
+    is real: the volume can be recreated from the snapshot during the
+    retention window. The snapshot costs ~5% of the volume price.
+
+    Deleting a volume while its snapshot is still 'pending' is safe:
+    the point-in-time capture is already fixed and the snapshot
+    completes on its own (AWS-documented behavior).
+    """
+
+    resource_type = 'ebs_volume'
+    action_type = 'delete_volume'
+    can_rollback = True   # recreate the volume from the pre-delete snapshot
+
+    def get_resource_state(self, resource_id, region):
+        ec2 = boto3.client('ec2', region_name=region)
+        try:
+            volume = ec2.describe_volumes(VolumeIds=[resource_id])['Volumes'][0]
+        except ec2.exceptions.ClientError:
+            return None
+        return {
+            'volume_id':   volume['VolumeId'],
+            'volume_type': volume['VolumeType'],
+            'size_gb':     volume['Size'],
+            'state':       volume['State'],
+            'az':          volume['AvailabilityZone'],
+            'attachments': [a['InstanceId']
+                            for a in volume.get('Attachments', [])],
+            'tags':        _tags_dict(volume.get('Tags')),
+        }
+
+    def verify_still_wasteful(self, state, resource_id, region):
+        if state['state'] != 'available' or state['attachments']:
+            attached = (f", attached to {', '.join(state['attachments'])}"
+                        if state['attachments'] else '')
+            raise SafeguardException(
+                f"Volume {resource_id} is '{state['state']}'{attached} "
+                f"— no longer orphaned, not deleting"
+            )
+
+    def execute_action(self, resource_id, region, state):
+        ec2 = boto3.client('ec2', region_name=region)
+        snapshot = ec2.create_snapshot(
+            VolumeId=resource_id,
+            Description=(f"wasteless rollback before delete_volume "
+                         f"{resource_id}"),
+            TagSpecifications=[{
+                'ResourceType': 'snapshot',
+                'Tags': [
+                    {'Key': 'wasteless:rollback', 'Value': 'true'},
+                    {'Key': 'wasteless:source-volume', 'Value': resource_id},
+                ],
+            }],
+        )
+        ebs_snapshot_id = snapshot['SnapshotId']
+        logger.info(f"Rollback snapshot {ebs_snapshot_id} created "
+                    f"for {resource_id}")
+        self._attach_ebs_snapshot_to_rollback(resource_id, ebs_snapshot_id)
+
+        ec2.delete_volume(VolumeId=resource_id)
+
+    def _attach_ebs_snapshot_to_rollback(self, resource_id, ebs_snapshot_id):
+        """The rollback row is written before execute_action runs; merge
+        the EBS snapshot id into it so the rollback is actionable."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE rollback_snapshots
+                SET state_before = state_before || %s::jsonb
+                WHERE id = (
+                    SELECT max(id) FROM rollback_snapshots
+                    WHERE resource_id = %s AND resource_type = %s
+                );
+            """, (
+                json.dumps({'rollback_ebs_snapshot_id': ebs_snapshot_id}),
+                resource_id, self.resource_type,
+            ))
+            self.conn.commit()
+        finally:
+            cursor.close()
+
+
 class NATGatewayRemediator(ResourceRemediator):
     """Delete an unused NAT gateway (irreversible)."""
 
@@ -386,6 +469,7 @@ class LoadBalancerRemediator(ResourceRemediator):
 # recommendation_type -> remediator class, used by the UI dispatch
 REMEDIATORS_BY_RECOMMENDATION = {
     'migrate_gp2_to_gp3':   Gp2MigrationRemediator,
+    'delete_volume':        VolumeDeleteRemediator,
     'delete_nat_gateway':   NATGatewayRemediator,
     'delete_load_balancer': LoadBalancerRemediator,
 }

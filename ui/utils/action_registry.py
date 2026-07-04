@@ -21,11 +21,11 @@ EXECUTION_MODES = {
     'terminate_instance':   'boto3',
     # Backend remediators (src/remediators/resource_remediator.py)
     'migrate_gp2_to_gp3':   'remediator',
+    'delete_volume':        'remediator',  # snapshot-first: rollback real
     'delete_nat_gateway':   'remediator',
     'delete_load_balancer': 'remediator',
     # Manual review — approval is a decision, execution is up to the human
     'downsize_instance':    'manual',
-    'delete_volume':        'manual',
     'delete_snapshot':      'manual',
     'release_ip':           'manual',
     'delete_vpc':           'manual',
