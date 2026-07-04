@@ -141,6 +141,11 @@
                 €{{ "%.2f"|format(daily_burn * 30) }}/mo · €{{ "%.0f"|format(daily_burn * 30 * 12) }}/yr
             </div>
         </div>
+        {% if ai_daily_cost is not none %}
+        <div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100); text-align: center;">
+            AI insights: {% if ai_daily_cost < 0.005 %}&lt;€0.01{% else %}€{{ "%.2f"|format(ai_daily_cost) }}{% endif %}/day{% if ai_roi and ai_roi >= 2 %} · finds {% if ai_roi > 100 %}&gt;×100{% else %}×{{ "%.0f"|format(ai_roi) }}{% endif %} its cost{% endif %}
+        </div>
+        {% endif %}
         {% if waste_trend %}
         <div style="height: 50px; position: relative; margin-top: 0.5rem;">
             <canvas id="burnSparkline"></canvas>

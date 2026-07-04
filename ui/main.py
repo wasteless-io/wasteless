@@ -447,6 +447,10 @@ async def home(request: Request, conn=Depends(get_db)):
     })
 
 
+# Fixed USD→EUR rate for LLM costs, same convention as the detectors' AWS pricing
+USD_TO_EUR = float(os.getenv('USD_TO_EUR', '0.92'))
+
+
 # Trend chart ranges: key → (days back, granularity, subtitle)
 TREND_RANGES = {
     "7d":  (7,   "day",   "Last 7 days · 30-day linear forecast"),
@@ -595,9 +599,27 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     """)
     waste_by_resource = cursor.fetchall()
 
+    # LLM spend over the last 30 days, averaged per day actually covered
+    # (dividing by 30 would understate the rate when tracking just started)
+    cursor.execute("""
+        SELECT COALESCE(SUM(cost_usd), 0) as cost_usd,
+               COUNT(*) as calls,
+               GREATEST(CURRENT_DATE - MIN(called_at::date) + 1, 1) as days_covered
+        FROM llm_usage
+        WHERE called_at >= NOW() - INTERVAL '30 days'
+    """)
+    llm_row = cursor.fetchone()
+
     cursor.close()
 
+    ai_daily_cost = None
+    ai_roi = None
+    if llm_row and llm_row['calls']:
+        ai_daily_cost = float(llm_row['cost_usd']) * USD_TO_EUR / llm_row['days_covered']
+
     daily_burn = float(inaction_row['daily_burn']) if inaction_row else 0
+    if ai_daily_cost:
+        ai_roi = daily_burn / ai_daily_cost
     first_detection = inaction_row['first_detection'] if inaction_row else None
 
     return templates.TemplateResponse(request, "dashboard.html", context={
@@ -610,6 +632,8 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         "age_distribution": age_distribution,
         "daily_burn": daily_burn,
         "first_detection": first_detection,
+        "ai_daily_cost": ai_daily_cost,
+        "ai_roi": ai_roi,
     })
 
 
@@ -861,7 +885,8 @@ def reports_narrative(
     """
     from utils.reports import collect_digest_data, generate_narrative
     start_date, end_date = _resolve_report_period(month, start, end, days)
-    narrative = generate_narrative(collect_digest_data(conn, start_date, end_date))
+    narrative = generate_narrative(collect_digest_data(conn, start_date, end_date),
+                                   conn=conn)
     return JSONResponse({"narrative": narrative})
 
 

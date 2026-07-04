@@ -58,6 +58,48 @@ def is_enabled() -> bool:
         return False
 
 
+def record_usage(conn, feature: str, response: Any) -> None:
+    """
+    Log one LLM call into llm_usage (tokens + cost computed by litellm).
+
+    Same contract as the insights themselves: never raises, a tracking
+    failure must not break the feature. cost_usd stays NULL when litellm
+    does not know the model's pricing (local/custom models).
+    """
+    if conn is None:
+        return
+    try:
+        import litellm
+        usage = getattr(response, 'usage', None)
+        try:
+            cost_usd = litellm.completion_cost(completion_response=response)
+        except Exception:
+            cost_usd = None
+
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO llm_usage
+                    (feature, model, prompt_tokens, completion_tokens, cost_usd)
+                VALUES (%s, %s, %s, %s, %s);
+            """, (
+                feature,
+                getattr(response, 'model', None) or os.getenv(MODEL_ENV_VAR),
+                getattr(usage, 'prompt_tokens', None),
+                getattr(usage, 'completion_tokens', None),
+                cost_usd,
+            ))
+            conn.commit()
+        finally:
+            cursor.close()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.warning(f"LLM usage tracking failed (continuing without): {e}")
+
+
 def build_prompt(action: str, resource_type: str, savings: Any,
                  confidence: Any, metadata: Dict[str, Any]) -> str:
     return PROMPT_TEMPLATE.format(
@@ -70,7 +112,8 @@ def build_prompt(action: str, resource_type: str, savings: Any,
 
 
 def generate_insight(action: str, resource_type: str, savings: Any,
-                     confidence: Any, metadata: Dict[str, Any]) -> Optional[str]:
+                     confidence: Any, metadata: Dict[str, Any],
+                     conn=None) -> Optional[str]:
     """One AI insight for a recommendation, or None (never raises)."""
     if not is_enabled():
         return None
@@ -85,6 +128,7 @@ def generate_insight(action: str, resource_type: str, savings: Any,
             temperature=0.2,
             timeout=TIMEOUT_SECONDS,
         )
+        record_usage(conn, 'insight', response)
         insight = response.choices[0].message.content
         return insight.strip() if insight else None
     except Exception as e:
@@ -121,7 +165,7 @@ def enrich_recommendations(conn, limit: int = MAX_INSIGHTS_PER_RUN) -> int:
             if isinstance(metadata, str):
                 metadata = json.loads(metadata)
             insight = generate_insight(action, resource_type, savings,
-                                       confidence, metadata or {})
+                                       confidence, metadata or {}, conn=conn)
             if insight:
                 cursor.execute(
                     "UPDATE recommendations SET ai_insight = %s WHERE id = %s;",

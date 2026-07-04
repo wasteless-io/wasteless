@@ -56,6 +56,18 @@
       PRIMARY KEY (snapshot_date, resource_type)
   );
 
+  -- Consommation LLM : une ligne par appel (insights, narratives)
+  -- (coût calculé par litellm, voir sql/migrations/llm_usage.sql)
+  CREATE TABLE IF NOT EXISTS llm_usage (
+      id SERIAL PRIMARY KEY,
+      called_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      feature VARCHAR(30) NOT NULL,
+      model VARCHAR(100),
+      prompt_tokens INTEGER,
+      completion_tokens INTEGER,
+      cost_usd DECIMAL(10, 6)
+  );
+
   -- Contraintes d'unicité (nécessaires pour ON CONFLICT upserts)
   DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_waste_resource') THEN
@@ -71,6 +83,7 @@
   CREATE INDEX IF NOT EXISTS idx_costs_raw_provider ON cloud_costs_raw(provider);
   CREATE INDEX IF NOT EXISTS idx_waste_date ON waste_detected(detection_date);
   CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
+  CREATE INDEX IF NOT EXISTS idx_llm_usage_called_at ON llm_usage(called_at);
 
   -- Gaspillage actif : ressource encore existante et non traitée.
   -- Exclut obsolete (ressource disparue) et applied/approved (action faite) ;
