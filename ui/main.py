@@ -307,7 +307,8 @@ async def home(request: Request, conn=Depends(get_db)):
     # Fetch metrics in single query
     cursor.execute("""
         WITH pending AS (
-            SELECT COUNT(*) as pending_count
+            SELECT COUNT(*) as pending_count,
+                   COALESCE(SUM(estimated_monthly_savings_eur), 0) as pending_eur
             FROM recommendations
             WHERE status = 'pending'
         ),
@@ -326,6 +327,7 @@ async def home(request: Request, conn=Depends(get_db)):
         )
         SELECT
             p.pending_count,
+            p.pending_eur,
             w.total_waste,
             r.total_spend,
             s.savings_realized,
@@ -404,16 +406,18 @@ async def home(request: Request, conn=Depends(get_db)):
     daily_cost = float(cost_row['daily_cost']) if cost_row else 0
     monthly_cost = float(cost_row['monthly_cost']) if cost_row else 0
 
-    # Trend: compare current vs 7 days ago (savings potential)
+    # Trend: current waste vs the snapshot taken 7 days ago — same source
+    # as the AI briefing, so the KPI delta and the prose never contradict.
+    # None (no snapshot yet) means no trend to show, not a zero delta.
     cursor.execute("""
-        SELECT COALESCE(SUM(estimated_monthly_savings_eur), 0) as savings_week_ago
-        FROM recommendations
-        WHERE created_at <= NOW() - INTERVAL '7 days'
+        SELECT SUM(total_eur) as week_ago_eur
+        FROM waste_snapshots
+        WHERE snapshot_date = CURRENT_DATE - 7
     """)
     trend_row = cursor.fetchone()
-    savings_week_ago = float(trend_row['savings_week_ago']) if trend_row else 0
-    current_savings = float(result['total_waste']) if result else 0
-    savings_trend = current_savings - savings_week_ago  # positive = more waste found
+    week_ago_eur = trend_row['week_ago_eur'] if trend_row else None
+    current_waste = float(result['total_waste']) if result else 0
+    savings_trend = (current_waste - float(week_ago_eur)) if week_ago_eur is not None else None
 
     cursor.close()
 

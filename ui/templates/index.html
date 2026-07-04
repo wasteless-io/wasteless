@@ -25,8 +25,69 @@
     </div>
 </div>
 
+<!-- KPI Banner: numbers before prose — three distinct dimensions,
+     not one figure at three time scales -->
+<!-- Daily / Monthly Waste Banner -->
+<div class="card mb-1" style="padding: 0.85rem 1.25rem; display: flex; justify-content: space-around; align-items: center;">
+
+    <!-- What leaks: current waste + how it moved -->
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.2f"|format(monthly_cost) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 0.72rem; margin-top: 0.15rem;">
+            {% if savings_trend is none %}
+            {# No snapshot from a week ago yet: no trend beats a fake one #}
+            {% elif savings_trend > 0.01 %}
+            <span style="color: var(--danger); font-weight: 600;">&#9650; +{{ "%.2f"|format(savings_trend) }} € vs last week</span> <span style="color: var(--gray-400);">·</span>
+            {% elif savings_trend < -0.01 %}
+            <span style="color: var(--success); font-weight: 600;">&#9660; {{ "%.2f"|format(savings_trend) }} € vs last week</span> <span style="color: var(--gray-400);">·</span>
+            {% else %}
+            <span style="color: var(--gray-500);">stable vs last week</span> <span style="color: var(--gray-400);">·</span>
+            {% endif %}
+            <span style="color: var(--gray-400);">&approx; {{ "%.0f"|format(monthly_cost * 12) }} €/yr</span>
+        </div>
+    </div>
+
+    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
+
+    <!-- What awaits a decision -->
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.pending_eur or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></div>
+        <div style="font-size: 0.72rem; margin-top: 0.15rem;">
+            {% if (metrics.pending_count or 0) > 0 %}
+            <a href="/recommendations" style="color: var(--warning); font-weight: 600; text-decoration: none;">{{ metrics.pending_count }} action{{ 's' if metrics.pending_count > 1 }} awaiting approval &rarr;</a>
+            {% else %}
+            <span style="color: var(--gray-400);">nothing awaiting approval</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
+
+    <!-- What is proven: the number that justifies the tool -->
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.savings_realized or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">
+            {% if (metrics.savings_realized or 0) > 0 %}verified via Cost Explorer{% else %}appears after your first applied action{% endif %}
+        </div>
+    </div>
+
+    {# Waste Rate only earns a slot once Cost Explorer data exists #}
+    {% if metrics.waste_rate %}
+    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Waste Rate</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};">{{ "%.1f"|format(metrics.waste_rate) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
+        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">of this month's spend</div>
+    </div>
+    {% endif %}
+</div>
+
 {% if llm_enabled %}
-<!-- AI Daily Briefing: the AI comments, every number comes from the database -->
+<!-- AI Daily Briefing: below the numbers — the AI comments, it never leads.
+     Collapsed to its first paragraph by default. -->
 <div class="card mb-1" id="briefing-card" style="padding: 1rem 1.25rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
@@ -46,40 +107,6 @@
     </div>
 </div>
 {% endif %}
-
-<!-- Daily / Monthly Waste Banner -->
-<div class="card mb-1" style="padding: 0.75rem 1.25rem; display: flex; justify-content: space-around; align-items: center;">
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Daily Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.2f"|format(daily_cost) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
-    </div>
-    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.2f"|format(monthly_cost) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
-    </div>
-    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Annual Waste Projection</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.0f"|format(monthly_cost * 12) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
-    </div>
-    {# Waste Rate and Savings Realized only earn a slot once they have data;
-       until then the banner stays a clean 3-figure row #}
-    {% if metrics.waste_rate %}
-    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Waste Rate</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};">{{ "%.1f"|format(metrics.waste_rate) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
-    </div>
-    {% endif %}
-    {% if (metrics.savings_realized or 0) > 0 %}
-    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);">{{ "%.0f"|format(metrics.savings_realized) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
-    </div>
-    {% endif %}
-</div>
 
 <!-- Recent Activity -->
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
@@ -233,13 +260,35 @@ async function loadBriefing(refresh) {
             return;
         }
         body.textContent = '';
-        // Plain text from the model: render blank-line-separated paragraphs
-        data.briefing.split(/\n\s*\n/).forEach((para, i) => {
+        // Plain text from the model: blank-line-separated paragraphs.
+        // Only the first shows by default — the numbers above lead, the
+        // prose is one glance away.
+        const paras = data.briefing.split(/\n\s*\n/).map(t => t.trim()).filter(Boolean);
+        paras.forEach((para, i) => {
             const p = document.createElement('p');
-            p.textContent = para.trim();
+            p.textContent = para;
             p.style.margin = i === 0 ? '0' : '0.5rem 0 0';
+            if (i > 0) {
+                p.dataset.briefingExtra = '1';
+                p.style.display = 'none';
+            }
             body.appendChild(p);
         });
+        if (paras.length > 1) {
+            const toggle = document.createElement('a');
+            toggle.href = '#';
+            toggle.textContent = 'Show more';
+            toggle.style.cssText = 'display: inline-block; margin-top: 0.4rem; font-size: 0.78rem; font-weight: 600; color: var(--gray-500); text-decoration: none;';
+            toggle.onclick = (e) => {
+                e.preventDefault();
+                const expand = toggle.textContent === 'Show more';
+                body.querySelectorAll('[data-briefing-extra]').forEach(el => {
+                    el.style.display = expand ? '' : 'none';
+                });
+                toggle.textContent = expand ? 'Show less' : 'Show more';
+            };
+            body.appendChild(toggle);
+        }
         if (data.generated_at) {
             const d = new Date(data.generated_at);
             meta.textContent = 'Generated ' + d.toLocaleDateString([], { day: 'numeric', month: 'short' })

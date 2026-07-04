@@ -40,25 +40,35 @@ TOP_PENDING_LIMIT = 5
 
 BRIEFING_PROMPT = """\
 You are the FinOps assistant inside wasteless, an AWS cost-waste detector.
-Write today's briefing for the CTO from the data below.
+Write today's briefing for the CTO from the data below. The dashboard
+already shows the headline numbers; your job is the reading of them, not
+the recitation.
 
 Briefing data (JSON, amounts in EUR/month unless stated): {data}
 
-Write 3 short paragraphs of plain text (no markdown, no headings, no
-bullet lists), around 150-220 words in total:
-1. Situation — total active waste and how it moved versus yesterday and
-   versus 7 days ago (waste_trend), the dominant resource types, and the
-   waste rate versus total spend when available.
-2. Decisions and incidents — what is waiting for approval (count, amount,
-   the largest items and how long the oldest has been waiting), any failed
-   actions in the last 7 days, and how stale the last scan is if it is
-   more than a day old.
-3. Recommendation — the single most valuable next step, with the concrete
-   amount it recovers, and the verified savings achieved so far to keep
-   perspective.
-Be factual and direct, no filler, no greetings. Never invent numbers that
-are not in the data above; if a value is null or missing, say the data is
-not available rather than guessing."""
+Write 2 short paragraphs of plain text (no markdown, no headings, no
+bullet lists), 80-130 words in total:
+1. Situation — total active waste, how it moved versus yesterday and
+   versus 7 days ago (waste_trend), and what dominates it.
+2. Recommendation — the single most valuable next step and the concrete
+   amount it recovers.
+
+Mention these ONLY when their condition holds, otherwise not a word
+about them (not even to say they are fine, empty, or unavailable):
+- pending approvals: only if pending.count > 0
+- failed actions: only if actions_7d.failed > 0
+- scan freshness: only if last_scan_hours_ago > 24
+- waste rate / total spend: only if waste_rate_pct is a number
+- verified savings: only if verified_savings_eur > 0
+
+Hard rules:
+- Never invent numbers that are not in the data.
+- If a value is null, zero, or an empty list, OMIT it entirely. Never
+  write that data is unavailable, null, or that there is nothing to
+  report — silence is the correct way to report an empty state.
+- Write amounts like "9.57 €" and durations in natural units ("20
+  minutes ago", "3 days"), never decimal hours.
+- Factual and direct, no filler, no greetings."""
 
 
 def collect_briefing_data(conn) -> Dict[str, Any]:
