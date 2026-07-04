@@ -63,53 +63,22 @@
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Annual Waste Projection</div>
         <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.0f"|format(monthly_cost * 12) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
     </div>
-</div>
-
-<!-- KPIs Row -->
-<div class="card mb-1" style="padding: 1rem;">
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
-        <!-- Waste Rate -->
-        <div style="text-align: center; padding: 0.5rem;">
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
-                <span style="background: {% if metrics.waste_rate and metrics.waste_rate > 20 %}var(--danger){% elif metrics.waste_rate %}var(--warning){% else %}var(--gray-300){% endif %}; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">%</span>
-            </div>
-            {% if metrics.waste_rate %}
-            <div style="font-size: 2rem; font-weight: 700; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};">{{ "%.1f"|format(metrics.waste_rate) }}<span style="font-size: 1rem; font-weight: 500;"> %</span></div>
-            {% else %}
-            <div style="font-size: 2rem; font-weight: 700; color: var(--gray-400);">—</div>
-            {% endif %}
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Waste Rate</div>
-            <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.25rem;">
-                {% if metrics.waste_rate %}of total monthly spend{% else %}No cost data yet{% endif %}
-            </div>
-        </div>
-
-        <!-- Actions Required -->
-        <div style="text-align: center; padding: 0.5rem; border-left: 1px solid var(--gray-200); border-right: 1px solid var(--gray-200);">
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
-                <span style="background: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-300){% endif %}; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
-            </div>
-            <div style="font-size: 2rem; font-weight: 700; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ metrics.pending_count or 0 }}</div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Actions Required</div>
-            {% if pending_breakdown %}
-            <div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 0.3rem;">
-                {% for row in pending_breakdown %}{{ row.cnt }} {{ row.resource_type | replace('_', ' ') | replace('ebs volume', 'EBS') | replace('ec2 instance', 'EC2') | replace('elastic ip', 'EIP') | replace('ebs snapshot', 'Snap') }}{% if not loop.last %} · {% endif %}{% endfor %}
-            </div>
-            {% else %}
-            <div style="font-size: 0.85rem; color: var(--gray-500); margin-top: 0.25rem;">All clear</div>
-            {% endif %}
-        </div>
-
-        <!-- Savings Realized -->
-        <div style="text-align: center; padding: 0.5rem;">
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
-                <span style="background: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-300){% endif %}; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
-            </div>
-            <div style="font-size: 2rem; font-weight: 700; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};">{{ "%.0f"|format(metrics.savings_realized or 0) }} <span style="font-size: 1rem; font-weight: 500;">€</span></div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Savings Realized</div>
-            <div style="font-size: 0.85rem; color: var(--gray-400); margin-top: 0.25rem;">{% if (metrics.savings_realized or 0) > 0 %}verified savings to date{% else %}No actions yet{% endif %}</div>
-        </div>
+    {# Waste Rate and Savings Realized only earn a slot once they have data;
+       until then the banner stays a clean 3-figure row #}
+    {% if metrics.waste_rate %}
+    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Waste Rate</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};">{{ "%.1f"|format(metrics.waste_rate) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
     </div>
+    {% endif %}
+    {% if (metrics.savings_realized or 0) > 0 %}
+    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);">{{ "%.0f"|format(metrics.savings_realized) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Recent Activity -->
@@ -270,7 +239,8 @@ async function loadBriefing(refresh) {
         });
         if (data.generated_at) {
             const d = new Date(data.generated_at);
-            meta.textContent = 'Generated ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            meta.textContent = 'Generated ' + d.toLocaleDateString([], { day: 'numeric', month: 'short' })
+                + ', ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
         btn.style.display = 'inline-block';
     } catch (err) {

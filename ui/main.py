@@ -386,17 +386,6 @@ async def home(request: Request, conn=Depends(get_db)):
     """)
     recent_activity = cursor.fetchall()
 
-    # Pending breakdown by resource type
-    cursor.execute("""
-        SELECT w.resource_type, COUNT(*) as cnt
-        FROM recommendations r
-        JOIN waste_detected w ON r.waste_id = w.id
-        WHERE r.status = 'pending'
-        GROUP BY w.resource_type
-        ORDER BY cnt DESC
-    """)
-    pending_breakdown = cursor.fetchall()
-
     # Last sync time
     cursor.execute("""
         SELECT MAX(updated_at) as last_sync FROM waste_detected
@@ -442,7 +431,6 @@ async def home(request: Request, conn=Depends(get_db)):
         "waste_by_type": waste_by_type,
         "recent_activity": recent_activity,
         "system_health": system_health,
-        "pending_breakdown": pending_breakdown,
         "last_sync": last_sync,
         "daily_cost": daily_cost,
         "monthly_cost": monthly_cost,
