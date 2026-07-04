@@ -187,14 +187,18 @@
             <h3 style="margin: 0; font-size: 1rem;">Waste Trend & Forecast</h3>
             <span style="font-size: 0.75rem; color: var(--gray-500);">Last 30 days · 30-day linear forecast</span>
         </div>
-        <span style="font-size: 0.75rem; color: var(--gray-400); display: flex; align-items: center; gap: 1rem;">
+        <span id="forecastLegend" style="font-size: 0.75rem; color: var(--gray-400); display: flex; align-items: center; gap: 1rem;">
             <span style="display: inline-flex; align-items: center; gap: 0.35rem;"><span style="width: 20px; height: 2px; background: var(--gray-800); display: inline-block;"></span> Actual</span>
-            <span id="forecastLegendItem" style="display: inline-flex; align-items: center; gap: 0.35rem;"><span style="width: 20px; height: 2px; background: var(--gray-400); display: inline-block; border-top: 2px dashed var(--gray-400);"></span> Forecast</span>
-            <span id="forecastHint" style="display: none;">Forecast available after 7 days of history</span>
+            <span style="display: inline-flex; align-items: center; gap: 0.35rem;"><span style="width: 20px; height: 2px; background: var(--gray-400); display: inline-block; border-top: 2px dashed var(--gray-400);"></span> Forecast</span>
         </span>
     </div>
-    <div style="height: 160px; position: relative;">
+    <div id="forecastChartWrap" style="height: 160px; position: relative;">
         <canvas id="forecastChart"></canvas>
+    </div>
+    <div id="forecastEmpty" style="height: 160px; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+        <p style="margin: 0 0 0.25rem; font-weight: 600; color: var(--gray-700);">Building trend history</p>
+        <p class="text-muted" style="margin: 0; font-size: 0.85rem;">The trend and 30-day forecast appear after 7 daily scans.</p>
+        <div style="display: flex; gap: 4px; margin-top: 0.75rem;" id="forecastProgress"></div>
     </div>
 </div>
 {% endif %}
@@ -296,43 +300,52 @@ new Chart(document.getElementById('burnSparkline'), {
     const raw = [{% for item in waste_trend %}{{ "%.4f"|format(item.total_waste or 0) }}{% if not loop.last %},{% endif %}{% endfor %}];
     const labels = [{% for item in waste_trend %}'{{ item.date }}'{% if not loop.last %},{% endif %}{% endfor %}];
     const n = raw.length;
-    if (n < 2) return;
 
-    // A linear regression on fewer points is false precision — hold the forecast
-    // until there is at least a week of history.
-    const canForecast = n >= 7;
-    const forecastLabels = [];
-
-    const datasets = [{
-        label: 'Actual',
-        data: raw,
-        borderColor: '#1f2937',
-        backgroundColor: 'rgba(17,17,17,0.05)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 0,
-        borderWidth: 2
-    }];
-
-    if (canForecast) {
-        // Linear regression on actual data
-        let sx = 0, sy = 0, sxy = 0, sxx = 0;
-        for (let i = 0; i < n; i++) { sx += i; sy += raw[i]; sxy += i * raw[i]; sxx += i * i; }
-        const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
-        const intercept = (sy - slope * sx) / n;
-
-        // Forecast labels (next 30 days)
-        const lastDate = new Date(labels[n - 1]);
-        const forecastData = [];
-        for (let i = 1; i <= 30; i++) {
-            const d = new Date(lastDate);
-            d.setDate(d.getDate() + i);
-            forecastLabels.push(d.toISOString().slice(0, 10));
-            forecastData.push(Math.max(0, slope * (n - 1 + i) + intercept));
+    // Under a week of history there is no trend to draw: two points stretched
+    // across the card read as a crash. Show a progress placeholder instead.
+    if (n < 7) {
+        document.getElementById('forecastLegend').style.display = 'none';
+        document.getElementById('forecastChartWrap').style.display = 'none';
+        const empty = document.getElementById('forecastEmpty');
+        empty.style.display = 'flex';
+        const progress = document.getElementById('forecastProgress');
+        for (let i = 0; i < 7; i++) {
+            const dot = document.createElement('span');
+            dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${i < n ? 'var(--gray-700)' : 'var(--gray-200)'};`;
+            progress.appendChild(dot);
         }
+        return;
+    }
 
-        datasets[0].data = raw.concat(Array(30).fill(null));
-        datasets.push({
+    // Linear regression on actual data
+    let sx = 0, sy = 0, sxy = 0, sxx = 0;
+    for (let i = 0; i < n; i++) { sx += i; sy += raw[i]; sxy += i * raw[i]; sxx += i * i; }
+    const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+    const intercept = (sy - slope * sx) / n;
+
+    // Forecast labels (next 30 days)
+    const lastDate = new Date(labels[n - 1]);
+    const forecastLabels = [];
+    const forecastData = [];
+    for (let i = 1; i <= 30; i++) {
+        const d = new Date(lastDate);
+        d.setDate(d.getDate() + i);
+        forecastLabels.push(d.toISOString().slice(0, 10));
+        forecastData.push(Math.max(0, slope * (n - 1 + i) + intercept));
+    }
+
+    const datasets = [
+        {
+            label: 'Actual',
+            data: raw.concat(Array(30).fill(null)),
+            borderColor: '#1f2937',
+            backgroundColor: 'rgba(17,17,17,0.05)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 2
+        },
+        {
             label: 'Forecast',
             // Overlap point for visual continuity
             data: Array(n - 1).fill(null).concat([raw[n - 1]]).concat(forecastData),
@@ -342,11 +355,8 @@ new Chart(document.getElementById('burnSparkline'), {
             tension: 0.3,
             pointRadius: 0,
             borderWidth: 1.5
-        });
-    } else {
-        document.getElementById('forecastLegendItem').style.display = 'none';
-        document.getElementById('forecastHint').style.display = 'inline';
-    }
+        }
+    ];
 
     new Chart(document.getElementById('forecastChart'), {
         type: 'line',
