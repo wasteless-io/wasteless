@@ -343,6 +343,10 @@ new Chart(document.getElementById('burnSparkline'), {
             fill: true,
             tension: 0.3,
             pointRadius: 0,
+            pointHoverRadius: 4,
+            pointHoverBackgroundColor: '#1f2937',
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 2,
             borderWidth: 2
         },
         {
@@ -354,9 +358,35 @@ new Chart(document.getElementById('burnSparkline'), {
             fill: false,
             tension: 0.3,
             pointRadius: 0,
+            pointHoverRadius: 4,
+            pointHoverBackgroundColor: '#9ca3af',
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 2,
             borderWidth: 1.5
         }
     ];
+
+    // Vertical crosshair following the hovered x position
+    const crosshair = {
+        id: 'crosshair',
+        afterDatasetsDraw(chart) {
+            const active = chart.tooltip && chart.tooltip.getActiveElements();
+            if (!active || !active.length) return;
+            const x = active[0].element.x;
+            const { top, bottom } = chart.chartArea;
+            const c = chart.ctx;
+            c.save();
+            c.beginPath();
+            c.moveTo(x, top);
+            c.lineTo(x, bottom);
+            c.strokeStyle = 'rgba(0,0,0,0.15)';
+            c.lineWidth = 1;
+            c.stroke();
+            c.restore();
+        }
+    };
+
+    const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
     new Chart(document.getElementById('forecastChart'), {
         type: 'line',
@@ -364,12 +394,24 @@ new Chart(document.getElementById('burnSparkline'), {
             labels: labels.concat(forecastLabels),
             datasets: datasets
         },
+        plugins: [crosshair],
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            // Snap to the nearest x anywhere on the plot, so the tooltip
+            // follows the cursor sliding along the line
+            interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { display: false },
-                tooltip: { callbacks: { label: ctx => ` €${ctx.parsed.y.toFixed(2)}/mo` } }
+                tooltip: {
+                    callbacks: {
+                        title: items => fmtDate(items[0].label),
+                        label: ctx => ` ${ctx.dataset.label}: €${ctx.parsed.y.toFixed(2)}/mo`
+                    },
+                    filter: ctx => ctx.parsed.y != null,
+                    displayColors: false,
+                    padding: 10
+                }
             },
             scales: {
                 x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 10 } } },
