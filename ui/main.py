@@ -564,32 +564,6 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     # by detector runs + one-shot backfill)
     trend, trend_granularity, trend_subtitle, waste_trend = fetch_waste_trend(cursor, trend)
 
-    # Age distribution: how long resources have actually been wasting.
-    # Detectors store the resource age in metadata->>'age_days' (snapshot
-    # start time, volume create time...); detection_date is the fallback.
-    cursor.execute("""
-        WITH aged AS (
-            SELECT
-                COALESCE((metadata->>'age_days')::int,
-                         CURRENT_DATE - detection_date) as age_days,
-                monthly_waste_eur
-            FROM active_waste
-        )
-        SELECT
-            CASE
-                WHEN age_days <= 30 THEN '< 30 days'
-                WHEN age_days <= 90 THEN '31-90 days'
-                ELSE '90+ days'
-            END as age_bucket,
-            COUNT(*) as cnt,
-            COALESCE(SUM(monthly_waste_eur), 0) as total_eur,
-            MIN(age_days) as min_age
-        FROM aged
-        GROUP BY age_bucket
-        ORDER BY min_age
-    """)
-    age_distribution = cursor.fetchall()
-
     # Waste cost by resource type (kept for ROI summary) — active waste
     cursor.execute("""
         SELECT resource_type, SUM(monthly_waste_eur) as total_eur, COUNT(*) as cnt
@@ -682,7 +656,6 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         "trend_granularity": trend_granularity,
         "trend_subtitle": trend_subtitle,
         "waste_by_resource": waste_by_resource,
-        "age_distribution": age_distribution,
         "daily_burn": daily_burn,
         "first_detection": first_detection,
         "burned_total": burned_total,
