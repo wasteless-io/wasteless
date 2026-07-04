@@ -170,8 +170,11 @@
                     <span style="font-size: 0.84rem; color: var(--gray-800);">{{ item.resource_type | replace('_', ' ') | title }}</span>
                     <code style="font-size: 0.72rem; color: var(--gray-500); margin-left: 0.35rem;">{{ item.resource_id[:18] if item.resource_id else '' }}…</code>
                 </div>
+                {% if item.dry_run %}
+                <span style="font-size: 0.68rem; color: var(--primary); background: rgba(99,102,241,0.1); border-radius: 8px; padding: 0.1rem 0.4rem; font-weight: 600; flex-shrink: 0;">DRY-RUN</span>
+                {% endif %}
                 {% if item.action_status == 'success' %}
-                <span style="font-size: 0.78rem; color: var(--success); font-weight: 600; flex-shrink: 0;">&#10003; Done</span>
+                <span style="font-size: 0.78rem; color: var(--success); font-weight: 600; flex-shrink: 0;">{% if item.dry_run %}&#10003; Simulated{% else %}&#10003; Done{% endif %}</span>
                 {% else %}
                 <span style="font-size: 0.78rem; color: var(--danger); font-weight: 600; flex-shrink: 0;" title="{{ item.error_message or '' }}">&#10007; Failed</span>
                 {% endif %}
