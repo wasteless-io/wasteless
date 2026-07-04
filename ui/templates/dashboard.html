@@ -105,7 +105,7 @@
 </div>
 
 <!-- Charts Row -->
-<div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem;">
+<div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 1rem;">
 
     <!-- Cost by Resource Type (horizontal bar) -->
     <div class="card" style="padding: 1rem;">
@@ -141,11 +141,6 @@
                 €{{ "%.2f"|format(daily_burn * 30) }}/mo · €{{ "%.0f"|format(daily_burn * 30 * 12) }}/yr
             </div>
         </div>
-        {% if ai_daily_cost is not none %}
-        <div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100); text-align: center;">
-            AI insights: {% if ai_daily_cost < 0.005 %}&lt;€0.01{% else %}€{{ "%.2f"|format(ai_daily_cost) }}{% endif %}/day{% if ai_roi and ai_roi >= 2 %} · finds {% if ai_roi > 100 %}&gt;×100{% else %}×{{ "%.0f"|format(ai_roi) }}{% endif %} its cost{% endif %}
-        </div>
-        {% endif %}
         {% if waste_trend %}
         <div style="height: 50px; position: relative; margin-top: 0.5rem;">
             <canvas id="burnSparkline"></canvas>
@@ -179,6 +174,42 @@
         {% else %}
         <div style="height: 140px; display: flex; align-items: center; justify-content: center;">
             <p class="text-muted" style="margin: 0;">No data yet</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- AI Spend -->
+    <div class="card" style="padding: 1rem; display: flex; flex-direction: column;">
+        <div style="margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem;">AI Spend</h3>
+            <span style="font-size: 0.75rem; color: var(--gray-500);">LLM usage · last 30 days</span>
+        </div>
+        {% if ai_usage %}
+        {% set feature_labels = {'insight': 'Insights', 'narrative': 'Report narratives'} %}
+        <div style="text-align: center;">
+            <div style="font-size: 2.25rem; font-weight: 700; color: var(--gray-900);">
+                {% if ai_usage.cost_eur < 0.01 %}&lt;€0.01{% else %}€{{ "%.2f"|format(ai_usage.cost_eur) }}{% endif %}
+            </div>
+            <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem;">
+                {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }} · {{ "{:,}".format(ai_usage.tokens) }} tokens
+            </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; flex: 1;">
+            {% for f in ai_usage.features %}
+            <div style="display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-size: 0.8rem;">
+                <span style="color: var(--gray-700); font-weight: 500; white-space: nowrap;">{{ feature_labels.get(f.feature, f.feature) }}</span>
+                <span style="color: var(--gray-500); white-space: nowrap;">{{ f.calls }} call{{ 's' if f.calls > 1 }} · {% if f.cost_eur < 0.01 %}&lt;€0.01{% else %}€{{ "%.2f"|format(f.cost_eur) }}{% endif %}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% if ai_roi and ai_roi >= 2 %}
+        <div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100); text-align: center;">
+            Finds {% if ai_roi > 100 %}&gt;×100{% else %}×{{ "%.0f"|format(ai_roi) }}{% endif %} its cost in waste
+        </div>
+        {% endif %}
+        {% else %}
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 140px;">
+            <p class="text-muted" style="margin: 0; text-align: center;">No AI usage yet</p>
         </div>
         {% endif %}
     </div>

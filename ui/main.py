@@ -599,23 +599,52 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     """)
     waste_by_resource = cursor.fetchall()
 
-    # LLM spend over the last 30 days, averaged per day actually covered
-    # (dividing by 30 would understate the rate when tracking just started)
+    # LLM spend over the last 30 days: totals averaged per day actually
+    # covered (dividing by 30 would understate the rate when tracking just
+    # started), plus a per-feature breakdown for the AI Spend card
     cursor.execute("""
         SELECT COALESCE(SUM(cost_usd), 0) as cost_usd,
                COUNT(*) as calls,
+               COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) as tokens,
                GREATEST(CURRENT_DATE - MIN(called_at::date) + 1, 1) as days_covered
         FROM llm_usage
         WHERE called_at >= NOW() - INTERVAL '30 days'
     """)
     llm_row = cursor.fetchone()
 
+    cursor.execute("""
+        SELECT feature,
+               COUNT(*) as calls,
+               COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) as tokens,
+               COALESCE(SUM(cost_usd), 0) as cost_usd
+        FROM llm_usage
+        WHERE called_at >= NOW() - INTERVAL '30 days'
+        GROUP BY feature
+        ORDER BY cost_usd DESC
+    """)
+    llm_features = cursor.fetchall()
+
     cursor.close()
 
+    ai_usage = None
     ai_daily_cost = None
     ai_roi = None
     if llm_row and llm_row['calls']:
         ai_daily_cost = float(llm_row['cost_usd']) * USD_TO_EUR / llm_row['days_covered']
+        ai_usage = {
+            "cost_eur": float(llm_row['cost_usd']) * USD_TO_EUR,
+            "calls": llm_row['calls'],
+            "tokens": llm_row['tokens'],
+            "features": [
+                {
+                    "feature": f['feature'],
+                    "calls": f['calls'],
+                    "tokens": f['tokens'],
+                    "cost_eur": float(f['cost_usd']) * USD_TO_EUR,
+                }
+                for f in llm_features
+            ],
+        }
 
     daily_burn = float(inaction_row['daily_burn']) if inaction_row else 0
     if ai_daily_cost:
@@ -632,6 +661,7 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         "age_distribution": age_distribution,
         "daily_burn": daily_burn,
         "first_detection": first_detection,
+        "ai_usage": ai_usage,
         "ai_daily_cost": ai_daily_cost,
         "ai_roi": ai_roi,
     })
