@@ -185,13 +185,13 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
         <div>
             <h3 style="margin: 0; font-size: 1rem;">Waste Trend & Forecast</h3>
-            <span style="font-size: 0.75rem; color: var(--gray-500);">{{ trend_subtitle }}</span>
+            <span id="trendSubtitle" style="font-size: 0.75rem; color: var(--gray-500);">{{ trend_subtitle }}</span>
         </div>
         <div style="display: flex; align-items: center; gap: 1.25rem;">
             <div style="display: flex; gap: 0.25rem;">
                 {% for key in ['7d', '30d', '90d', '1y'] %}
-                <a href="/dashboard?trend={{ key }}"
-                   class="btn {% if trend_range == key %}btn-primary{% else %}btn-outline{% endif %}"
+                <a href="/dashboard?trend={{ key }}" data-range="{{ key }}"
+                   class="btn trend-range-btn {% if trend_range == key %}btn-primary{% else %}btn-outline{% endif %}"
                    style="padding: 0.2rem 0.55rem; font-size: 0.72rem;">{{ key }}</a>
                 {% endfor %}
             </div>
@@ -305,25 +305,49 @@ new Chart(document.getElementById('burnSparkline'), {
     }
 });
 
-(function() {
-    const raw = [{% for item in waste_trend %}{{ "%.4f"|format(item.total_waste or 0) }}{% if not loop.last %},{% endif %}{% endfor %}];
-    const labels = [{% for item in waste_trend %}'{{ item.date }}'{% if not loop.last %},{% endif %}{% endfor %}];
-    const n = raw.length;
+// Vertical crosshair following the hovered x position
+const trendCrosshair = {
+    id: 'crosshair',
+    afterDatasetsDraw(chart) {
+        const active = chart.tooltip && chart.tooltip.getActiveElements();
+        if (!active || !active.length) return;
+        const x = active[0].element.x;
+        const { top, bottom } = chart.chartArea;
+        const c = chart.ctx;
+        c.save();
+        c.beginPath();
+        c.moveTo(x, top);
+        c.lineTo(x, bottom);
+        c.strokeStyle = 'rgba(0,0,0,0.15)';
+        c.lineWidth = 1;
+        c.stroke();
+        c.restore();
+    }
+};
 
-    // 'day' (7d/30d/90d) or 'month' (1y) — drives forecast step and labels
-    const granularity = '{{ trend_granularity }}';
+let trendChart = null;
+
+// (Re)draw the trend chart in place — called at load and on range change
+function renderTrendChart(labels, raw, granularity) {
+    const n = raw.length;
     // Honest minimum for a regression, and forecast horizon, per granularity
     const minPoints = granularity === 'day' ? 7 : 4;
     const horizon = granularity === 'day' ? 30 : 6;
 
+    const legend = document.getElementById('forecastLegend');
+    const wrap = document.getElementById('forecastChartWrap');
+    const empty = document.getElementById('forecastEmpty');
+    const progress = document.getElementById('forecastProgress');
+
+    if (trendChart) { trendChart.destroy(); trendChart = null; }
+    progress.innerHTML = '';
+
     // Under the minimum history there is no trend to draw: two points
     // stretched across the card read as a crash. Show a placeholder instead.
     if (n < minPoints) {
-        document.getElementById('forecastLegend').style.display = 'none';
-        document.getElementById('forecastChartWrap').style.display = 'none';
-        const empty = document.getElementById('forecastEmpty');
+        legend.style.display = 'none';
+        wrap.style.display = 'none';
         empty.style.display = 'flex';
-        const progress = document.getElementById('forecastProgress');
         for (let i = 0; i < minPoints; i++) {
             const dot = document.createElement('span');
             dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${i < n ? 'var(--gray-700)' : 'var(--gray-200)'};`;
@@ -331,6 +355,9 @@ new Chart(document.getElementById('burnSparkline'), {
         }
         return;
     }
+    legend.style.display = 'flex';
+    wrap.style.display = 'block';
+    empty.style.display = 'none';
 
     // Linear regression on actual data
     let sx = 0, sy = 0, sxy = 0, sxx = 0;
@@ -382,38 +409,18 @@ new Chart(document.getElementById('burnSparkline'), {
         }
     ];
 
-    // Vertical crosshair following the hovered x position
-    const crosshair = {
-        id: 'crosshair',
-        afterDatasetsDraw(chart) {
-            const active = chart.tooltip && chart.tooltip.getActiveElements();
-            if (!active || !active.length) return;
-            const x = active[0].element.x;
-            const { top, bottom } = chart.chartArea;
-            const c = chart.ctx;
-            c.save();
-            c.beginPath();
-            c.moveTo(x, top);
-            c.lineTo(x, bottom);
-            c.strokeStyle = 'rgba(0,0,0,0.15)';
-            c.lineWidth = 1;
-            c.stroke();
-            c.restore();
-        }
-    };
-
     const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',
         granularity === 'day'
             ? { day: 'numeric', month: 'short', year: 'numeric' }
             : { month: 'long', year: 'numeric' });
 
-    new Chart(document.getElementById('forecastChart'), {
+    trendChart = new Chart(document.getElementById('forecastChart'), {
         type: 'line',
         data: {
             labels: labels.concat(forecastLabels),
             datasets: datasets
         },
-        plugins: [crosshair],
+        plugins: [trendCrosshair],
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -438,7 +445,41 @@ new Chart(document.getElementById('burnSparkline'), {
             }
         }
     });
-})();
+}
+
+// Initial render with server-side data
+renderTrendChart(
+    [{% for item in waste_trend %}'{{ item.date }}'{% if not loop.last %},{% endif %}{% endfor %}],
+    [{% for item in waste_trend %}{{ "%.4f"|format(item.total_waste or 0) }}{% if not loop.last %},{% endif %}{% endfor %}],
+    '{{ trend_granularity }}'
+);
+
+// Range buttons: fetch and redraw in place — no page reload, no scroll jump
+document.querySelectorAll('.trend-range-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`/api/dashboard/trend?range=${btn.dataset.range}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            renderTrendChart(
+                data.points.map(p => p.date),
+                data.points.map(p => p.total),
+                data.granularity
+            );
+            document.getElementById('trendSubtitle').textContent = data.subtitle;
+            document.querySelectorAll('.trend-range-btn').forEach(b => {
+                b.classList.toggle('btn-primary', b === btn);
+                b.classList.toggle('btn-outline', b !== btn);
+            });
+            // Keep the URL shareable / refresh-safe without navigating
+            history.replaceState(null, '', `/dashboard?trend=${data.range}`);
+        } catch (err) {
+            // Network hiccup: fall back to plain navigation
+            window.location.href = btn.href;
+        }
+    });
+});
 {% endif %}
 </script>
 {% endblock %}
