@@ -8,6 +8,35 @@
     <p>Manage auto-remediation policies and safeguards</p>
 </div>
 
+{% set dry_run = config.get('dry_run', True) %}
+{% set auto_enabled = config.get('auto_remediation', {}).get('enabled', False) %}
+{% set action_toggles = config.get('auto_remediation', {}).get('actions', {}) or {} %}
+{% set wl_instance_ids = config.get('whitelist', {}).get('instance_ids', []) %}
+{% set wl_tags = config.get('whitelist', {}).get('tags', []) %}
+{% set ns = namespace(enabled_actions=0) %}
+{% for action in automatable_actions %}{% if action_toggles.get(action.type, True) %}{% set ns.enabled_actions = ns.enabled_actions + 1 %}{% endif %}{% endfor %}
+
+<!-- Status summary -->
+<div class="card mb-2" style="padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.5rem 1.5rem; flex-wrap: wrap; font-size: 0.85rem;">
+    <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+        <span class="text-muted">Execution:</span>
+        {% if dry_run %}<span class="badge badge-success">Dry-Run</span>{% else %}<span class="badge badge-danger">Production</span>{% endif %}
+    </span>
+    <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+        <span class="text-muted">Remediation:</span>
+        {% if auto_enabled %}<span class="badge badge-danger">Auto</span>{% else %}<span class="badge badge-info">Manual</span>{% endif %}
+    </span>
+    <span class="text-muted">{{ ns.enabled_actions }}/{{ automatable_actions|length }} actions automated</span>
+    <span class="text-muted">{{ wl_instance_ids|length }} instance{{ 's' if wl_instance_ids|length != 1 }} + {{ wl_tags|length }} tag{{ 's' if wl_tags|length != 1 }} protected</span>
+</div>
+
+{% if not dry_run and auto_enabled %}
+<div class="card mb-2" style="padding: 0.6rem 1rem; border: 1px solid var(--danger); background: rgba(245, 101, 101, 0.06); font-size: 0.85rem;">
+    <strong style="color: var(--danger);">&#9888; Production + Auto Mode:</strong>
+    approved actions will be executed on AWS without further review. Make sure the whitelist below covers everything critical.
+</div>
+{% endif %}
+
 <!-- Execution Mode -->
 <div class="card mb-2" style="padding: 1rem;">
     <h3 style="margin: 0 0 1rem 0;">Execution Mode</h3>
@@ -17,7 +46,7 @@
         <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if config.get('dry_run', True) %}var(--success){% else %}var(--gray-200){% endif %}; background: {% if config.get('dry_run', True) %}rgba(72, 187, 120, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(!document.getElementById('dryRunToggle').checked) { document.getElementById('dryRunToggle').checked = true; toggleDryRun(true); }">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                 <span style="background: {% if config.get('dry_run', True) %}var(--success){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
-                    {% if config.get('dry_run', True) %}&#10003;{% else %}&#128274;{% endif %}
+                    {% if config.get('dry_run', True) %}&#10003;{% else %}–{% endif %}
                 </span>
                 <div>
                     <strong style="font-size: 1rem;">Dry-Run</strong>
@@ -33,7 +62,7 @@
         <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if not config.get('dry_run', True) %}var(--danger){% else %}var(--gray-200){% endif %}; background: {% if not config.get('dry_run', True) %}rgba(245, 101, 101, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(document.getElementById('dryRunToggle').checked) { toggleDryRun(false); }">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                 <span style="background: {% if not config.get('dry_run', True) %}var(--danger){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
-                    {% if not config.get('dry_run', True) %}&#10003;{% else %}&#9889;{% endif %}
+                    {% if not config.get('dry_run', True) %}&#10003;{% else %}–{% endif %}
                 </span>
                 <div>
                     <strong style="font-size: 1rem;">Production</strong>
@@ -51,36 +80,14 @@
 
 <!-- Auto-Remediation Controls -->
 <div class="card mb-2" style="padding: 1rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 style="margin: 0;">Auto-Remediation</h3>
-        <div style="display: flex; align-items: center; gap: 1rem;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span class="text-muted" style="font-size: 0.8rem;">Buffer:</span>
-                <input type="number" id="dryRunDays" class="form-input" style="width: 60px; padding: 0.3rem; text-align: center;"
-                    value="{{ config.get('auto_remediation', {}).get('dry_run_days', 7) }}"
-                    min="0" max="30">
-                <span class="text-muted" style="font-size: 0.8rem;">days</span>
-                <button onclick="updateConfig('dry_run_days', parseInt(document.getElementById('dryRunDays').value))"
-                    class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Save</button>
-            </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span class="text-muted" style="font-size: 0.8rem;" title="Approved actions wait this many days before executing; cancellable meanwhile. 0 = immediate.">Grace period:</span>
-                <input type="number" id="gracePeriodDays" class="form-input" style="width: 60px; padding: 0.3rem; text-align: center;"
-                    value="{{ config.get('approval', {}).get('grace_period_days', 0) }}"
-                    min="0" max="30">
-                <span class="text-muted" style="font-size: 0.8rem;">days</span>
-                <button onclick="updateConfig('grace_period_days', parseInt(document.getElementById('gracePeriodDays').value))"
-                    class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Save</button>
-            </div>
-        </div>
-    </div>
+    <h3 style="margin: 0 0 1rem 0;">Auto-Remediation</h3>
 
     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; font-size: 0.85rem;">
         <!-- Manual Mode -->
         <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if not config.get('auto_remediation', {}).get('enabled', False) %}var(--primary){% else %}var(--gray-200){% endif %}; background: {% if not config.get('auto_remediation', {}).get('enabled', False) %}rgba(102, 126, 234, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(confirm('Switch to Manual mode?')) { document.getElementById('autoRemediationToggle').checked = false; updateConfig('auto_remediation_enabled', false); }">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                 <span style="background: {% if not config.get('auto_remediation', {}).get('enabled', False) %}var(--primary){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
-                    {% if not config.get('auto_remediation', {}).get('enabled', False) %}&#10003;{% else %}&#9654;{% endif %}
+                    {% if not config.get('auto_remediation', {}).get('enabled', False) %}&#10003;{% else %}–{% endif %}
                 </span>
                 <div>
                     <strong style="font-size: 1rem;">Manual Mode</strong>
@@ -96,7 +103,7 @@
         <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if config.get('auto_remediation', {}).get('enabled', False) %}var(--danger){% else %}var(--gray-200){% endif %}; background: {% if config.get('auto_remediation', {}).get('enabled', False) %}rgba(245, 101, 101, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(confirm('WARNING: Enable Auto-Remediation? Actions will run automatically without approval.')) { document.getElementById('autoRemediationToggle').checked = true; updateConfig('auto_remediation_enabled', true); }">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                 <span style="background: {% if config.get('auto_remediation', {}).get('enabled', False) %}var(--danger){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
-                    {% if config.get('auto_remediation', {}).get('enabled', False) %}&#10003;{% else %}&#9889;{% endif %}
+                    {% if config.get('auto_remediation', {}).get('enabled', False) %}&#10003;{% else %}–{% endif %}
                 </span>
                 <div>
                     <strong style="font-size: 1rem;">Auto Mode</strong>
@@ -110,6 +117,26 @@
     </div>
     <input type="checkbox" id="autoRemediationToggle" style="display: none;"
         {% if config.get('auto_remediation', {}).get('enabled', False) %}checked{% endif %}>
+
+    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200); display: flex; gap: 2rem; align-items: flex-end; flex-wrap: wrap; font-size: 0.85rem;">
+        <div style="flex: 1; min-width: 220px;">
+            <label for="dryRunDays" style="font-weight: 600;">Buffer</label>
+            <p class="text-muted" style="margin: 0.2rem 0 0.5rem 0; font-size: 0.8rem;">Observation period (days) before Auto Mode executes an action.</p>
+            <input type="number" id="dryRunDays" class="form-input" style="width: 70px; padding: 0.3rem; text-align: center;"
+                value="{{ config.get('auto_remediation', {}).get('dry_run_days', 7) }}"
+                min="0" max="30">
+            <span class="text-muted" style="font-size: 0.8rem;">days</span>
+        </div>
+        <div style="flex: 1; min-width: 220px;">
+            <label for="gracePeriodDays" style="font-weight: 600;">Grace period</label>
+            <p class="text-muted" style="margin: 0.2rem 0 0.5rem 0; font-size: 0.8rem;">Approved actions wait this many days before executing; cancellable meanwhile. 0 = immediate.</p>
+            <input type="number" id="gracePeriodDays" class="form-input" style="width: 70px; padding: 0.3rem; text-align: center;"
+                value="{{ config.get('approval', {}).get('grace_period_days', 0) }}"
+                min="0" max="30">
+            <span class="text-muted" style="font-size: 0.8rem;">days</span>
+        </div>
+        <button onclick="saveTimings()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Save delays</button>
+    </div>
 </div>
 
 <!-- Per-action automation toggles -->
@@ -191,6 +218,30 @@
     </div>
 </div>
 
+<!-- Policy as Code -->
+<div class="card mb-2" style="padding: 1rem; border: 1px solid var(--gray-300);">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+
+            <div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <strong style="font-size: 0.95rem;">Policy as Code</strong>
+                    <span class="badge badge-info" style="font-size: 0.65rem;">GitOps</span>
+                </div>
+                <p class="text-muted" style="margin: 0; font-size: 0.8rem;">Version your remediation policy in git — export as YAML, review, re-import.</p>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <a href="/api/policies/export" class="btn btn-primary" style="padding: 0.4rem 0.75rem; font-size: 0.85rem;">Export .yaml</a>
+            <label class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer; margin: 0;">
+                Import .yaml
+                <input type="file" id="policyFile" accept=".yaml,.yml" style="display: none;" onchange="importPolicy()">
+            </label>
+            <span id="policyImportStatus" style="font-size: 0.8rem;"></span>
+        </div>
+    </div>
+</div>
+
 <!-- Help -->
 <details class="card" style="padding: 1rem;">
     <summary style="cursor: pointer; font-weight: 600; font-size: 0.9rem;">Need help? Click to expand</summary>
@@ -219,21 +270,7 @@
     </div>
 </details>
 
-<!-- Policy as code -->
-<div class="card mb-2" style="padding: 1rem;">
-    <h3 style="margin: 0 0 0.25rem 0;">Policy as Code</h3>
-    <p class="text-muted" style="margin: 0 0 1rem 0; font-size: 0.85rem;">
-        Export the whole remediation policy (safeguards, whitelist, schedule,
-        grace period…) as YAML to version it in git, and re-import a reviewed
-        version. Imports are strictly validated — unknown keys are rejected.
-    </p>
-    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-        <a href="/api/policies/export" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Export policy (.yaml)</a>
-        <input type="file" id="policyFile" accept=".yaml,.yml" style="font-size: 0.8rem;">
-        <button onclick="importPolicy()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Import policy</button>
-        <span id="policyImportStatus" style="font-size: 0.8rem;"></span>
-    </div>
-</div>
+
 
 <div class="text-right mt-2">
     <button onclick="refreshData()" class="btn btn-outline">Refresh Settings</button>
@@ -295,6 +332,23 @@
         } catch (error) {
             alert('Error: ' + error.message);
             document.getElementById('dryRunToggle').checked = !enabled;
+        }
+    }
+
+    async function saveTimings() {
+        try {
+            await api('/api/config', {
+                method: 'POST',
+                body: JSON.stringify({ key: 'dry_run_days', value: parseInt(document.getElementById('dryRunDays').value) })
+            });
+            await api('/api/config', {
+                method: 'POST',
+                body: JSON.stringify({ key: 'grace_period_days', value: parseInt(document.getElementById('gracePeriodDays').value) })
+            });
+            alert('Configuration saved!');
+            refreshData();
+        } catch (error) {
+            alert('Error: ' + error.message);
         }
     }
 

@@ -11,13 +11,18 @@
         body { background: white; }
     }
     .narrative-box {
-        background: var(--gray-100, #f3f4f6);
-        border-left: 3px solid #22c55e;
+        background: var(--gray-100);
+        border-left: 3px solid var(--success);
         border-radius: 6px;
         padding: 0.875rem 1rem;
         font-size: 0.9rem;
         line-height: 1.55;
         white-space: pre-wrap;
+    }
+    .card-delta-neutral {
+        font-size: 0.875rem;
+        color: var(--gray-600);
+        margin-top: 0.25rem;
     }
 </style>
 {% endblock %}
@@ -25,15 +30,27 @@
 {% block content %}
 <div class="page-header no-print" style="margin-bottom: 1rem;">
     <h1 style="margin-bottom: 0.25rem;">Reports</h1>
+    <p style="color: var(--gray-600); font-size: 0.85rem;">{{ report.period.start }} → {{ report.period.end }} &nbsp;·&nbsp; {{ report.period.days }} day{{ 's' if report.period.days > 1 }}</p>
 </div>
 
 <!-- Period filters -->
 <div class="card mb-1 no-print" style="padding: 0.75rem;">
     <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+
+        <!-- Quick links -->
         <div style="display: flex; gap: 0.5rem;">
-            <a href="/reports?days=7" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Last 7 days</a>
-            <a href="/reports?days=30" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Last 30 days</a>
+            <a href="/reports?days=7"
+               class="btn {% if report.period.days == 7 %}btn-primary{% else %}btn-outline{% endif %}"
+               style="padding: 0.4rem 0.75rem;">Last 7 days</a>
+            <a href="/reports?days=30"
+               class="btn {% if report.period.days == 30 %}btn-primary{% else %}btn-outline{% endif %}"
+               style="padding: 0.4rem 0.75rem;">Last 30 days</a>
         </div>
+
+        <!-- Separator -->
+        <div style="width: 1px; background: var(--gray-300); align-self: stretch;"></div>
+
+        <!-- Month picker -->
         <form method="get" action="/reports" style="margin: 0;">
             <div style="display: flex; gap: 0.5rem; align-items: end;">
                 <div class="form-group" style="margin: 0;">
@@ -43,6 +60,8 @@
                 <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
             </div>
         </form>
+
+        <!-- Custom range -->
         <form method="get" action="/reports" style="margin: 0;">
             <div style="display: flex; gap: 0.5rem; align-items: end;">
                 <div class="form-group" style="margin: 0;">
@@ -56,69 +75,74 @@
                 <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
             </div>
         </form>
-        <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+
+        <!-- Export actions -->
+        <div style="margin-left: auto; display: flex; gap: 0.5rem; border-left: 1px solid var(--gray-300); padding-left: 1rem;">
             <a href="/api/reports/download?start={{ start }}&end={{ end }}" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Download .md</a>
             <button onclick="window.print()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Print / PDF</button>
         </div>
     </div>
 </div>
 
-<!-- Report header -->
-<div style="display: flex; align-items: baseline; gap: 0.75rem; margin: 1rem 0 0.75rem;">
-    <h2 style="margin: 0; font-size: 1.05rem;">Activity report</h2>
-    <span style="font-size: 0.85rem; color: var(--gray-600, #6b7280);">{{ report.period.start }} to {{ report.period.end }} ({{ report.period.days }} day{{ 's' if report.period.days > 1 }})</span>
-</div>
-
 <!-- AI narrative -->
 {% if llm_enabled %}
 <div class="card mb-1" style="padding: 0.875rem;">
-    <div id="narrative-idle" class="no-print">
-        <button id="narrative-btn" class="btn btn-primary" style="padding: 0.4rem 0.75rem;" onclick="generateNarrative()">Generate AI summary</button>
-        <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280); margin-left: 0.5rem;">Comments the numbers below — the numbers themselves are always computed from the database.</span>
+    <div id="narrative-idle" class="no-print" style="display: flex; align-items: center; gap: 0.75rem;">
+        <button id="narrative-btn" class="btn btn-primary" style="padding: 0.4rem 0.75rem;"
+                aria-describedby="narrative-hint" onclick="generateNarrative()">Generate AI summary</button>
+        <span id="narrative-hint" style="font-size: 0.75rem; color: var(--gray-600);">Comments the numbers below — the numbers themselves are always computed from the database.</span>
     </div>
     <div id="narrative-text" class="narrative-box" style="display: none;"></div>
 </div>
 {% endif %}
 
 <!-- Summary cards -->
+{% set has_data = report.new_waste.count > 0 or report.pending.count > 0 or report.actions.succeeded > 0 or report.verified_savings_eur > 0 %}
+{% if not has_data %}
+<div class="card mb-1" style="padding: 2rem; text-align: center;">
+    <p style="font-weight: 600; margin-bottom: 0.25rem;">No activity in this period</p>
+    <p class="text-muted" style="font-size: 0.85rem;">Try a wider date range, or run the collectors to gather AWS metrics.</p>
+</div>
+{% else %}
 <div class="grid grid-4 mb-1">
     <div class="card">
-        <div class="card-title">New waste detected</div>
-        <div class="card-value">EUR {{ "%.2f"|format(report.new_waste.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
+        <div class="card-title">Waste detected (period)</div>
+        <div class="card-value">€{{ "%.2f"|format(report.new_waste.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
         <div class="card-delta">{{ report.new_waste.count }} resource(s)</div>
     </div>
     <div class="card">
         {% if report.pending.scope == 'snapshot' %}
-        <div class="card-title">Pending recommendations <span class="badge badge-info">live</span></div>
-        <div class="card-value">EUR {{ "%.2f"|format(report.pending.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
+        <div class="card-title">Recommendations <span class="badge badge-info">live</span></div>
+        <div class="card-value">€{{ "%.2f"|format(report.pending.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
         <div class="card-delta">{{ report.pending.count }} pending{% if report.pending.oldest_days is not none and report.pending.count > 0 %} · oldest {{ report.pending.oldest_days }}d{% endif %}</div>
         {% else %}
         <div class="card-title">Recommendations created</div>
-        <div class="card-value">EUR {{ "%.2f"|format(report.pending.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
-        <div class="card-delta">{{ report.pending.count }} in the period</div>
+        <div class="card-value">€{{ "%.2f"|format(report.pending.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
+        <div class="card-delta-neutral">{{ report.pending.count }} in the period</div>
         {% endif %}
     </div>
     <div class="card">
         <div class="card-title">Actions executed</div>
         <div class="card-value">{{ report.actions.succeeded }}</div>
-        <div class="card-delta">
+        <div class="card-delta-neutral">
             {% if report.actions.failed > 0 %}<span class="text-danger">{{ report.actions.failed }} failed</span> · {% endif %}{{ report.actions.dry_run }} dry-run
         </div>
     </div>
     <div class="card">
         <div class="card-title">Savings verified</div>
-        <div class="card-value">EUR {{ "%.2f"|format(report.verified_savings_eur) }}</div>
+        <div class="card-value">€{{ "%.2f"|format(report.verified_savings_eur) }}</div>
         <div class="card-delta">via Cost Explorer</div>
     </div>
 </div>
+{% endif %}
 
 <!-- Waste by resource type -->
 <div class="card" style="padding: 0;">
-    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--gray-200, #e5e7eb); font-weight: 600; font-size: 0.9rem;">Waste detected by resource type</div>
+    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--gray-200); font-weight: 600; font-size: 0.9rem;">Waste detected by resource type</div>
     <div class="table-container">
         <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
             <thead>
-                <tr style="text-align: left; color: var(--gray-600, #6b7280);">
+                <tr style="text-align: left; color: var(--gray-600);">
                     <th style="padding: 0.5rem 1rem;">Resource type</th>
                     <th style="padding: 0.5rem 1rem;">Resources</th>
                     <th style="padding: 0.5rem 1rem;">Monthly waste</th>
@@ -126,14 +150,14 @@
             </thead>
             <tbody>
                 {% for resource_type, count, eur in report.new_waste.by_type %}
-                <tr style="border-top: 1px solid var(--gray-200, #e5e7eb);">
+                <tr style="border-top: 1px solid var(--gray-200);">
                     <td style="padding: 0.5rem 1rem;">{{ resource_type }}</td>
                     <td style="padding: 0.5rem 1rem;">{{ count }}</td>
-                    <td style="padding: 0.5rem 1rem;">EUR {{ "%.2f"|format(eur) }}/mo</td>
+                    <td style="padding: 0.5rem 1rem;">€{{ "%.2f"|format(eur) }}/mo</td>
                 </tr>
                 {% else %}
-                <tr style="border-top: 1px solid var(--gray-200, #e5e7eb);">
-                    <td colspan="3" style="padding: 0.75rem 1rem; color: var(--gray-600, #6b7280);">No waste detected in this period.</td>
+                <tr style="border-top: 1px solid var(--gray-200);">
+                    <td colspan="3" style="padding: 1.5rem 1rem; text-align: center; color: var(--gray-600);">No waste detected in this period.</td>
                 </tr>
                 {% endfor %}
             </tbody>
