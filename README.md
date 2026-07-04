@@ -13,6 +13,12 @@ Open-source cloud cost optimization. Detect idle and orphaned AWS resources. Rem
 
 **Requirements:** Docker, Python 3.11+, AWS credentials (`aws configure`)
 
+On macOS, install all prerequisites in one command:
+
+```bash
+brew bundle           # Installs Python, Docker Desktop, uv, AWS CLI (see Brewfile)
+```
+
 ```bash
 git clone https://github.com/wastelessio/wasteless.git
 cd wasteless

@@ -197,6 +197,13 @@ fi
 if [ $MISSING_DEPS -eq 1 ]; then
     echo ""
     print_error "Certains prerequis sont manquants. Installez-les et reexecutez ce script."
+    if [ "$(uname)" = "Darwin" ]; then
+        if check_command brew; then
+            print_info "Sur macOS, tout s'installe en une commande: brew bundle"
+        else
+            print_info "Installez Homebrew (https://brew.sh) puis lancez: brew bundle"
+        fi
+    fi
     exit 1
 fi
 
@@ -210,10 +217,25 @@ print_header "2/7 - Configuration de l'environnement Python"
 
 create_venv() {
     local path="$1"
-    if [ $USE_UV -eq 1 ]; then
-        uv venv "$path"
+    # Sur macOS, le venv est cree en <path>.nosync + symlink <path>.
+    # Le suffixe .nosync empeche iCloud Drive de synchroniser le venv, ce qui
+    # evite les copies de conflit ("venv 2", "bin 2") qui corrompent
+    # l'environnement quand le projet vit dans Documents ou Desktop.
+    if [ "$(uname)" = "Darwin" ]; then
+        local real="${path}.nosync"
+        rm -rf "$real"
+        if [ $USE_UV -eq 1 ]; then
+            uv venv "$real"
+        else
+            python3 -m venv "$real"
+        fi
+        ln -sfn "$(basename "$real")" "$path"
     else
-        python3 -m venv "$path"
+        if [ $USE_UV -eq 1 ]; then
+            uv venv "$path"
+        else
+            python3 -m venv "$path"
+        fi
     fi
 }
 
