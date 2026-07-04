@@ -549,13 +549,28 @@ def fetch_waste_by_resource(cursor, range_key: str):
         )
         SELECT w.resource_type,
                SUM(w.total_eur) / NULLIF((SELECT n FROM days), 0) AS total_eur,
-               l.resource_count AS cnt
+               l.resource_count AS cnt,
+               (SELECT MIN(snapshot_date) FROM win) AS period_start,
+               (SELECT MAX(snapshot_date) FROM win) AS period_end
         FROM win w
         JOIN latest l USING (resource_type)
         GROUP BY w.resource_type, l.resource_count
         ORDER BY total_eur DESC
     """, (days,))
-    return range_key, f"Avg monthly waste · {label}", cursor.fetchall()
+    rows = cursor.fetchall()
+
+    # Show the dates actually covered: fresh installs have less history
+    # than the theoretical window, and "last 30 days" alone would overclaim
+    subtitle = f"Avg monthly waste · {label}"
+    if rows:
+        start, end = rows[0]["period_start"], rows[0]["period_end"]
+        if start == end:
+            subtitle += f" · {end.strftime('%-d %b %Y')}"
+        elif start.year == end.year:
+            subtitle += f" · {start.strftime('%-d %b')} – {end.strftime('%-d %b %Y')}"
+        else:
+            subtitle += f" · {start.strftime('%-d %b %Y')} – {end.strftime('%-d %b %Y')}"
+    return range_key, subtitle, rows
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
