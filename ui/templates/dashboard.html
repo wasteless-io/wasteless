@@ -164,7 +164,7 @@
     /* Trend card */
     .trend-controls { display: flex; align-items: center; gap: 1.25rem; }
     .trend-ranges { display: flex; gap: 0.25rem; }
-    .trend-range-btn { padding: 0.2rem 0.55rem; font-size: 0.72rem; }
+    .trend-range-btn, .resource-range-btn { padding: 0.2rem 0.55rem; font-size: 0.72rem; }
     .trend-legend {
         font-size: 0.75rem;
         color: var(--gray-500);
@@ -367,19 +367,22 @@
         <div class="chart-head">
             <div>
                 <h3 class="chart-title">Cost by Resource Type</h3>
-                <span class="chart-subtitle">Monthly waste distribution</span>
+                <span id="resourceSubtitle" class="chart-subtitle">{{ resource_subtitle }}</span>
             </div>
-            <span class="chart-unit">€/mo</span>
+            <div class="trend-ranges" role="group" aria-label="Resource chart time range">
+                {% for key in ['7d', '30d', '90d', '1y'] %}
+                <button type="button" data-range="{{ key }}"
+                        class="btn resource-range-btn {% if resource_range == key %}btn-primary{% else %}btn-outline{% endif %}"
+                        {% if resource_range == key %}aria-current="true"{% endif %}>{{ key }}</button>
+                {% endfor %}
+            </div>
         </div>
-        {% if waste_by_resource %}
-        <div class="chart-area">
+        <div id="resourceChartWrap" class="chart-area"{% if not waste_by_resource %} style="display: none;"{% endif %}>
             <canvas id="costByResourceChart" role="img" aria-label="Bar chart of monthly waste cost by resource type"></canvas>
         </div>
-        {% else %}
-        <div class="chart-empty">
-            <p class="text-muted">No data yet</p>
+        <div id="resourceEmpty" class="chart-empty"{% if waste_by_resource %} style="display: none;"{% endif %}>
+            <p class="text-muted">No data for this range</p>
         </div>
-        {% endif %}
     </div>
 
     <!-- AI Spend -->
@@ -485,7 +488,6 @@
 {% block extra_js %}
 <script src="/static/chart.umd.min.js"></script>
 <script>
-{% if waste_by_resource %}
 (function() {
     const typeLabels = {
         ebs_snapshot: 'EBS Snapshots',
@@ -496,73 +498,115 @@
         load_balancer: 'Load Balancers',
         vpc: 'VPCs'
     };
-    const types = [{% for item in waste_by_resource %}'{{ item.resource_type }}'{% if not loop.last %},{% endif %}{% endfor %}];
-    const values = [{% for item in waste_by_resource %}{{ "%.4f"|format(item.total_eur or 0) }}{% if not loop.last %},{% endif %}{% endfor %}];
-    const counts = [{% for item in waste_by_resource %}{{ item.cnt or 0 }}{% if not loop.last %},{% endif %}{% endfor %}];
-    const labels = types.map(t => typeLabels[t] || t.replace(/_/g, ' '));
-    const total = values.reduce((a, b) => a + b, 0);
+    let resourceChart = null;
 
-    // Direct value labels at bar ends (axis is dropped: the values are read
-    // on the bars themselves)
-    const valueLabels = {
-        id: 'valueLabels',
-        afterDatasetsDraw(chart) {
-            const meta = chart.getDatasetMeta(0);
-            const c = chart.ctx;
-            c.save();
-            c.font = '600 11px sans-serif';
-            c.fillStyle = '#374151';
-            c.textBaseline = 'middle';
-            meta.data.forEach((bar, i) => {
-                c.fillText(`€${values[i].toFixed(2)}`, bar.x + 6, bar.y);
-            });
-            c.restore();
+    // (Re)draw the bar chart in place — called at load and on range change.
+    // items: [{ t: resource_type, v: monthly EUR, c: resource count }]
+    function renderResourceChart(items) {
+        const wrap = document.getElementById('resourceChartWrap');
+        const empty = document.getElementById('resourceEmpty');
+        if (resourceChart) { resourceChart.destroy(); resourceChart = null; }
+        if (!items.length) {
+            wrap.style.display = 'none';
+            empty.style.display = 'flex';
+            return;
         }
-    };
+        wrap.style.display = 'block';
+        empty.style.display = 'none';
 
-    new Chart(document.getElementById('costByResourceChart'), {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: values,
-                backgroundColor: '#2563eb',
-                borderWidth: 0,
-                borderRadius: 4,
-                maxBarThickness: 20
-            }]
-        },
-        plugins: [valueLabels],
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            layout: { padding: { right: 64 } },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    displayColors: false,
-                    padding: 10,
-                    callbacks: {
-                        label: ctx => {
-                            const pct = total > 0 ? (ctx.parsed.x / total * 100).toFixed(0) : 0;
-                            const cnt = counts[ctx.dataIndex];
-                            return [
-                                `€${ctx.parsed.x.toFixed(2)}/mo · ${pct}% of waste`,
-                                `${cnt} resource${cnt > 1 ? 's' : ''}`
-                            ];
+        const labels = items.map(i => typeLabels[i.t] || i.t.replace(/_/g, ' '));
+        const values = items.map(i => i.v);
+        const counts = items.map(i => i.c);
+        const total = values.reduce((a, b) => a + b, 0);
+
+        // Direct value labels at bar ends (axis is dropped: the values are
+        // read on the bars themselves)
+        const valueLabels = {
+            id: 'valueLabels',
+            afterDatasetsDraw(chart) {
+                const meta = chart.getDatasetMeta(0);
+                const c = chart.ctx;
+                c.save();
+                c.font = '600 11px sans-serif';
+                c.fillStyle = '#374151';
+                c.textBaseline = 'middle';
+                meta.data.forEach((bar, i) => {
+                    c.fillText(`€${values[i].toFixed(2)}`, bar.x + 6, bar.y);
+                });
+                c.restore();
+            }
+        };
+
+        resourceChart = new Chart(document.getElementById('costByResourceChart'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: '#2563eb',
+                    borderWidth: 0,
+                    borderRadius: 4,
+                    maxBarThickness: 20
+                }]
+            },
+            plugins: [valueLabels],
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { right: 64 } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        displayColors: false,
+                        padding: 10,
+                        callbacks: {
+                            label: ctx => {
+                                const pct = total > 0 ? (ctx.parsed.x / total * 100).toFixed(0) : 0;
+                                const cnt = counts[ctx.dataIndex];
+                                return [
+                                    `€${ctx.parsed.x.toFixed(2)}/mo · ${pct}% of waste`,
+                                    `${cnt} resource${cnt > 1 ? 's' : ''}`
+                                ];
+                            }
                         }
                     }
+                },
+                scales: {
+                    x: { display: false },
+                    y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11 } } }
                 }
-            },
-            scales: {
-                x: { display: false },
-                y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11 } } }
             }
-        }
+        });
+    }
+
+    // Range buttons: fetch and redraw in place (state is client-side only,
+    // the ?trend= URL param belongs to the trend chart)
+    document.querySelectorAll('.resource-range-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            try {
+                const res = await fetch(`/api/dashboard/waste-by-resource?range=${btn.dataset.range}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                renderResourceChart(data.items.map(i => ({ t: i.resource_type, v: i.total, c: i.count })));
+                document.getElementById('resourceSubtitle').textContent = data.subtitle;
+                document.querySelectorAll('.resource-range-btn').forEach(b => {
+                    b.classList.toggle('btn-primary', b === btn);
+                    b.classList.toggle('btn-outline', b !== btn);
+                    if (b === btn) b.setAttribute('aria-current', 'true');
+                    else b.removeAttribute('aria-current');
+                });
+            } catch (err) {
+                // Network hiccup: keep the current chart
+            }
+        });
     });
+
+    // Initial render with server-side data
+    renderResourceChart([
+        {% for item in waste_by_resource %}{ t: '{{ item.resource_type }}', v: {{ "%.4f"|format(item.total_eur or 0) }}, c: {{ item.cnt or 0 }} }{% if not loop.last %},{% endif %}{% endfor %}
+    ]);
 })();
-{% endif %}
 
 {% if waste_trend %}
 // Vertical crosshair following the hovered x position
