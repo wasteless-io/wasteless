@@ -19,6 +19,21 @@
         --danger-text: #b91c1c;
     }
 
+    /* Exception banner: only rendered when recent actions failed */
+    .alert-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.6rem 1rem;
+        margin-bottom: 0.5rem;
+        background: rgba(239, 68, 68, 0.07);
+        border: 1px solid rgba(239, 68, 68, 0.25);
+        border-radius: 8px;
+        font-size: 0.85rem;
+        color: var(--danger-text);
+    }
+    .alert-banner a { color: var(--danger-text); font-weight: 600; }
+
     .card.compact { padding: 1rem; }
     .card.slim { padding: 0.75rem; }
     .btn-sm { padding: 0.4rem 0.75rem; }
@@ -191,9 +206,9 @@
 
     @media (max-width: 1024px) {
         .charts-grid { grid-template-columns: 1fr; }
-        /* .grid-4/.grid-3 wrap to 2 columns here (base.html): keep the
-           divider only where a left neighbour actually remains */
-        .grid-4 .kpi:nth-child(odd), .grid-3 .kpi:nth-child(odd) { border-left: none; }
+        /* .grid-3 wraps to 2 columns here (base.html): keep the divider
+           only where a left neighbour actually remains */
+        .grid-3 .kpi:nth-child(odd) { border-left: none; }
     }
     @media (max-width: 768px) {
         .kpi + .kpi {
@@ -211,10 +226,18 @@
     <p>Live overview of your AWS waste and savings</p>
 </div>
 
+{% if (kpis.failed_7d or 0) > 0 %}
+<div class="alert-banner" role="alert">
+    <svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span>{{ kpis.failed_7d }} action{{ 's' if kpis.failed_7d > 1 }} failed in the last 7 days</span>
+    <a href="/history?status_filter=failed">View history &rarr;</a>
+</div>
+{% endif %}
+
 <!-- KPIs Row 1 — Financial View -->
 <div class="card compact mb-1">
     <div class="section-label">Financial Overview</div>
-    <div class="grid grid-4">
+    <div class="grid grid-3">
 
         <!-- Monthly Waste -->
         <div class="kpi">
@@ -258,28 +281,6 @@
             {% endif %}
         </div>
 
-        <!-- Last Scan -->
-        <div class="kpi">
-            {% if kpis.last_analysis %}
-            {% set hours_ago = ((now() - kpis.last_analysis).total_seconds() / 3600) | int %}
-            {% set days_ago = (hours_ago / 24) | int %}
-            <div class="kpi-icon">
-                <span class="{% if hours_ago < 24 %}bg-success{% elif hours_ago < 48 %}bg-warning{% else %}bg-danger{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-            </div>
-            <div class="kpi-value">{{ kpis.last_analysis.strftime('%H:%M') }}</div>
-            <div class="kpi-label">Last Scan</div>
-            <div class="kpi-sub">
-                {{ kpis.last_analysis.strftime('%d %b') }} · {% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}{% if hours_ago >= 48 %} — overdue{% elif hours_ago >= 24 %} — stale{% endif %}
-            </div>
-            {% else %}
-            <div class="kpi-icon">
-                <span class="bg-neutral"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-            </div>
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">Last Scan</div>
-            <div class="kpi-sub">No scan yet</div>
-            {% endif %}
-        </div>
     </div>
 </div>
 
@@ -308,11 +309,19 @@
             </div>
         </div>
 
-        <!-- Success Rate -->
+        <!-- Last Scan: relative freshness is the signal, clock time is detail -->
         <div class="kpi">
-            <div class="kpi-value {% if (kpis.success_rate or 0) >= 80 %}text-success{% elif (kpis.success_rate or 0) > 0 %}text-warning{% else %}is-muted{% endif %}">{{ "%.0f"|format(kpis.success_rate or 0) }}<span class="unit"> %</span></div>
-            <div class="kpi-label">Success Rate</div>
-            <div class="kpi-sub">of executed actions</div>
+            {% if kpis.last_analysis %}
+            {% set hours_ago = ((now() - kpis.last_analysis).total_seconds() / 3600) | int %}
+            {% set days_ago = (hours_ago / 24) | int %}
+            <div class="kpi-value {% if hours_ago >= 48 %}text-danger{% elif hours_ago >= 24 %}text-warning{% endif %}">{% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}</div>
+            <div class="kpi-label">Last Scan</div>
+            <div class="kpi-sub">{{ kpis.last_analysis.strftime('%d %b, %H:%M') }}{% if hours_ago >= 48 %} — overdue{% elif hours_ago >= 24 %} — stale{% endif %}</div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">Last Scan</div>
+            <div class="kpi-sub">No scan yet</div>
+            {% endif %}
         </div>
     </div>
 </div>
