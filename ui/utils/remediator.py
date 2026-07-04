@@ -18,11 +18,10 @@ import threading
 from contextlib import contextmanager
 
 # Add backend path to sys.path to import backend modules
-# Path structure: wasteless-ui/utils/ -> go up 2 levels -> wasteless/
+# Path structure: <repo>/ui/utils/ -> go up 2 levels -> <repo>/ (src/ lives there)
 BACKEND_PATH = os.path.abspath(os.path.join(
     os.path.dirname(__file__),
-    '..', '..',
-    'wasteless'
+    '..', '..'
 ))
 
 # Thread lock for protecting remediator initialization
@@ -131,6 +130,7 @@ class RemediatorProxy:
         """
         self.dry_run = dry_run
         self._remediator = None
+        self._resource_remediators: Dict[str, Any] = {}
 
         # Early validation of backend availability
         if not _backend_exists:
@@ -138,6 +138,29 @@ class RemediatorProxy:
                 f"Backend not available: {_backend_error}\n"
                 f"Please ensure wasteless backend is cloned at: {BACKEND_PATH}"
             )
+
+    def _get_resource_remediator(self, recommendation_type: str):
+        """
+        Lazy load a non-EC2 remediator (gp2 migration, NAT gateway, load
+        balancer) matching the recommendation type. Returns None when the
+        type has no automated remediator.
+        """
+        if recommendation_type in self._resource_remediators:
+            return self._resource_remediators[recommendation_type]
+
+        with _remediator_lock:
+            if recommendation_type in self._resource_remediators:
+                return self._resource_remediators[recommendation_type]
+
+            with _backend_context():
+                from src.remediators.resource_remediator import (
+                    REMEDIATORS_BY_RECOMMENDATION
+                )
+                cls = REMEDIATORS_BY_RECOMMENDATION.get(recommendation_type)
+                remediator = cls(dry_run=self.dry_run) if cls else None
+                self._resource_remediators[recommendation_type] = remediator
+
+        return remediator
 
     def _get_remediator(self):
         """
@@ -205,18 +228,18 @@ class RemediatorProxy:
             List of execution results with status and details
         """
         results = []
-        remediator = self._get_remediator()
 
         for rec_id in recommendation_ids:
             try:
-                # Get instance_id and recommendation details from database
+                # Get resource and recommendation details from database
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT
                         w.resource_id,
                         r.recommendation_type,
                         r.action_required,
-                        w.confidence_score
+                        w.confidence_score,
+                        w.metadata->>'region' as region
                     FROM recommendations r
                     JOIN waste_detected w ON r.waste_id = w.id
                     WHERE r.id = %s
@@ -234,25 +257,43 @@ class RemediatorProxy:
                     })
                     continue
 
-                instance_id, rec_type, action, confidence = row
+                if isinstance(row, dict):
+                    # UI connections use RealDictCursor
+                    instance_id = row['resource_id']
+                    rec_type    = row['recommendation_type']
+                    action      = row['action_required']
+                    confidence  = row['confidence_score']
+                    region      = row['region']
+                else:
+                    instance_id, rec_type, action, confidence, region = row
 
-                # Only execute stop or terminate actions
-                if rec_type not in ['stop_instance', 'terminate_instance']:
-                    results.append({
-                        'recommendation_id': rec_id,
-                        'instance_id': instance_id,
-                        'success': False,
-                        'error': f'Action type {rec_type} not supported yet (only stop/terminate)',
-                        'recommendation_type': rec_type
-                    })
-                    continue
+                if rec_type in ['stop_instance', 'terminate_instance']:
+                    # EC2 path (stop works for both stop and terminate intent)
+                    result = self._get_remediator().stop_instance(
+                        instance_id=instance_id,
+                        recommendation_id=rec_id,
+                        reason=action
+                    )
+                else:
+                    resource_remediator = self._get_resource_remediator(rec_type)
+                    if resource_remediator is None:
+                        results.append({
+                            'recommendation_id': rec_id,
+                            'instance_id': instance_id,
+                            'success': False,
+                            'error': f'Action type {rec_type} has no automated '
+                                     f'remediator yet',
+                            'recommendation_type': rec_type
+                        })
+                        continue
 
-                # Execute the stop action (works for both stop and terminate intent)
-                result = remediator.stop_instance(
-                    instance_id=instance_id,
-                    recommendation_id=rec_id,
-                    reason=action
-                )
+                    result = resource_remediator.remediate(
+                        resource_id=instance_id,
+                        recommendation_id=rec_id,
+                        reason=action,
+                        region=region
+                    )
+                    result['instance_id'] = result.get('resource_id')
 
                 # Add recommendation_id to result
                 result['recommendation_id'] = rec_id

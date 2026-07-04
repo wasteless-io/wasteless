@@ -54,57 +54,46 @@ def get_db():
 
 
 def sync_aws_job():
-    """Background job to sync recommendations with AWS state."""
+    """Background job to sync recommendations with AWS state.
+
+    Covers every resource type detectors can produce (EC2 instances, EBS
+    volumes, Elastic IPs, snapshots, NAT gateways, load balancers): when
+    the resource no longer exists, the pending recommendation is obsolete.
+    """
+    from utils.aws_sync import find_vanished_resources
+
     try:
-        import boto3
         conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
         cursor = conn.cursor()
 
-        # Get pending recommendations — EC2 instances only
+        # Pending recommendations grouped by resource type
         cursor.execute("""
-            SELECT DISTINCT w.resource_id
+            SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
             FROM recommendations r
             JOIN waste_detected w ON r.waste_id = w.id
             WHERE r.status = 'pending'
-              AND w.resource_type = 'ec2_instance'
+            GROUP BY w.resource_type
         """)
-        pending_instances = [row['resource_id'] for row in cursor.fetchall()]
+        pending = {row['resource_type']: row['ids'] for row in cursor.fetchall()}
 
-        if not pending_instances:
+        if not pending:
             conn.close()
             return
 
-        # Check AWS for instance states
-        regions = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
-        aws_states = {}
+        vanished = find_vanished_resources(pending)
 
-        for region in regions:
-            try:
-                ec2 = boto3.client('ec2', region_name=region)
-                response = ec2.describe_instances(
-                    Filters=[{'Name': 'instance-id', 'Values': pending_instances}]
-                )
-                for reservation in response.get('Reservations', []):
-                    for instance in reservation.get('Instances', []):
-                        aws_states[instance['InstanceId']] = instance['State']['Name']
-            except Exception:
-                continue
-
-        # Mark obsolete recommendations
         obsolete_count = 0
-        for instance_id in pending_instances:
-            state = aws_states.get(instance_id)
-
-            if state is None or state == 'terminated':
-                cursor.execute("""
-                    UPDATE recommendations r
-                    SET status = 'obsolete', applied_at = NOW()
-                    FROM waste_detected w
-                    WHERE r.waste_id = w.id
-                    AND w.resource_id = %s
-                    AND r.status = 'pending'
-                """, (instance_id,))
-                obsolete_count += cursor.rowcount
+        for resource_type, ids in vanished.items():
+            cursor.execute("""
+                UPDATE recommendations r
+                SET status = 'obsolete', applied_at = NOW()
+                FROM waste_detected w
+                WHERE r.waste_id = w.id
+                AND w.resource_type = %s
+                AND w.resource_id = ANY(%s)
+                AND r.status = 'pending'
+            """, (resource_type, ids))
+            obsolete_count += cursor.rowcount
 
         conn.commit()
         conn.close()
@@ -984,6 +973,27 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
 
                     # Execute real AWS action if NOT in dry-run mode (read from config, ignore client value)
                     dry_run = _config_manager.get_dry_run()
+
+                    # gp2 migrations, NAT gateways and load balancers go through
+                    # the backend remediators (safeguards + rollback snapshot +
+                    # live waste re-verification), in dry-run and real mode alike
+                    if rec_type in ('migrate_gp2_to_gp3', 'delete_nat_gateway',
+                                    'delete_load_balancer'):
+                        try:
+                            from utils.remediator import RemediatorProxy
+                            proxy = RemediatorProxy(dry_run=dry_run)
+                            result = proxy.execute_recommendations(conn, [rec_id])[0]
+                            result['action'] = rec_type
+                        except Exception as e:
+                            result = {
+                                'recommendation_id': rec_id,
+                                'instance_id': instance_id,
+                                'success': False,
+                                'error': str(e),
+                                'action': rec_type,
+                            }
+                        results.append(result)
+                        continue
                     if not dry_run:
                         try:
                             import boto3
@@ -1145,20 +1155,47 @@ async def api_sync_aws(conn=Depends(get_db)):
     try:
         cursor = conn.cursor()
 
-        # Get all pending recommendations with their instance IDs
+        # Pending recommendations grouped by resource type: only EC2
+        # instances go through the state logic below; other types are
+        # existence-checked with the proper API (an EIP id would never be
+        # found by describe_instances and used to be wrongly obsoleted)
         cursor.execute("""
-            SELECT DISTINCT w.resource_id
+            SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
             FROM recommendations r
             JOIN waste_detected w ON r.waste_id = w.id
             WHERE r.status = 'pending'
+            GROUP BY w.resource_type
         """)
-        pending_instances = [row['resource_id'] for row in cursor.fetchall()]
+        pending_by_type = {row['resource_type']: row['ids']
+                           for row in cursor.fetchall()}
+        pending_instances = pending_by_type.pop('ec2_instance', [])
 
-        if not pending_instances:
+        if not pending_instances and not pending_by_type:
             return {"synced": 0, "obsolete": 0, "message": "No pending recommendations"}
 
+        total_checked = len(pending_instances) + sum(
+            len(ids) for ids in pending_by_type.values())
+
+        # Non-EC2 resources: obsolete recommendations whose resource is gone
+        obsolete_count = 0
+        if pending_by_type:
+            from utils.aws_sync import find_vanished_resources
+            vanished = find_vanished_resources(pending_by_type)
+            for resource_type, ids in vanished.items():
+                cursor.execute("""
+                    UPDATE recommendations r
+                    SET status = 'obsolete', applied_at = NOW()
+                    FROM waste_detected w
+                    WHERE r.waste_id = w.id
+                    AND w.resource_type = %s
+                    AND w.resource_id = ANY(%s)
+                    AND r.status = 'pending'
+                """, (resource_type, ids))
+                obsolete_count += cursor.rowcount
+
         # Query AWS for instance states (check multiple regions)
-        regions_to_check = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
+        regions_to_check = (['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
+                            if pending_instances else [])
         aws_states = {}
 
         for region in regions_to_check:
@@ -1179,8 +1216,7 @@ async def api_sync_aws(conn=Depends(get_db)):
                 print(f"Error checking region {region}: {e}")
                 continue
 
-        # Update recommendations based on AWS state
-        obsolete_count = 0
+        # Update EC2 recommendations based on AWS state
         synced_count = 0
 
         for instance_id in pending_instances:
@@ -1244,7 +1280,7 @@ async def api_sync_aws(conn=Depends(get_db)):
         return {
             "synced": synced_count,
             "obsolete": obsolete_count,
-            "total_checked": len(pending_instances),
+            "total_checked": total_checked,
             "message": f"Synced {synced_count} instances, marked {obsolete_count} as obsolete"
         }
 
