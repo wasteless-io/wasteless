@@ -124,6 +124,7 @@ Edit `config/remediation.yaml`:
 |---------|---------|-------------|
 | `auto_remediation.enabled` | `false` | Enable autonomous execution |
 | `auto_remediation.dry_run_days` | `7` | Mandatory dry-run period |
+| `approval.grace_period_days` | `3` | Delay between approval and execution (0 = immediate, cancellable meanwhile) |
 | `protection.min_instance_age_days` | `30` | Ignore instances younger than N days |
 | `protection.min_idle_days` | `14` | Must be idle for N+ days |
 | `protection.min_confidence_score` | `0.80` | Minimum detection confidence |
@@ -171,6 +172,12 @@ Before executing any action, Wasteless validates 7 conditions:
 
 **If any check fails → action aborted and logged.**
 
+On top of the 7 checks, approvals can go through a **grace period**
+(`approval.grace_period_days`): the action is scheduled instead of executed,
+stays cancellable from the Recommendations page, and runs automatically once
+the delay elapses. The whole policy is exportable/importable as YAML
+(Settings → Policy as Code) so it can be versioned and reviewed in git.
+
 ---
 
 ## Features
@@ -196,6 +203,8 @@ Before executing any action, Wasteless validates 7 conditions:
 | `/` | GET | Home dashboard |
 | `/recommendations` | GET | Pending recommendations |
 | `/history` | GET | Action history |
+| `/reports` | GET | Activity report over a date range |
+| `/logs` | GET | Live log viewer with search (debug) |
 | `/cloud-resources` | GET | EC2 inventory |
 | `/settings` | GET | Configuration |
 | `/api/metrics` | GET | JSON metrics |
@@ -203,6 +212,11 @@ Before executing any action, Wasteless validates 7 conditions:
 | `/api/config` | POST | Update config |
 | `/api/whitelist` | POST | Add to whitelist |
 | `/api/sync-aws` | POST | Trigger manual sync |
+| `/api/reports/download` | GET | Download a report as Markdown |
+| `/api/reports/narrative` | POST | AI summary of a report (on demand) |
+| `/api/logs` | GET | Incremental poll of in-memory logs |
+| `/api/policies/export` | GET | Download the remediation policy as YAML |
+| `/api/policies/import` | POST | Validate and apply a policy YAML |
 
 ---
 

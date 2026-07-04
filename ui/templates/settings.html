@@ -63,6 +63,15 @@
                 <button onclick="updateConfig('dry_run_days', parseInt(document.getElementById('dryRunDays').value))"
                     class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Save</button>
             </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="text-muted" style="font-size: 0.8rem;" title="Approved actions wait this many days before executing; cancellable meanwhile. 0 = immediate.">Grace period:</span>
+                <input type="number" id="gracePeriodDays" class="form-input" style="width: 60px; padding: 0.3rem; text-align: center;"
+                    value="{{ config.get('approval', {}).get('grace_period_days', 0) }}"
+                    min="0" max="30">
+                <span class="text-muted" style="font-size: 0.8rem;">days</span>
+                <button onclick="updateConfig('grace_period_days', parseInt(document.getElementById('gracePeriodDays').value))"
+                    class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Save</button>
+            </div>
         </div>
     </div>
 
@@ -210,6 +219,22 @@
     </div>
 </details>
 
+<!-- Policy as code -->
+<div class="card mb-2" style="padding: 1rem;">
+    <h3 style="margin: 0 0 0.25rem 0;">Policy as Code</h3>
+    <p class="text-muted" style="margin: 0 0 1rem 0; font-size: 0.85rem;">
+        Export the whole remediation policy (safeguards, whitelist, schedule,
+        grace period…) as YAML to version it in git, and re-import a reviewed
+        version. Imports are strictly validated — unknown keys are rejected.
+    </p>
+    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+        <a href="/api/policies/export" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Export policy (.yaml)</a>
+        <input type="file" id="policyFile" accept=".yaml,.yml" style="font-size: 0.8rem;">
+        <button onclick="importPolicy()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Import policy</button>
+        <span id="policyImportStatus" style="font-size: 0.8rem;"></span>
+    </div>
+</div>
+
 <div class="text-right mt-2">
     <button onclick="refreshData()" class="btn btn-outline">Refresh Settings</button>
 </div>
@@ -217,6 +242,39 @@
 
 {% block extra_js %}
 <script>
+    async function importPolicy() {
+        const fileInput = document.getElementById('policyFile');
+        const status = document.getElementById('policyImportStatus');
+        if (!fileInput.files.length) {
+            status.textContent = 'Choose a .yaml file first.';
+            status.style.color = 'var(--danger, #ef4444)';
+            return;
+        }
+        if (!confirm('Import this policy? It replaces the whole current configuration.')) {
+            return;
+        }
+        try {
+            const text = await fileInput.files[0].text();
+            const resp = await fetch('/api/policies/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ yaml_text: text })
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                status.textContent = 'Policy imported (' + data.sections.join(', ') + '). Reloading…';
+                status.style.color = 'var(--success, #22c55e)';
+                setTimeout(() => window.location.reload(), 1200);
+            } else {
+                status.textContent = 'Rejected: ' + data.detail;
+                status.style.color = 'var(--danger, #ef4444)';
+            }
+        } catch (e) {
+            status.textContent = 'Import failed: ' + e;
+            status.style.color = 'var(--danger, #ef4444)';
+        }
+    }
+
     async function toggleDryRun(enabled) {
         const message = enabled
             ? 'Dry-run mode will be enabled. Actions will be simulated.'

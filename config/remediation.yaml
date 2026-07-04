@@ -8,6 +8,8 @@ auto_remediation:
     delete_volume: true
     delete_nat_gateway: true
     delete_load_balancer: true
+approval:
+  grace_period_days: 3
 protection:
   min_instance_age_days: 30
   min_idle_days: 14

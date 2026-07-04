@@ -32,6 +32,40 @@
     </form>
 </div>
 
+{% if scheduled_recs %}
+<!-- Approvals waiting out their grace period -->
+<div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid #d29922;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+        <strong style="font-size: 0.9rem;">Scheduled executions</strong>
+        <span class="badge badge-warning">{{ scheduled_recs|length }}</span>
+        <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280);">
+            Approved actions execute automatically after the grace period unless cancelled.
+        </span>
+    </div>
+    <div class="table-container">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+            <tbody>
+                {% for s in scheduled_recs %}
+                <tr id="scheduled-row-{{ s.id }}" style="border-top: 1px solid var(--gray-200, #e5e7eb);">
+                    <td style="padding: 0.4rem 0.6rem; font-family: monospace;">{{ s.resource_id }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">{{ s.recommendation_type }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">EUR {{ "%.2f"|format(s.estimated_monthly_savings_eur or 0) }}/mo</td>
+                    <td style="padding: 0.4rem 0.6rem;">
+                        executes {{ s.execute_after.strftime('%Y-%m-%d %H:%M') }}
+                        ({{ s.days_left }} day{{ 's' if s.days_left > 1 }} left)
+                    </td>
+                    <td style="padding: 0.4rem 0.6rem; text-align: right;">
+                        <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;"
+                                onclick="cancelScheduled({{ s.id }})">Cancel</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- Tabs -->
 <div class="card" style="padding: 0.75rem;">
     <!-- Tab nav -->
@@ -528,11 +562,41 @@
 
             // Red toast as soon as one action failed; note manual approvals
             const manualCount = response.results.filter(r => r.success && r.manual).length;
+            const scheduledCount = response.results.filter(r => r.success && r.scheduled).length;
             let msg = successCount + '/' + ids.length + ' actions completed successfully!';
             if (manualCount > 0) {
                 msg += ' (' + manualCount + ' approved — execute manually on AWS)';
             }
+            if (scheduledCount > 0) {
+                msg += ' (' + scheduledCount + ' scheduled — grace period, cancellable from this page)';
+            }
             showToast(msg, successCount === ids.length ? 'success' : 'error');
+            if (scheduledCount > 0) {
+                // Reload so the "Scheduled executions" panel reflects reality
+                setTimeout(() => window.location.reload(), 1500);
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function cancelScheduled(recId) {
+        if (!confirm('Cancel this scheduled execution? The recommendation returns to the pending list.')) {
+            return;
+        }
+        try {
+            const response = await api('/api/actions', {
+                method: 'POST',
+                body: JSON.stringify({
+                    recommendation_ids: [recId],
+                    action: 'cancel'
+                })
+            });
+            const ok = response.results[0] && response.results[0].success;
+            showToast(ok ? 'Execution cancelled — recommendation is pending again.'
+                         : 'Cancel failed: ' + (response.results[0].error || 'unknown'),
+                      ok ? 'success' : 'error');
+            if (ok) setTimeout(() => window.location.reload(), 1000);
         } catch (error) {
             showToast('Error: ' + error.message, 'error');
         }
