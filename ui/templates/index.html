@@ -7,7 +7,7 @@
 <div class="card mb-1" style="padding: 1.25rem 1.5rem; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: white; font-weight: 700;">Cost Overview</h1>
+            <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: white; font-weight: 700;">Waste Overview</h1>
             <p style="margin: 0; opacity: 0.7; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
                 {% if last_sync %}
                     {% set now = now() if now is defined else last_sync %}
@@ -25,20 +25,20 @@
     </div>
 </div>
 
-<!-- Daily / Monthly Costs Banner -->
+<!-- Daily / Monthly Waste Banner -->
 <div class="card mb-1" style="padding: 0.75rem 1.25rem; display: flex; justify-content: space-around; align-items: center;">
     <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Daily Cost</div>
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Daily Waste</div>
         <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.2f"|format(daily_cost) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
     </div>
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Cost</div>
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
         <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.2f"|format(monthly_cost) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
     </div>
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Annual Projection</div>
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Annual Waste Projection</div>
         <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.0f"|format(monthly_cost * 12) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
     </div>
 </div>
