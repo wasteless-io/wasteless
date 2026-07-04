@@ -147,13 +147,15 @@ Two patterns exist:
 compute a confidence score, insert into `waste_detected` then `recommendations`.
 
 **2. Steampipe-based** (preferred for new inventory-style detectors): write the
-detection SQL in `sql/steampipe/your_detector.sql` and create a detector class
-inheriting from `steampipe_base.py`. See `eip_orphan_steampipe.py` for a minimal
-example.
+detection SQL in `sql/steampipe/your_detector.sql` and subclass
+`SteampipeWasteDetector` (`steampipe_base.py`) — only `map_rows()` is needed.
+See `eip_orphan_steampipe.py` for a minimal example.
 
 In both cases:
 
-1. Register the detector in `src/detectors/__init__.py`
+1. **Declare the `recommendation_type` in `ui/utils/action_registry.py`** with
+   an execution mode (`boto3`, `remediator` or `manual`) — the guard test in
+   `ui/tests/test_action_registry.py` fails on undeclared types
 2. Add a migration in `sql/migrations/` if new tables are needed
 3. Add unit tests in `tests/unit/`
 4. Add a Terraform test fixture if the resource can be fabricated cheaply
