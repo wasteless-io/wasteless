@@ -454,7 +454,7 @@ USD_TO_EUR = float(os.getenv('USD_TO_EUR', '0.92'))
 # ui/static/providers/. First match wins across the models list.
 _PROVIDER_KEYWORDS = [
     ('deepseek', 'deepseek'),
-    ('claude', 'anthropic'),
+    ('claude', 'claude'),
     ('anthropic', 'anthropic'),
     ('gpt', 'openai'),
     ('openai', 'openai'),
