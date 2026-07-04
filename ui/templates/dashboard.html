@@ -36,6 +36,8 @@
 
     .card.compact { padding: 1rem; }
     .card.slim { padding: 0.75rem; }
+    /* 3 KPIs don't need the full page width */
+    .financial-card { max-width: 880px; }
     .btn-sm { padding: 0.4rem 0.75rem; }
 
     .section-label {
@@ -235,7 +237,7 @@
 {% endif %}
 
 <!-- KPIs Row 1 — Financial View -->
-<div class="card compact mb-1">
+<div class="card compact financial-card mb-1">
     <div class="section-label">Financial Overview</div>
     <div class="grid grid-3">
 
