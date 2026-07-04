@@ -172,6 +172,11 @@
             <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem;">
                 {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }} · {{ "{:,}".format(ai_usage.tokens) }} tokens
             </div>
+            {% if ai_usage.models %}
+            <div style="font-size: 0.75rem; color: var(--gray-400); margin-top: 0.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ ai_usage.models | join(', ') }}">
+                {{ ai_usage.models | join(', ') }}
+            </div>
+            {% endif %}
         </div>
         <div style="display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; flex: 1;">
             {% for f in ai_usage.features %}

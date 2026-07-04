@@ -598,6 +598,13 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     """)
     llm_features = cursor.fetchall()
 
+    cursor.execute("""
+        SELECT DISTINCT model FROM llm_usage
+        WHERE called_at >= NOW() - INTERVAL '30 days' AND model IS NOT NULL
+        ORDER BY model
+    """)
+    llm_models = [r['model'] for r in cursor.fetchall()]
+
     # Already burned: cumulative EUR actually lost, one daily-rate slice per
     # snapshot day (total_eur is a monthly rate, hence /30). Backfilled
     # history is a floor: resources cleaned before tracking are invisible.
@@ -633,6 +640,7 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             "cost_eur": float(llm_row['cost_usd']) * USD_TO_EUR,
             "calls": llm_row['calls'],
             "tokens": llm_row['tokens'],
+            "models": llm_models,
             "features": [
                 {
                     "feature": f['feature'],
