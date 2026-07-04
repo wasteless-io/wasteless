@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - Wasteless.io{% endblock %}
+
+{% block extra_css %}
+<style>
+    .logs-toolbar {
+        display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+        padding: 0.6rem 0.75rem;
+    }
+    .logs-console {
+        background: #0d1117;
+        color: #c9d1d9;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.78rem;
+        line-height: 1.5;
+        border-radius: 8px;
+        padding: 0.75rem;
+        height: calc(100vh - 190px);
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .log-line { display: block; }
+    .log-line .ts { color: #8b949e; }
+    .log-line .logger { color: #79c0ff; }
+    .log-line mark { background: #d29922; color: #0d1117; border-radius: 2px; }
+    .lvl { display: inline-block; width: 5.2em; font-weight: 600; }
+    .lvl-DEBUG { color: #8b949e; }
+    .lvl-INFO { color: #3fb950; }
+    .lvl-WARNING { color: #d29922; }
+    .lvl-ERROR, .lvl-CRITICAL { color: #f85149; }
+    .logs-status { font-size: 0.75rem; color: var(--gray-600, #6b7280); margin-left: auto; }
+    .btn.paused { background: #d29922; color: #0d1117; border-color: #d29922; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom: 0.75rem;">
+    <h1 style="margin-bottom: 0.25rem;">Logs</h1>
+    <p style="font-size: 0.8rem; color: var(--gray-600, #6b7280); margin: 0;">
+        Live logs of the UI process (in-memory, last 2000 entries, reset on restart).
+        Backend pipeline runs log to their own terminal.
+    </p>
+</div>
+
+<div class="card mb-1 logs-toolbar">
+    <input type="search" id="log-search" class="form-input" placeholder="Search message or logger…"
+           style="padding: 0.4rem; width: 280px;" autocomplete="off">
+    <select id="log-level" class="form-select" style="padding: 0.4rem; width: auto;">
+        <option value="DEBUG">All levels</option>
+        <option value="INFO" selected>INFO+</option>
+        <option value="WARNING">WARNING+</option>
+        <option value="ERROR">ERROR+</option>
+    </select>
+    <button id="log-pause" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Pause</button>
+    <button id="log-clear" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Clear</button>
+    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem;">
+        <input type="checkbox" id="log-autoscroll" checked> Auto-scroll
+    </label>
+    <span class="logs-status" id="log-status">connecting…</span>
+</div>
+
+<div class="logs-console" id="log-console"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const consoleEl = document.getElementById('log-console');
+    const searchEl = document.getElementById('log-search');
+    const levelEl = document.getElementById('log-level');
+    const pauseEl = document.getElementById('log-pause');
+    const clearEl = document.getElementById('log-clear');
+    const autoscrollEl = document.getElementById('log-autoscroll');
+    const statusEl = document.getElementById('log-status');
+
+    const POLL_MS = 1500;
+    const MAX_LINES = 3000;
+    let afterId = 0;
+    let paused = false;
+    let shown = 0;
+    let timer = null;
+    let searchDebounce = null;
+
+    function esc(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function highlight(text, needle) {
+        if (!needle) return esc(text);
+        const escaped = esc(text);
+        const pattern = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return escaped.replace(new RegExp('(' + pattern + ')', 'gi'), '<mark>$1</mark>');
+    }
+
+    function render(entries) {
+        const needle = searchEl.value.trim();
+        const html = entries.map(e =>
+            '<span class="log-line">' +
+            '<span class="ts">' + e.ts + '</span> ' +
+            '<span class="lvl lvl-' + e.level + '">' + e.level + '</span> ' +
+            '<span class="logger">' + highlight(e.logger, needle) + '</span> ' +
+            highlight(e.message, needle) +
+            '</span>'
+        ).join('');
+        consoleEl.insertAdjacentHTML('beforeend', html);
+        shown += entries.length;
+        while (consoleEl.childElementCount > MAX_LINES) {
+            consoleEl.removeChild(consoleEl.firstElementChild);
+            shown--;
+        }
+        if (autoscrollEl.checked) consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    async function poll() {
+        if (paused) return;
+        const params = new URLSearchParams({
+            after_id: afterId,
+            level: levelEl.value,
+            q: searchEl.value.trim(),
+        });
+        try {
+            const resp = await fetch('/api/logs?' + params);
+            const data = await resp.json();
+            if (data.entries.length) render(data.entries);
+            afterId = data.last_id;
+            statusEl.textContent = shown + ' line(s) shown';
+        } catch (e) {
+            statusEl.textContent = 'poll failed: ' + e;
+        }
+    }
+
+    function resetView() {
+        consoleEl.innerHTML = '';
+        shown = 0;
+        afterId = 0;   // refetch buffer with the new filters
+        poll();
+    }
+
+    searchEl.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(resetView, 300);
+    });
+    levelEl.addEventListener('change', resetView);
+
+    pauseEl.addEventListener('click', () => {
+        paused = !paused;
+        pauseEl.textContent = paused ? 'Resume' : 'Pause';
+        pauseEl.classList.toggle('paused', paused);
+        if (!paused) poll();
+    });
+
+    clearEl.addEventListener('click', () => {
+        consoleEl.innerHTML = '';
+        shown = 0;
+        statusEl.textContent = '0 line(s) shown';
+        // afterId is kept: only new logs will appear
+    });
+
+    poll();
+    timer = setInterval(poll, POLL_MS);
+    window.addEventListener('beforeunload', () => clearInterval(timer));
+})();
+</script>
+{% endblock %}
