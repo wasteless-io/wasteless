@@ -231,21 +231,31 @@
             <div class="kpi-icon">
                 <span class="{% if (kpis.cumulative_savings or 0) > 0 %}bg-success{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
             </div>
-            <div class="kpi-value {% if (kpis.cumulative_savings or 0) > 0 %}text-success{% else %}is-muted{% endif %}">{{ eur(kpis.cumulative_savings) }}</div>
+            {% if (kpis.cumulative_savings or 0) > 0 %}
+            <div class="kpi-value text-success">{{ eur(kpis.cumulative_savings) }}</div>
             <div class="kpi-label">Savings Realized</div>
             <div class="kpi-sub">Since launch · verified via Cost Explorer</div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">Savings Realized</div>
+            <div class="kpi-sub">Appears after your first approved action</div>
+            {% endif %}
         </div>
 
-        <!-- Capture Rate -->
+        <!-- Pending Savings (amount at stake; the count lives in Operational Status) -->
         <div class="kpi">
-            {% set total_identified = (kpis.cumulative_savings or 0) + (kpis.potential_monthly or 0) %}
-            {% set capture_rate = ((kpis.cumulative_savings or 0) / total_identified * 100) if total_identified > 0 else 0 %}
             <div class="kpi-icon">
-                <span class="{% if capture_rate >= 50 %}bg-success{% elif capture_rate > 0 %}bg-warning{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
+                <span class="{% if (kpis.pending_count or 0) > 0 %}bg-warning{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12M6 22h12M8 2v4l4 4 4-4V2M8 22v-4l4-4 4 4v4"/></svg></span>
             </div>
-            <div class="kpi-value {% if capture_rate >= 50 %}text-success{% elif capture_rate > 0 %}text-warning{% else %}is-muted{% endif %}">{{ "%.0f"|format(capture_rate) }}<span class="unit"> %</span></div>
-            <div class="kpi-label">Capture Rate</div>
-            <div class="kpi-sub">Saved / Waste identified</div>
+            {% if (kpis.pending_count or 0) > 0 %}
+            <div class="kpi-value text-warning">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></div>
+            <div class="kpi-label">Pending Savings</div>
+            <div class="kpi-sub">Recoverable if approved</div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">Pending Savings</div>
+            <div class="kpi-sub">Nothing awaiting approval</div>
+            {% endif %}
         </div>
 
         <!-- Last Scan -->
