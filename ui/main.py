@@ -450,6 +450,33 @@ async def home(request: Request, conn=Depends(get_db)):
 # Fixed USD→EUR rate for LLM costs, same convention as the detectors' AWS pricing
 USD_TO_EUR = float(os.getenv('USD_TO_EUR', '0.92'))
 
+# Provider logo detection: keyword in the model name → logo slug in
+# ui/static/providers/. First match wins across the models list.
+_PROVIDER_KEYWORDS = [
+    ('deepseek', 'deepseek'),
+    ('claude', 'anthropic'),
+    ('anthropic', 'anthropic'),
+    ('gpt', 'openai'),
+    ('openai', 'openai'),
+    ('ollama', 'ollama'),
+    ('llama', 'ollama'),
+    ('mistral', 'mistral'),
+    ('gemini', 'gemini'),
+]
+
+
+def _llm_provider(models):
+    """Logo slug for the first recognized provider, or None."""
+    for model in models:
+        name = (model or '').lower()
+        for keyword, provider in _PROVIDER_KEYWORDS:
+            if keyword in name:
+                logo = os.path.join(os.path.dirname(__file__),
+                                    'static', 'providers', f'{provider}.svg')
+                if os.path.exists(logo):
+                    return provider
+    return None
+
 
 # Trend chart ranges: key → (days back, granularity, subtitle)
 TREND_RANGES = {
@@ -641,6 +668,7 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             "calls": llm_row['calls'],
             "tokens": llm_row['tokens'],
             "models": llm_models,
+            "provider": _llm_provider(llm_models),
             "features": [
                 {
                     "feature": f['feature'],
