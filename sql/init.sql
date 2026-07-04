@@ -59,6 +59,17 @@
   CREATE INDEX IF NOT EXISTS idx_costs_raw_provider ON cloud_costs_raw(provider);
   CREATE INDEX IF NOT EXISTS idx_waste_date ON waste_detected(detection_date);
   CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
-  
+
+  -- Gaspillage actif : ressource encore existante et non traitée.
+  -- Exclut obsolete (ressource disparue) et applied/approved (action faite) ;
+  -- garde pending et rejected (la ressource coûte toujours).
+  -- Tous les agrégats Home/Dashboard lisent cette vue.
+  CREATE OR REPLACE VIEW active_waste AS
+  SELECT w.*
+  FROM waste_detected w
+  LEFT JOIN recommendations r ON r.waste_id = w.id
+  WHERE COALESCE(r.status, 'pending') NOT IN ('obsolete', 'applied', 'approved');
+
+
   -- Base de données séparée pour Metabase
   CREATE DATABASE metabase;

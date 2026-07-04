@@ -66,12 +66,14 @@ def sync_aws_job():
         conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
         cursor = conn.cursor()
 
-        # Pending recommendations grouped by resource type
+        # Open recommendations grouped by resource type. Rejected ones are
+        # included: a rejected resource still counts as active waste, so its
+        # disappearance must also be detected to stop counting it.
         cursor.execute("""
             SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
             FROM recommendations r
             JOIN waste_detected w ON r.waste_id = w.id
-            WHERE r.status = 'pending'
+            WHERE r.status IN ('pending', 'rejected')
             GROUP BY w.resource_type
         """)
         pending = {row['resource_type']: row['ids'] for row in cursor.fetchall()}
@@ -91,7 +93,7 @@ def sync_aws_job():
                 WHERE r.waste_id = w.id
                 AND w.resource_type = %s
                 AND w.resource_id = ANY(%s)
-                AND r.status = 'pending'
+                AND r.status IN ('pending', 'rejected')
             """, (resource_type, ids))
             obsolete_count += cursor.rowcount
 
@@ -223,7 +225,7 @@ async def home(request: Request, conn=Depends(get_db)):
         ),
         waste AS (
             SELECT COALESCE(SUM(monthly_waste_eur), 0) as total_waste
-            FROM waste_detected
+            FROM active_waste
         ),
         raw_costs AS (
             SELECT COALESCE(SUM(cost), 0) as total_spend
@@ -250,13 +252,13 @@ async def home(request: Request, conn=Depends(get_db)):
     """)
     result = cursor.fetchone()
 
-    # Waste by type (grouped)
+    # Waste by type (grouped) — active waste only
     cursor.execute("""
         SELECT
             resource_type,
             COUNT(*) as cnt,
             COALESCE(SUM(monthly_waste_eur), 0) as total_eur
-        FROM waste_detected
+        FROM active_waste
         GROUP BY resource_type
         ORDER BY total_eur DESC
     """)
@@ -264,7 +266,7 @@ async def home(request: Request, conn=Depends(get_db)):
 
     # Recent activity: mix detections + actions, sorted by time
     cursor.execute("""
-        SELECT event_type, event_time, resource_type, cnt, amount, resource_id, action_status, error_message
+        SELECT event_type, event_time, resource_type, cnt, amount, resource_id, action_status, error_message, dry_run
         FROM (
             SELECT
                 'detection' as event_type,
@@ -274,7 +276,8 @@ async def home(request: Request, conn=Depends(get_db)):
                 COALESCE(SUM(monthly_waste_eur), 0) as amount,
                 NULL::varchar as resource_id,
                 NULL::varchar as action_status,
-                NULL::text as error_message
+                NULL::text as error_message,
+                NULL::boolean as dry_run
             FROM waste_detected
             GROUP BY DATE(created_at), resource_type
             UNION ALL
@@ -286,7 +289,8 @@ async def home(request: Request, conn=Depends(get_db)):
                 0 as amount,
                 resource_id,
                 action_status,
-                error_message
+                error_message,
+                dry_run
             FROM actions_log
         ) combined
         ORDER BY event_time DESC
@@ -312,12 +316,12 @@ async def home(request: Request, conn=Depends(get_db)):
     last_sync_row = cursor.fetchone()
     last_sync = last_sync_row['last_sync'] if last_sync_row else None
 
-    # Daily / Monthly costs (detected waste)
+    # Daily / Monthly costs (active detected waste)
     cursor.execute("""
         SELECT
             COALESCE(SUM(monthly_waste_eur), 0) as monthly_cost,
             COALESCE(SUM(monthly_waste_eur), 0) / 30.0 as daily_cost
-        FROM waste_detected
+        FROM active_waste
     """)
     cost_row = cursor.fetchone()
     daily_cost = float(cost_row['daily_cost']) if cost_row else 0
@@ -371,7 +375,9 @@ async def dashboard(request: Request, conn=Depends(get_db)):
             FROM savings_realized
         ),
         waste AS (
-            SELECT COUNT(*) as waste_count FROM waste_detected
+            SELECT COUNT(*) as waste_count,
+                   COALESCE(SUM(monthly_waste_eur), 0) as active_monthly
+            FROM active_waste
         ),
         actions AS (
             SELECT
@@ -396,6 +402,7 @@ async def dashboard(request: Request, conn=Depends(get_db)):
             m.potential_monthly,
             s.verified_savings,
             w.waste_count,
+            w.active_monthly,
             COALESCE(a.success_rate, 0) as success_rate,
             c.total_saved as cumulative_savings,
             p.pending_count,
@@ -410,12 +417,12 @@ async def dashboard(request: Request, conn=Depends(get_db)):
     """)
     kpis = cursor.fetchone()
 
-    # Cost of inaction: first detection date + daily burn rate
+    # Cost of inaction: first detection date + daily burn rate (active waste)
     cursor.execute("""
         SELECT
             MIN(detection_date) as first_detection,
             COALESCE(SUM(monthly_waste_eur), 0) / 30.0 as daily_burn
-        FROM waste_detected
+        FROM active_waste
     """)
     inaction_row = cursor.fetchone()
 
@@ -429,27 +436,36 @@ async def dashboard(request: Request, conn=Depends(get_db)):
     """)
     waste_trend = cursor.fetchall()
 
-    # Age distribution: resources grouped by how long they've been detected
+    # Age distribution: how long resources have actually been wasting.
+    # Detectors store the resource age in metadata->>'age_days' (snapshot
+    # start time, volume create time...); detection_date is the fallback.
     cursor.execute("""
+        WITH aged AS (
+            SELECT
+                COALESCE((metadata->>'age_days')::int,
+                         CURRENT_DATE - detection_date) as age_days,
+                monthly_waste_eur
+            FROM active_waste
+        )
         SELECT
             CASE
-                WHEN CURRENT_DATE - detection_date <= 30 THEN '< 30 days'
-                WHEN CURRENT_DATE - detection_date <= 90 THEN '31-90 days'
+                WHEN age_days <= 30 THEN '< 30 days'
+                WHEN age_days <= 90 THEN '31-90 days'
                 ELSE '90+ days'
             END as age_bucket,
             COUNT(*) as cnt,
             COALESCE(SUM(monthly_waste_eur), 0) as total_eur,
-            MIN(CURRENT_DATE - detection_date) as min_age
-        FROM waste_detected
+            MIN(age_days) as min_age
+        FROM aged
         GROUP BY age_bucket
         ORDER BY min_age
     """)
     age_distribution = cursor.fetchall()
 
-    # Waste cost by resource type (kept for ROI summary)
+    # Waste cost by resource type (kept for ROI summary) — active waste
     cursor.execute("""
         SELECT resource_type, SUM(monthly_waste_eur) as total_eur
-        FROM waste_detected
+        FROM active_waste
         GROUP BY resource_type
         ORDER BY total_eur DESC
     """)
@@ -1163,7 +1179,7 @@ async def api_sync_aws(conn=Depends(get_db)):
             SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
             FROM recommendations r
             JOIN waste_detected w ON r.waste_id = w.id
-            WHERE r.status = 'pending'
+            WHERE r.status IN ('pending', 'rejected')
             GROUP BY w.resource_type
         """)
         pending_by_type = {row['resource_type']: row['ids']
@@ -1189,7 +1205,7 @@ async def api_sync_aws(conn=Depends(get_db)):
                     WHERE r.waste_id = w.id
                     AND w.resource_type = %s
                     AND w.resource_id = ANY(%s)
-                    AND r.status = 'pending'
+                    AND r.status IN ('pending', 'rejected')
                 """, (resource_type, ids))
                 obsolete_count += cursor.rowcount
 
@@ -1230,7 +1246,7 @@ async def api_sync_aws(conn=Depends(get_db)):
                     FROM waste_detected w
                     WHERE r.waste_id = w.id
                     AND w.resource_id = %s
-                    AND r.status = 'pending'
+                    AND r.status IN ('pending', 'rejected')
                 """, (instance_id,))
                 obsolete_count += cursor.rowcount
             else:

@@ -16,9 +16,9 @@
             <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
                 <span style="background: var(--warning); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
             </div>
-            <div style="font-size: 1.75rem; font-weight: 700; color: var(--warning);">{{ "%.2f"|format(kpis.potential_monthly or 0) }} <span style="font-size: 0.9rem; font-weight: 400;">€</span></div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--warning);">{{ "%.2f"|format(kpis.active_monthly or 0) }} <span style="font-size: 0.9rem; font-weight: 400;">€</span></div>
             <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Monthly Waste</div>
-            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">{{ "%.0f"|format((kpis.potential_monthly or 0) * 12) }} €/year</div>
+            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">{{ "%.0f"|format((kpis.active_monthly or 0) * 12) }} €/year</div>
         </div>
 
         <!-- Savings Realized -->
@@ -156,7 +156,7 @@
                 {{ "%.2f"|format(daily_burn) }} <span style="font-size: 1rem; font-weight: 400; color: var(--gray-500);">€/day</span>
             </div>
             <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem;">
-                {{ "%.2f"|format(daily_burn * 30) }} €/mo · {{ "%.0f"|format(daily_burn * 365) }} €/yr
+                {{ "%.2f"|format(daily_burn * 30) }} €/mo · {{ "%.0f"|format(daily_burn * 30 * 12) }} €/yr
             </div>
         </div>
         {% if waste_trend %}
@@ -220,10 +220,9 @@
             <div style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">{{ "%.0f"|format(capture_rate) }}%</div>
             <div style="font-size: 0.75rem; color: var(--gray-600);">Capture Rate</div>
         </div>
-        <!-- Actions Executed -->
+        <!-- Pending recommendations vs active waste -->
         <div style="text-align: center; padding: 0.75rem; background: rgba(160, 174, 192, 0.1); border-radius: 8px;">
-            {% set total_actions = (100 / (kpis.success_rate or 1)) * (kpis.success_rate or 0) / 100 if kpis.success_rate else 0 %}
-            <div style="font-size: 1.25rem; font-weight: 700; color: var(--gray-600);">{{ kpis.waste_count or 0 }} / {{ "%.0f"|format(kpis.waste_count or 0) }}</div>
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--gray-600);">{{ kpis.pending_count or 0 }} / {{ kpis.waste_count or 0 }}</div>
             <div style="font-size: 0.75rem; color: var(--gray-600);">Pending / Total</div>
         </div>
     </div>
