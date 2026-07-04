@@ -255,31 +255,82 @@
 <script src="/static/chart.umd.min.js"></script>
 <script>
 {% if waste_by_resource %}
-new Chart(document.getElementById('costByResourceChart'), {
-    type: 'bar',
-    data: {
-        labels: [{% for item in waste_by_resource %}'{{ item.resource_type }}'{% if not loop.last %},{% endif %}{% endfor %}],
-        datasets: [{
-            data: [{% for item in waste_by_resource %}{{ "%.4f"|format(item.total_eur or 0) }}{% if not loop.last %},{% endif %}{% endfor %}],
-            backgroundColor: '#2563eb',
-            borderWidth: 0,
-            borderRadius: 4
-        }]
-    },
-    options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: false },
-            tooltip: { callbacks: { label: ctx => ` €${ctx.parsed.x.toFixed(2)}/mo` } }
-        },
-        scales: {
-            x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-            y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+(function() {
+    const typeLabels = {
+        ebs_snapshot: 'EBS Snapshots',
+        ebs_volume: 'EBS Volumes',
+        ec2_instance: 'EC2 Instances',
+        elastic_ip: 'Elastic IPs',
+        nat_gateway: 'NAT Gateways',
+        load_balancer: 'Load Balancers',
+        vpc: 'VPCs'
+    };
+    const types = [{% for item in waste_by_resource %}'{{ item.resource_type }}'{% if not loop.last %},{% endif %}{% endfor %}];
+    const values = [{% for item in waste_by_resource %}{{ "%.4f"|format(item.total_eur or 0) }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const counts = [{% for item in waste_by_resource %}{{ item.cnt or 0 }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const labels = types.map(t => typeLabels[t] || t.replace(/_/g, ' '));
+    const total = values.reduce((a, b) => a + b, 0);
+
+    // Direct value labels at bar ends (axis is dropped: the values are read
+    // on the bars themselves)
+    const valueLabels = {
+        id: 'valueLabels',
+        afterDatasetsDraw(chart) {
+            const meta = chart.getDatasetMeta(0);
+            const c = chart.ctx;
+            c.save();
+            c.font = '600 11px sans-serif';
+            c.fillStyle = '#374151';
+            c.textBaseline = 'middle';
+            meta.data.forEach((bar, i) => {
+                c.fillText(`€${values[i].toFixed(2)}`, bar.x + 6, bar.y);
+            });
+            c.restore();
         }
-    }
-});
+    };
+
+    new Chart(document.getElementById('costByResourceChart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: '#2563eb',
+                borderWidth: 0,
+                borderRadius: 4,
+                maxBarThickness: 20
+            }]
+        },
+        plugins: [valueLabels],
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { right: 64 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    displayColors: false,
+                    padding: 10,
+                    callbacks: {
+                        label: ctx => {
+                            const pct = total > 0 ? (ctx.parsed.x / total * 100).toFixed(0) : 0;
+                            const cnt = counts[ctx.dataIndex];
+                            return [
+                                `€${ctx.parsed.x.toFixed(2)}/mo · ${pct}% of waste`,
+                                `${cnt} resource${cnt > 1 ? 's' : ''}`
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { display: false },
+                y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11 } } }
+            }
+        }
+    });
+})();
 {% endif %}
 
 {% if waste_trend %}
