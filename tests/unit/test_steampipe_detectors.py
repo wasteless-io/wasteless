@@ -20,6 +20,7 @@ from detectors.ebs_gp2_migration import (
     EBSGp2MigrationDetector, GP2_TO_GP3_SAVINGS_EUR_PER_GIB
 )
 from detectors.elb_unused import ELBUnusedDetector, ELB_MONTHLY_COST_EUR
+from detectors.vpc_unused import VPCUnusedDetector
 from collectors.ec2_metrics_steampipe import rows_to_records
 
 
@@ -106,6 +107,42 @@ class TestELBUnusedMapping:
 
     def test_empty_input(self):
         assert _bare(ELBUnusedDetector).map_rows([]) == []
+
+
+class TestVPCUnusedMapping:
+
+    def test_custom_vpc(self):
+        item = _bare(VPCUnusedDetector).map_rows([{
+            'vpc_id': 'vpc-0abc',
+            'region': 'eu-west-3',
+            'cidr_block': '10.0.0.0/16',
+            'is_default': False,
+            'name': 'sandbox',
+        }])[0]
+        assert item['resource_id'] == 'vpc-0abc'
+        assert item['monthly_cost'] == 0.0
+        assert item['confidence'] == 0.85
+        assert 'DELETE' in item['action']
+        assert 'sandbox (vpc-0abc)' in item['action']
+        assert item['metadata']['hygiene'] is True
+
+    def test_default_vpc_lower_confidence_and_review(self):
+        item = _bare(VPCUnusedDetector).map_rows([{
+            'vpc_id': 'vpc-def', 'region': 'us-east-1',
+            'cidr_block': '172.31.0.0/16', 'is_default': True, 'name': '',
+        }])[0]
+        assert item['confidence'] == 0.60
+        assert item['action'].startswith('REVIEW default VPC vpc-def')
+
+    def test_unnamed_vpc_uses_bare_id(self):
+        item = _bare(VPCUnusedDetector).map_rows([{
+            'vpc_id': 'vpc-1', 'is_default': False, 'name': None,
+        }])[0]
+        assert 'vpc-1 in' in item['action']
+        assert item['metadata']['name'] == ''
+
+    def test_empty_input(self):
+        assert _bare(VPCUnusedDetector).map_rows([]) == []
 
 
 class TestBaseDetect:
