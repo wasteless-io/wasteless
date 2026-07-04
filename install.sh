@@ -589,6 +589,18 @@ fi
 
 print_verbose "installation des dependances UI (ui/requirements.txt)"
 install_deps ui/venv ui/requirements.txt
+
+# litellm aussi dans le venv UI: la page Reports genere le resume IA
+# depuis le processus UI (fail-soft, comme pour le venv racine)
+if grep -q '^WASTELESS_LLM_MODEL=' .env 2>/dev/null; then
+    if [ $USE_UV -eq 1 ]; then
+        silence uv pip install --python ui/venv/bin/python3 litellm $PIP_OPT \
+            || print_warning "litellm non installe dans ui/venv — le resume IA de la page Reports sera masque"
+    else
+        silence ui/venv/bin/pip install litellm $PIP_OPT \
+            || print_warning "litellm non installe dans ui/venv — le resume IA de la page Reports sera masque"
+    fi
+fi
 print_step "Dependances UI installees"
 
 # Fichier ui/.env — toujours mis a jour pour reflechir le chemin courant

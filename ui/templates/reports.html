@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Wasteless.io{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media print {
+        .sidebar, .no-print { display: none !important; }
+        .main { padding: 0 !important; }
+        .card { box-shadow: none; border: 1px solid #ddd; }
+        body { background: white; }
+    }
+    .narrative-box {
+        background: var(--gray-100, #f3f4f6);
+        border-left: 3px solid #22c55e;
+        border-radius: 6px;
+        padding: 0.875rem 1rem;
+        font-size: 0.9rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header no-print" style="margin-bottom: 1rem;">
+    <h1 style="margin-bottom: 0.25rem;">Reports</h1>
+</div>
+
+<!-- Period filters -->
+<div class="card mb-1 no-print" style="padding: 0.75rem;">
+    <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="/reports?days=7" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Last 7 days</a>
+            <a href="/reports?days=30" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Last 30 days</a>
+        </div>
+        <form method="get" action="/reports" style="margin: 0;">
+            <div style="display: flex; gap: 0.5rem; align-items: end;">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Month</label>
+                    <input type="month" name="month" class="form-input" style="padding: 0.4rem;" value="{{ month }}">
+                </div>
+                <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
+            </div>
+        </form>
+        <form method="get" action="/reports" style="margin: 0;">
+            <div style="display: flex; gap: 0.5rem; align-items: end;">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">From</label>
+                    <input type="date" name="start" class="form-input" style="padding: 0.4rem;" value="{{ start }}" required>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">To</label>
+                    <input type="date" name="end" class="form-input" style="padding: 0.4rem;" value="{{ end }}" required>
+                </div>
+                <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
+            </div>
+        </form>
+        <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+            <a href="/api/reports/download?start={{ start }}&end={{ end }}" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Download .md</a>
+            <button onclick="window.print()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Print / PDF</button>
+        </div>
+    </div>
+</div>
+
+<!-- Report header -->
+<div style="display: flex; align-items: baseline; gap: 0.75rem; margin: 1rem 0 0.75rem;">
+    <h2 style="margin: 0; font-size: 1.05rem;">Activity report</h2>
+    <span style="font-size: 0.85rem; color: var(--gray-600, #6b7280);">{{ report.period.start }} to {{ report.period.end }} ({{ report.period.days }} day{{ 's' if report.period.days > 1 }})</span>
+</div>
+
+<!-- AI narrative -->
+{% if llm_enabled %}
+<div class="card mb-1" style="padding: 0.875rem;">
+    <div id="narrative-idle" class="no-print">
+        <button id="narrative-btn" class="btn btn-primary" style="padding: 0.4rem 0.75rem;" onclick="generateNarrative()">Generate AI summary</button>
+        <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280); margin-left: 0.5rem;">Comments the numbers below — the numbers themselves are always computed from the database.</span>
+    </div>
+    <div id="narrative-text" class="narrative-box" style="display: none;"></div>
+</div>
+{% endif %}
+
+<!-- Summary cards -->
+<div class="grid grid-4 mb-1">
+    <div class="card">
+        <div class="card-title">New waste detected</div>
+        <div class="card-value">EUR {{ "%.2f"|format(report.new_waste.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
+        <div class="card-delta">{{ report.new_waste.count }} resource(s)</div>
+    </div>
+    <div class="card">
+        {% if report.pending.scope == 'snapshot' %}
+        <div class="card-title">Pending recommendations <span class="badge badge-info">live</span></div>
+        <div class="card-value">EUR {{ "%.2f"|format(report.pending.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
+        <div class="card-delta">{{ report.pending.count }} pending{% if report.pending.oldest_days is not none and report.pending.count > 0 %} · oldest {{ report.pending.oldest_days }}d{% endif %}</div>
+        {% else %}
+        <div class="card-title">Recommendations created</div>
+        <div class="card-value">EUR {{ "%.2f"|format(report.pending.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
+        <div class="card-delta">{{ report.pending.count }} in the period</div>
+        {% endif %}
+    </div>
+    <div class="card">
+        <div class="card-title">Actions executed</div>
+        <div class="card-value">{{ report.actions.succeeded }}</div>
+        <div class="card-delta">
+            {% if report.actions.failed > 0 %}<span class="text-danger">{{ report.actions.failed }} failed</span> · {% endif %}{{ report.actions.dry_run }} dry-run
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">Savings verified</div>
+        <div class="card-value">EUR {{ "%.2f"|format(report.verified_savings_eur) }}</div>
+        <div class="card-delta">via Cost Explorer</div>
+    </div>
+</div>
+
+<!-- Waste by resource type -->
+<div class="card" style="padding: 0;">
+    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--gray-200, #e5e7eb); font-weight: 600; font-size: 0.9rem;">Waste detected by resource type</div>
+    <div class="table-container">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+            <thead>
+                <tr style="text-align: left; color: var(--gray-600, #6b7280);">
+                    <th style="padding: 0.5rem 1rem;">Resource type</th>
+                    <th style="padding: 0.5rem 1rem;">Resources</th>
+                    <th style="padding: 0.5rem 1rem;">Monthly waste</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for resource_type, count, eur in report.new_waste.by_type %}
+                <tr style="border-top: 1px solid var(--gray-200, #e5e7eb);">
+                    <td style="padding: 0.5rem 1rem;">{{ resource_type }}</td>
+                    <td style="padding: 0.5rem 1rem;">{{ count }}</td>
+                    <td style="padding: 0.5rem 1rem;">EUR {{ "%.2f"|format(eur) }}/mo</td>
+                </tr>
+                {% else %}
+                <tr style="border-top: 1px solid var(--gray-200, #e5e7eb);">
+                    <td colspan="3" style="padding: 0.75rem 1rem; color: var(--gray-600, #6b7280);">No waste detected in this period.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function generateNarrative() {
+        const btn = document.getElementById('narrative-btn');
+        const box = document.getElementById('narrative-text');
+        btn.disabled = true;
+        btn.textContent = 'Generating…';
+        try {
+            const resp = await fetch('/api/reports/narrative?start={{ start }}&end={{ end }}', { method: 'POST' });
+            const data = await resp.json();
+            if (data.narrative) {
+                box.textContent = data.narrative;
+                box.style.display = 'block';
+                document.getElementById('narrative-idle').style.display = 'none';
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Generate AI summary';
+                alert('AI summary unavailable (provider error or not configured). The report numbers are unaffected.');
+            }
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = 'Generate AI summary';
+            alert('AI summary request failed: ' + e);
+        }
+    }
+</script>
+{% endblock %}
