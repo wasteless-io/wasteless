@@ -235,6 +235,8 @@ class EBSOrphanDetector:
         volumes = self.detect()
 
         if not volumes:
+            from core.snapshots import snapshot_active_waste
+            snapshot_active_waste(self.conn)
             print("No orphaned volumes found — nothing to clean up.\n")
             return
 
@@ -250,6 +252,9 @@ class EBSOrphanDetector:
 
         waste_ids = self.save(volumes)
         rec_count = self.recommend(waste_ids)
+
+        from core.snapshots import snapshot_active_waste
+        snapshot_active_waste(self.conn)
 
         # AI insights (no-op unless WASTELESS_LLM_MODEL is configured)
         from core.llm import enrich_recommendations

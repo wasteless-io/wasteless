@@ -45,6 +45,17 @@
   -- Note: savings_realized table is defined in sql/migrations/remediation_tables.sql
   -- (Complete version with all tracking columns)
 
+  -- Photographie quotidienne du gaspillage actif par type de ressource
+  -- (historique stable pour les tendances, voir sql/migrations/waste_snapshots.sql)
+  CREATE TABLE IF NOT EXISTS waste_snapshots (
+      snapshot_date DATE NOT NULL,
+      resource_type VARCHAR(50) NOT NULL,
+      total_eur DECIMAL(12, 4) NOT NULL DEFAULT 0,
+      resource_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (snapshot_date, resource_type)
+  );
+
   -- Contraintes d'unicité (nécessaires pour ON CONFLICT upserts)
   DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_waste_resource') THEN
