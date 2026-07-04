@@ -25,8 +25,21 @@ class SafeguardException(Exception):
 class Safeguards:
     """Multi-layer safeguard system for auto-remediation."""
     
-    def __init__(self, config_path: str = "config/remediation.yaml"):
-        """Initialize safeguards with configuration."""
+    def __init__(self, config_path: str = None):
+        """Initialize safeguards with configuration.
+
+        Resolution order for the default path: WASTELESS_CONFIG_DIR env
+        var, then <repo root>/config/remediation.yaml relative to this
+        file — so callers outside the repo root (e.g. the UI process)
+        still find the config.
+        """
+        if config_path is None:
+            config_dir = os.environ.get('WASTELESS_CONFIG_DIR')
+            if not config_dir:
+                repo_root = os.path.dirname(os.path.dirname(
+                    os.path.dirname(os.path.abspath(__file__))))
+                config_dir = os.path.join(repo_root, 'config')
+            config_path = os.path.join(config_dir, 'remediation.yaml')
         self.config_path = config_path
         self.config = self._load_config()
         logger.info("Safeguards initialized")
@@ -179,7 +192,11 @@ class Safeguards:
             SafeguardException: If outside allowed schedule
         """
         schedule = self.config.get('schedule', {})
-        
+
+        if not schedule.get('enabled', False):
+            logger.debug("Schedule restriction disabled — any time allowed")
+            return True
+
         now = datetime.now()
         current_day = now.strftime("%A")
         current_hour = now.hour
