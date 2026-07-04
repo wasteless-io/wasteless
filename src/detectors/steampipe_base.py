@@ -29,6 +29,7 @@ import psycopg2
 
 from collectors.steampipe import run_query_file
 from core.llm import enrich_recommendations
+from core.snapshots import snapshot_active_waste
 
 load_dotenv()
 
@@ -162,6 +163,7 @@ class SteampipeWasteDetector:
         items = self.detect()
 
         if not items:
+            snapshot_active_waste(self.conn)
             print("Nothing detected — no waste of this type.\n")
             return
 
@@ -175,6 +177,7 @@ class SteampipeWasteDetector:
 
         waste_ids = self.save(items)
         rec_count = self.recommend(waste_ids, items)
+        snapshot_active_waste(self.conn)
         insights = enrich_recommendations(self.conn)
         if insights:
             print(f"AI insights generated:   {insights}")

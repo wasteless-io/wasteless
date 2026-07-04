@@ -299,6 +299,8 @@ class EC2StoppedDetector:
         instances = self.detect()
 
         if not instances:
+            from core.snapshots import snapshot_active_waste
+            snapshot_active_waste(self.conn)
             print(f"No instances stopped for >= {STOPPED_DAYS} days.\n")
             return
 
@@ -314,6 +316,9 @@ class EC2StoppedDetector:
 
         waste_ids = self.save(instances)
         rec_count = self.recommend(waste_ids)
+
+        from core.snapshots import snapshot_active_waste
+        snapshot_active_waste(self.conn)
 
         print(f"\nRecommendations created: {rec_count}")
         print("View at http://localhost:8888/recommendations\n")

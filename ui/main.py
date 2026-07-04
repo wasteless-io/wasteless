@@ -514,13 +514,14 @@ async def dashboard(request: Request, conn=Depends(get_db)):
     """)
     inaction_row = cursor.fetchone()
 
-    # Sparkline: daily totals last 30 days
+    # Trend: daily active-waste totals from waste_snapshots (stable history
+    # written by detector runs + one-shot backfill), last 30 days
     cursor.execute("""
-        SELECT DATE(updated_at) as date, COALESCE(SUM(monthly_waste_eur), 0) as total_waste
-        FROM waste_detected
-        WHERE updated_at >= NOW() - INTERVAL '30 days'
-        GROUP BY DATE(updated_at)
-        ORDER BY date
+        SELECT snapshot_date as date, COALESCE(SUM(total_eur), 0) as total_waste
+        FROM waste_snapshots
+        WHERE snapshot_date >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY snapshot_date
+        ORDER BY snapshot_date
     """)
     waste_trend = cursor.fetchall()
 

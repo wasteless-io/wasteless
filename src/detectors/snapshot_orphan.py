@@ -291,6 +291,8 @@ class SnapshotOrphanDetector:
             print(f"Cleaned up {cleaned} obsolete recommendation(s) (AMI-backed snapshots)\n")
 
         if not snapshots:
+            from core.snapshots import snapshot_active_waste
+            snapshot_active_waste(self.conn)
             print(f"No snapshots older than {SNAPSHOT_AGE_DAYS} days found.\n")
             return
 
@@ -308,6 +310,9 @@ class SnapshotOrphanDetector:
 
         waste_ids = self.save(snapshots)
         rec_count = self.recommend(waste_ids)
+
+        from core.snapshots import snapshot_active_waste
+        snapshot_active_waste(self.conn)
 
         # AI insights (no-op unless WASTELESS_LLM_MODEL is configured)
         from core.llm import enrich_recommendations

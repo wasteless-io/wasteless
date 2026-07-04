@@ -506,6 +506,8 @@ class EC2IdleDetector:
         )
 
         if not waste_list:
+            from core.snapshots import snapshot_active_waste
+            snapshot_active_waste(self.conn)
             print("No idle instances detected!")
             print("   All instances are being utilized efficiently.")
             return
@@ -526,6 +528,9 @@ class EC2IdleDetector:
 
         # Generate recommendations
         recommendations_count = self.generate_recommendations(waste_ids)
+
+        from core.snapshots import snapshot_active_waste
+        snapshot_active_waste(self.conn)
 
         # AI insights (no-op unless WASTELESS_LLM_MODEL is configured)
         from core.llm import enrich_recommendations
