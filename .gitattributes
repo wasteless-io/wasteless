@@ -1,0 +1,14 @@
+# Normalisation des fins de ligne : LF dans le depot, quel que soit l'OS.
+* text=auto
+
+# Les scripts executes par bash doivent rester en LF meme sur un checkout
+# Windows : en CRLF ils cassent sous WSL/Git Bash ("bad interpreter",
+# erreurs '\r' en fin de ligne).
+*.sh text eol=lf
+Makefile text eol=lf
+Brewfile text eol=lf
+
+# Binaires : jamais de conversion.
+*.png binary
+*.jpg binary
+*.ico binary
