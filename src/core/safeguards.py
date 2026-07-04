@@ -67,6 +67,22 @@ class Safeguards:
         
         return enabled
     
+    def is_action_enabled(self, action_type: str) -> bool:
+        """Per-action opt-out (auto_remediation.actions.<type>).
+
+        Lets the user keep automation on globally while forcing manual
+        execution for specific action types. A type missing from the map
+        is enabled — the global 'enabled' flag stays the master gate.
+        """
+        actions = self.config.get('auto_remediation', {}).get('actions', {})
+        enabled = actions.get(action_type, True)
+
+        if not enabled:
+            logger.warning(f"🛡️  Action '{action_type}' is DISABLED by config "
+                           f"(auto_remediation.actions)")
+
+        return enabled
+
     def is_whitelisted(self, instance_id: str, instance_tags: Dict) -> bool:
         """
         Check if instance is whitelisted (protected).

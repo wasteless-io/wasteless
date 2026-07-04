@@ -27,6 +27,29 @@ class TestSafeguardException:
         assert str(exc) == "Test message"
 
 
+class TestActionToggles:
+    """Per-action opt-out (auto_remediation.actions)."""
+
+    def _safeguards(self, config):
+        with patch.object(Safeguards, '_load_config', return_value=config):
+            return Safeguards()
+
+    def test_missing_map_means_enabled(self):
+        sg = self._safeguards({'auto_remediation': {'enabled': True}})
+        assert sg.is_action_enabled('delete_nat_gateway') is True
+
+    def test_missing_type_means_enabled(self):
+        sg = self._safeguards({'auto_remediation': {
+            'enabled': True, 'actions': {'stop_instance': True}}})
+        assert sg.is_action_enabled('migrate_gp2_to_gp3') is True
+
+    def test_disabled_type(self):
+        sg = self._safeguards({'auto_remediation': {
+            'enabled': True, 'actions': {'delete_nat_gateway': False}}})
+        assert sg.is_action_enabled('delete_nat_gateway') is False
+        assert sg.is_action_enabled('stop_instance') is True
+
+
 class TestSafeguardsWhitelist:
     """Tests for whitelist functionality."""
 

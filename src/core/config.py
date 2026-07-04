@@ -135,6 +135,11 @@ class RemediationConfig:
     whitelisted_tags: list = field(default_factory=list)
     allowed_days: list = field(default_factory=list)
     allowed_hours: list = field(default_factory=list)
+    # Per-action opt-out (auto_remediation.actions); missing key = enabled
+    action_toggles: dict = field(default_factory=dict)
+
+    def is_action_enabled(self, action_type: str) -> bool:
+        return self.action_toggles.get(action_type, True)
 
     @classmethod
     def from_yaml(cls, config_path: str = "config/remediation.yaml") -> 'RemediationConfig':
@@ -167,6 +172,7 @@ class RemediationConfig:
             whitelisted_tags=whitelist.get('tags', []),
             allowed_days=schedule.get('allowed_days', []),
             allowed_hours=schedule.get('allowed_hours', []),
+            action_toggles=auto_rem.get('actions', {}) or {},
         )
 
 

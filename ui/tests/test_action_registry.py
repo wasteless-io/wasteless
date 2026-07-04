@@ -160,6 +160,20 @@ class TestApproveFlow(unittest.TestCase):
         self.assertTrue(result['success'])
         self.assertFalse(result['manual'])
 
+    def test_disabled_toggle_degrades_automated_type_to_manual(self):
+        # stop_instance is 'boto3' in the registry; with its per-action
+        # toggle off, production approval must not attempt any AWS call
+        with patch.object(self.main._config_manager, 'get_action_enabled',
+                          return_value=False):
+            result, cursor = self._approve(
+                'stop_instance', 'ec2_instance', 'i-1', dry_run=False)
+        self.assertTrue(result['success'], result.get('error'))
+        self.assertTrue(result['manual'])
+        # logged as dry-run: nothing touched AWS
+        log_calls = [c for c in cursor.execute.call_args_list
+                     if 'actions_log' in str(c)]
+        self.assertTrue(log_calls[0].args[1][5])
+
 
 if __name__ == '__main__':
     unittest.main()

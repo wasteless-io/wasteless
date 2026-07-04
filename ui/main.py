@@ -661,9 +661,16 @@ async def settings(request: Request, conn=Depends(get_db)):
     stats = cursor.fetchone()
     cursor.close()
 
+    from utils.action_registry import EXECUTION_MODES
+    automatable_actions = [
+        {"type": t, "mode": m} for t, m in EXECUTION_MODES.items()
+        if m in ('boto3', 'remediator')
+    ]
+
     return templates.TemplateResponse(request, "settings.html", context={
         "config": config,
-        "stats": stats
+        "stats": stats,
+        "automatable_actions": automatable_actions
     })
 
 
@@ -997,6 +1004,12 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     # every detector's recommendation type to be declared there
                     mode = execution_mode(rec_type)
 
+                    # Per-action opt-out (Settings > Automated actions):
+                    # a disabled automated action degrades to manual review —
+                    # the decision is recorded, AWS is not touched
+                    if mode != 'manual' and not _config_manager.get_action_enabled(rec_type):
+                        mode = 'manual'
+
                     # Backend remediators (safeguards + rollback snapshot +
                     # live waste re-verification), in dry-run and real mode alike
                     if mode == 'remediator':
@@ -1145,6 +1158,15 @@ async def api_update_config(update: ConfigUpdate):
             success = config_manager.set_dry_run_days(update.value)
         elif update.key == "dry_run":
             success = config_manager.set_dry_run(update.value)
+        elif update.key.startswith("action:"):
+            action_type = update.key[len("action:"):]
+            from utils.action_registry import EXECUTION_MODES
+            if EXECUTION_MODES.get(action_type) not in ('boto3', 'remediator'):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"'{action_type}' is not an automatable action type")
+            success = config_manager.set_action_enabled(
+                action_type, bool(update.value))
         else:
             success = config_manager.update_protection_rule(update.key, update.value)
 
