@@ -5,6 +5,7 @@ auto_remediation:
     stop_instance: true
     terminate_instance: true
     migrate_gp2_to_gp3: true
+    delete_volume: true
     delete_nat_gateway: true
     delete_load_balancer: true
 protection:

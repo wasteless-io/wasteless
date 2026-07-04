@@ -42,7 +42,7 @@
         </button>
         <button id="tab-btn-ebs" onclick="switchTab('ebs')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">EBS Volumes <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ebs_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL</span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
         <button id="tab-btn-eip" onclick="switchTab('eip')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Elastic IPs <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ eip_recs|length }}</span></span>
@@ -426,9 +426,9 @@
             }
         });
         // Show automated vs manual action bar
-        // 'other' holds gp2 migrations, NAT gateways and load balancers,
-        // which have automated remediators
-        const isAutomated = tab === 'ec2' || tab === 'other';
+        // 'ebs' (delete_volume, snapshot-first) and 'other' (gp2 migrations,
+        // NAT gateways, load balancers) have automated remediators
+        const isAutomated = tab === 'ec2' || tab === 'ebs' || tab === 'other';
         document.getElementById('actions-automated').style.display = isAutomated ? 'flex' : 'none';
         document.getElementById('actions-manual').style.display    = isAutomated ? 'none' : 'flex';
 
