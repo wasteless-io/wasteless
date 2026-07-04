@@ -49,4 +49,4 @@ logging:
 aws:
   region: us-east-1
   assume_role_arn: ''
-dry_run: false
+dry_run: true
