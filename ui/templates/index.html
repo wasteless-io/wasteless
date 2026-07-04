@@ -25,6 +25,28 @@
     </div>
 </div>
 
+{% if llm_enabled %}
+<!-- AI Daily Briefing: the AI comments, every number comes from the database -->
+<div class="card mb-1" id="briefing-card" style="padding: 1rem 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+            Daily Briefing
+            <span style="font-size: 0.65rem; font-weight: 600; color: var(--primary); background: rgba(99,102,241,0.1); border-radius: 8px; padding: 0.1rem 0.45rem; text-transform: uppercase; letter-spacing: 0.05em;">AI</span>
+        </h3>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span id="briefing-meta" style="font-size: 0.72rem; color: var(--gray-400);"></span>
+            <button id="briefing-refresh" onclick="loadBriefing(true)" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.72rem; display: none;">Refresh</button>
+        </div>
+    </div>
+    <div id="briefing-body" style="font-size: 0.87rem; line-height: 1.55; color: var(--gray-700);">
+        <span style="color: var(--gray-400);">Generating today's briefing…</span>
+    </div>
+    <div style="font-size: 0.72rem; color: var(--gray-400); margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100);">
+        The AI comments the numbers — the numbers themselves are always computed from the database.
+    </div>
+</div>
+{% endif %}
+
 <!-- Daily / Monthly Waste Banner -->
 <div class="card mb-1" style="padding: 0.75rem 1.25rem; display: flex; justify-content: space-around; align-items: center;">
     <div style="text-align: center;">
@@ -215,4 +237,49 @@
         </span>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if llm_enabled %}
+<script>
+// Daily briefing: fetched async so the page never waits for the LLM.
+// Cache miss = one generation (up to ~30s); afterwards it's instant.
+async function loadBriefing(refresh) {
+    const body = document.getElementById('briefing-body');
+    const meta = document.getElementById('briefing-meta');
+    const btn = document.getElementById('briefing-refresh');
+    btn.disabled = true;
+    if (refresh) {
+        body.innerHTML = '<span style="color: var(--gray-400);">Regenerating…</span>';
+    }
+    try {
+        const res = await fetch('/api/briefing/today' + (refresh ? '?refresh=1' : ''));
+        const data = res.ok ? await res.json() : {};
+        if (!data.briefing) {
+            // LLM disabled or generation failed: the card has nothing to say
+            document.getElementById('briefing-card').style.display = 'none';
+            return;
+        }
+        body.textContent = '';
+        // Plain text from the model: render blank-line-separated paragraphs
+        data.briefing.split(/\n\s*\n/).forEach((para, i) => {
+            const p = document.createElement('p');
+            p.textContent = para.trim();
+            p.style.margin = i === 0 ? '0' : '0.5rem 0 0';
+            body.appendChild(p);
+        });
+        if (data.generated_at) {
+            const d = new Date(data.generated_at);
+            meta.textContent = 'Generated ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        btn.style.display = 'inline-block';
+    } catch (err) {
+        document.getElementById('briefing-card').style.display = 'none';
+    } finally {
+        btn.disabled = false;
+    }
+}
+loadBriefing(false);
+</script>
+{% endif %}
 {% endblock %}

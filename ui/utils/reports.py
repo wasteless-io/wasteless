@@ -29,6 +29,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(os.path.join(BACKEND_SRC_PATH, '..', '.env'), override=False)
 
 from core.llm import is_enabled as llm_narrative_available  # noqa: E402
+from reports.daily_briefing import get_or_create_briefing  # noqa: E402
 from reports.weekly_digest import (  # noqa: E402
     collect_digest_data,
     format_digest,
@@ -36,7 +37,8 @@ from reports.weekly_digest import (  # noqa: E402
 )
 
 __all__ = ['collect_digest_data', 'format_digest', 'generate_narrative',
-           'llm_narrative_available', 'resolve_period', 'report_filename']
+           'get_or_create_briefing', 'llm_narrative_available',
+           'resolve_period', 'report_filename']
 
 MAX_PERIOD_DAYS = 366
 

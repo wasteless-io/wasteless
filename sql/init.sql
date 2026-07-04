@@ -68,6 +68,15 @@
       cost_usd DECIMAL(10, 6)
   );
 
+  -- Briefing quotidien CTO généré par le LLM, caché une ligne par jour
+  -- (voir sql/migrations/daily_briefings.sql)
+  CREATE TABLE IF NOT EXISTS daily_briefings (
+      briefing_date DATE PRIMARY KEY,
+      content TEXT NOT NULL,
+      model VARCHAR(100),
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  );
+
   -- Contraintes d'unicité (nécessaires pour ON CONFLICT upserts)
   DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_waste_resource') THEN
