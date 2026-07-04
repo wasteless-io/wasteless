@@ -75,7 +75,9 @@ silence() {
 }
 
 print_verbose() {
-    [ $VERBOSE -eq 1 ] && echo -e "  ${CYAN}»${NC} $1"
+    if [ $VERBOSE -eq 1 ]; then
+        echo -e "  ${CYAN}»${NC} $1"
+    fi
 }
 
 # =============================================================================
@@ -313,6 +315,34 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
         echo ""
     fi
 
+    # Insights IA (optionnel, opt-in explicite — saute en mode quiet)
+    LLM_MODEL=""
+    LLM_KEY_VAR=""
+    LLM_API_KEY=""
+    if [ $VERBOSE -eq 1 ]; then
+        echo ""
+        print_info "Insights IA (optionnel)"
+        echo "  WasteLess peut expliquer chaque recommandation via un LLM."
+        echo "  Les metadonnees de vos ressources AWS seront envoyees au provider choisi."
+        echo "  1) DeepSeek   2) Claude (Anthropic)   3) OpenAI   4) Ollama (local, sans cle)"
+        read -p "Choisissez un provider [Entree = passer]: " LLM_CHOICE
+
+        case "$LLM_CHOICE" in
+            1) LLM_MODEL="deepseek/deepseek-chat";  LLM_KEY_VAR="DEEPSEEK_API_KEY" ;;
+            2) LLM_MODEL="anthropic/claude-haiku-4-5-20251001"; LLM_KEY_VAR="ANTHROPIC_API_KEY" ;;
+            3) LLM_MODEL="openai/gpt-4o-mini";      LLM_KEY_VAR="OPENAI_API_KEY" ;;
+            4) read -p "Modele Ollama [llama3.1]: " OLLAMA_MODEL
+               LLM_MODEL="ollama/${OLLAMA_MODEL:-llama3.1}" ;;
+            "") print_step "Insights IA ignores (activables plus tard: voir .env.template)" ;;
+            *)  print_warning "Choix invalide — insights IA ignores (activables plus tard: voir .env.template)" ;;
+        esac
+
+        if [ -n "$LLM_KEY_VAR" ]; then
+            read -sp "Cle API ($LLM_KEY_VAR): " LLM_API_KEY
+            echo ""
+        fi
+    fi
+
     # Creation du fichier .env
     cat > .env << EOF
 # ===========================================
@@ -346,8 +376,55 @@ LOG_LEVEL=INFO
 DRY_RUN=true
 EOF
 
+    if [ -n "$LLM_MODEL" ]; then
+        cat >> .env << EOF
+
+# AI insights (litellm — see .env.template for other providers)
+WASTELESS_LLM_MODEL=$LLM_MODEL
+EOF
+        if [ -n "$LLM_API_KEY" ]; then
+            echo "$LLM_KEY_VAR=$LLM_API_KEY" >> .env
+        fi
+    fi
+
     chmod 600 .env
     print_step "Fichier .env cree et securise"
+
+    # Installation + test de la config LLM (fail-soft: n'interrompt jamais l'installation)
+    if [ -n "$LLM_MODEL" ]; then
+        print_info "Installation de litellm..."
+        install_llm_ok=1
+        if [ $USE_UV -eq 1 ]; then
+            silence uv pip install --python venv/bin/python3 litellm $PIP_OPT || install_llm_ok=0
+        else
+            silence venv/bin/pip install litellm $PIP_OPT || install_llm_ok=0
+        fi
+        if [ $install_llm_ok -eq 0 ]; then
+            print_warning "Installation de litellm echouee — installez-le manuellement: pip install litellm"
+        else
+            print_info "Test de la configuration LLM ($LLM_MODEL)..."
+            if venv/bin/python3 - << 'PYEOF'
+import os, sys
+from dotenv import load_dotenv
+load_dotenv('.env')
+try:
+    import litellm
+    litellm.completion(
+        model=os.getenv('WASTELESS_LLM_MODEL'),
+        messages=[{'role': 'user', 'content': 'ping'}],
+        max_tokens=5, timeout=20)
+except Exception as e:
+    print(f"  {e}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+            then
+                print_step "Insights IA configures et testes"
+            else
+                print_warning "Le test LLM a echoue — verifiez la cle dans .env"
+                print_info "L'installation continue: les recommandations n'auront simplement pas d'insight IA"
+            fi
+        fi
+    fi
 fi
 
 # =============================================================================
