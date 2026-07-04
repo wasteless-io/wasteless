@@ -185,19 +185,28 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
         <div>
             <h3 style="margin: 0; font-size: 1rem;">Waste Trend & Forecast</h3>
-            <span style="font-size: 0.75rem; color: var(--gray-500);">Last 30 days · 30-day linear forecast</span>
+            <span style="font-size: 0.75rem; color: var(--gray-500);">{{ trend_subtitle }}</span>
         </div>
-        <span id="forecastLegend" style="font-size: 0.75rem; color: var(--gray-400); display: flex; align-items: center; gap: 1rem;">
-            <span style="display: inline-flex; align-items: center; gap: 0.35rem;"><span style="width: 20px; height: 2px; background: var(--gray-800); display: inline-block;"></span> Actual</span>
-            <span style="display: inline-flex; align-items: center; gap: 0.35rem;"><span style="width: 20px; height: 2px; background: var(--gray-400); display: inline-block; border-top: 2px dashed var(--gray-400);"></span> Forecast</span>
-        </span>
+        <div style="display: flex; align-items: center; gap: 1.25rem;">
+            <div style="display: flex; gap: 0.25rem;">
+                {% for key in ['7d', '30d', '90d', '1y'] %}
+                <a href="/dashboard?trend={{ key }}"
+                   class="btn {% if trend_range == key %}btn-primary{% else %}btn-outline{% endif %}"
+                   style="padding: 0.2rem 0.55rem; font-size: 0.72rem;">{{ key }}</a>
+                {% endfor %}
+            </div>
+            <span id="forecastLegend" style="font-size: 0.75rem; color: var(--gray-400); display: flex; align-items: center; gap: 1rem;">
+                <span style="display: inline-flex; align-items: center; gap: 0.35rem;"><span style="width: 20px; height: 2px; background: var(--gray-800); display: inline-block;"></span> Actual</span>
+                <span style="display: inline-flex; align-items: center; gap: 0.35rem;"><span style="width: 20px; height: 2px; background: var(--gray-400); display: inline-block; border-top: 2px dashed var(--gray-400);"></span> Forecast</span>
+            </span>
+        </div>
     </div>
     <div id="forecastChartWrap" style="height: 160px; position: relative;">
         <canvas id="forecastChart"></canvas>
     </div>
     <div id="forecastEmpty" style="height: 160px; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
         <p style="margin: 0 0 0.25rem; font-weight: 600; color: var(--gray-700);">Building trend history</p>
-        <p class="text-muted" style="margin: 0; font-size: 0.85rem;">The trend and 30-day forecast appear after 7 daily scans.</p>
+        <p class="text-muted" style="margin: 0; font-size: 0.85rem;">The trend and forecast appear once enough history is collected for this range.</p>
         <div style="display: flex; gap: 4px; margin-top: 0.75rem;" id="forecastProgress"></div>
     </div>
 </div>
@@ -301,15 +310,21 @@ new Chart(document.getElementById('burnSparkline'), {
     const labels = [{% for item in waste_trend %}'{{ item.date }}'{% if not loop.last %},{% endif %}{% endfor %}];
     const n = raw.length;
 
-    // Under a week of history there is no trend to draw: two points stretched
-    // across the card read as a crash. Show a progress placeholder instead.
-    if (n < 7) {
+    // 'day' (7d/30d/90d) or 'month' (1y) — drives forecast step and labels
+    const granularity = '{{ trend_granularity }}';
+    // Honest minimum for a regression, and forecast horizon, per granularity
+    const minPoints = granularity === 'day' ? 7 : 4;
+    const horizon = granularity === 'day' ? 30 : 6;
+
+    // Under the minimum history there is no trend to draw: two points
+    // stretched across the card read as a crash. Show a placeholder instead.
+    if (n < minPoints) {
         document.getElementById('forecastLegend').style.display = 'none';
         document.getElementById('forecastChartWrap').style.display = 'none';
         const empty = document.getElementById('forecastEmpty');
         empty.style.display = 'flex';
         const progress = document.getElementById('forecastProgress');
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < minPoints; i++) {
             const dot = document.createElement('span');
             dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${i < n ? 'var(--gray-700)' : 'var(--gray-200)'};`;
             progress.appendChild(dot);
@@ -323,13 +338,14 @@ new Chart(document.getElementById('burnSparkline'), {
     const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
     const intercept = (sy - slope * sx) / n;
 
-    // Forecast labels (next 30 days)
+    // Forecast labels: next `horizon` steps (days or months)
     const lastDate = new Date(labels[n - 1]);
     const forecastLabels = [];
     const forecastData = [];
-    for (let i = 1; i <= 30; i++) {
+    for (let i = 1; i <= horizon; i++) {
         const d = new Date(lastDate);
-        d.setDate(d.getDate() + i);
+        if (granularity === 'day') d.setDate(d.getDate() + i);
+        else d.setMonth(d.getMonth() + i);
         forecastLabels.push(d.toISOString().slice(0, 10));
         forecastData.push(Math.max(0, slope * (n - 1 + i) + intercept));
     }
@@ -337,7 +353,7 @@ new Chart(document.getElementById('burnSparkline'), {
     const datasets = [
         {
             label: 'Actual',
-            data: raw.concat(Array(30).fill(null)),
+            data: raw.concat(Array(horizon).fill(null)),
             borderColor: '#1f2937',
             backgroundColor: 'rgba(17,17,17,0.05)',
             fill: true,
@@ -386,7 +402,10 @@ new Chart(document.getElementById('burnSparkline'), {
         }
     };
 
-    const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',
+        granularity === 'day'
+            ? { day: 'numeric', month: 'short', year: 'numeric' }
+            : { month: 'long', year: 'numeric' });
 
     new Chart(document.getElementById('forecastChart'), {
         type: 'line',
