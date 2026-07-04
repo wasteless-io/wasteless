@@ -74,6 +74,15 @@ silence() {
     fi
 }
 
+sed_inplace() {
+    # sed -i portable: GNU (Linux/WSL) vs BSD (macOS)
+    if sed --version &>/dev/null; then
+        sed -i "$@"
+    else
+        sed -i '' "$@"
+    fi
+}
+
 print_verbose() {
     if [ $VERBOSE -eq 1 ]; then
         echo -e "  ${CYAN}»${NC} $1"
@@ -126,6 +135,20 @@ echo ""
 print_header "1/7 - Verification des prerequis"
 
 MISSING_DEPS=0
+
+# WSL : le projet doit vivre dans le systeme de fichiers Linux (~), pas dans
+# le disque Windows monte (/mnt/c/...) ou les permissions et les perfs cassent.
+if grep -qi microsoft /proc/version 2>/dev/null; then
+    print_step "Environnement WSL detecte"
+    case "$PWD" in
+        /mnt/*)
+            print_error "Le projet est sur le disque Windows ($PWD)"
+            print_info "Clonez-le dans le systeme de fichiers Linux, par exemple:"
+            print_info "  cd ~ && git clone <repo> && cd wasteless && ./install.sh"
+            exit 1
+            ;;
+    esac
+fi
 
 # Python 3.10+
 if check_command python3; then
@@ -202,6 +225,14 @@ if [ $MISSING_DEPS -eq 1 ]; then
             print_info "Sur macOS, tout s'installe en une commande: brew bundle"
         else
             print_info "Installez Homebrew (https://brew.sh) puis lancez: brew bundle"
+        fi
+    elif check_command apt; then
+        print_info "Sur Ubuntu/Debian/WSL:"
+        print_info "  sudo apt update && sudo apt install -y python3 python3-venv python3-pip git"
+        if grep -qi microsoft /proc/version 2>/dev/null; then
+            print_info "Docker sous WSL: installez Docker Desktop sur Windows avec le"
+            print_info "backend WSL2, puis activez l'integration Ubuntu dans"
+            print_info "Settings > Resources > WSL integration"
         fi
     fi
     exit 1
@@ -567,13 +598,13 @@ if [ -f "ui/.env" ]; then
     # Mettre a jour WASTELESS_BACKEND_PATH si le projet a ete deplace
     STORED_PATH=$(grep '^WASTELESS_BACKEND_PATH=' ui/.env | cut -d= -f2)
     if [ "$STORED_PATH" != "$CURRENT_PATH" ]; then
-        sed -i '' "s|^WASTELESS_BACKEND_PATH=.*|WASTELESS_BACKEND_PATH=$CURRENT_PATH|" ui/.env
+        sed_inplace "s|^WASTELESS_BACKEND_PATH=.*|WASTELESS_BACKEND_PATH=$CURRENT_PATH|" ui/.env
         UPDATED=1
     fi
     # Synchroniser le mot de passe DB depuis le root .env
     STORED_PW=$(grep '^DB_PASSWORD=' ui/.env | cut -d= -f2)
     if [ "$STORED_PW" != "$DB_PASSWORD" ]; then
-        sed -i '' "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" ui/.env
+        sed_inplace "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" ui/.env
         UPDATED=1
     fi
     if [ $UPDATED -eq 1 ]; then
@@ -615,7 +646,7 @@ if [ -n "$SHELL_RC" ]; then
     if grep -q "alias wasteless='$WASTELESS_CLI'" "$SHELL_RC" 2>/dev/null; then
         print_step "Alias 'wasteless' deja present"
     elif grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
-        sed -i '' "s|alias wasteless=.*|$ALIAS_LINE|" "$SHELL_RC"
+        sed_inplace "s|alias wasteless=.*|$ALIAS_LINE|" "$SHELL_RC"
         print_step "Alias 'wasteless' mis a jour dans $SHELL_RC"
     else
         echo "" >> "$SHELL_RC"

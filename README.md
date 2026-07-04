@@ -19,6 +19,8 @@ On macOS, install all prerequisites in one command:
 brew bundle           # Installs Python, Docker Desktop, uv, AWS CLI (see Brewfile)
 ```
 
+On Windows, use WSL2 — the native path is not supported (see [Windows setup](#windows-wsl2) below).
+
 ```bash
 git clone https://github.com/wastelessio/wasteless.git
 cd wasteless
@@ -212,6 +214,39 @@ Before executing any action, Wasteless validates 7 conditions:
 | Linux | Supported |
 | Windows (WSL2) | Supported |
 | Windows (native) | Not supported |
+
+### Windows (WSL2)
+
+Wasteless runs on Windows through WSL2. One-time setup:
+
+1. Install WSL2 with Ubuntu (PowerShell as administrator, then reboot):
+
+   ```powershell
+   wsl --install -d Ubuntu
+   ```
+
+2. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
+   with the **WSL2 backend**, then enable the Ubuntu integration in
+   *Settings → Resources → WSL integration*.
+
+3. Inside the Ubuntu terminal, install the prerequisites:
+
+   ```bash
+   sudo apt update && sudo apt install -y python3 python3-venv python3-pip git unzip
+   ```
+
+4. Clone the repository **in the Linux filesystem** (e.g. `~/`), **not** under
+   `/mnt/c/...` — the Windows filesystem breaks permissions and is 10-50x
+   slower from WSL:
+
+   ```bash
+   cd ~
+   git clone https://github.com/wastelessio/wasteless.git
+   cd wasteless
+   ./install.sh
+   ```
+
+Everything else (Quick Start, tests, UI) works exactly as on Linux.
 
 ---
 

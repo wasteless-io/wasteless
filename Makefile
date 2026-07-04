@@ -38,7 +38,7 @@ doctor: ## Diagnostique les problèmes d'environnement macOS courants
 		fi; \
 	done
 	@echo "— Artefacts de conflit iCloud —"
-	@found=0; for a in "venv 2" "ui/venv 2" "venv.nosync/bin 2" "ui/venv.nosync/bin 2"; do \
+	@found=0; for a in "venv "* "ui/venv "* "venv.nosync/bin "* "ui/venv.nosync/bin "*; do \
 		[ -e "$$a" ] && { echo "  $$a: à supprimer (copie de conflit iCloud)"; found=1; }; \
 	done; [ $$found -eq 0 ] && echo "  aucun" || true
 	@echo "— Docker —"
