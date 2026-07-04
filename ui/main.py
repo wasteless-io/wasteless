@@ -624,7 +624,31 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     """)
     llm_features = cursor.fetchall()
 
+    # Already burned: cumulative EUR actually lost, one daily-rate slice per
+    # snapshot day (total_eur is a monthly rate, hence /30). Backfilled
+    # history is a floor: resources cleaned before tracking are invisible.
+    cursor.execute("""
+        WITH daily AS (
+            SELECT snapshot_date, SUM(total_eur) / 30.0 AS rate
+            FROM waste_snapshots
+            GROUP BY snapshot_date
+        )
+        SELECT
+            (SELECT COALESCE(SUM(rate), 0) FROM daily) AS burned,
+            (SELECT MIN(snapshot_date) FROM daily) AS since,
+            (SELECT rate FROM daily ORDER BY snapshot_date DESC LIMIT 1) AS current_rate,
+            (SELECT rate FROM daily WHERE snapshot_date <= CURRENT_DATE - 30
+             ORDER BY snapshot_date DESC LIMIT 1) AS rate_30d_ago
+    """)
+    burned_row = cursor.fetchone()
+
     cursor.close()
+
+    burned_total = float(burned_row['burned']) if burned_row else 0
+    burned_since = burned_row['since'] if burned_row else None
+    burn_delta = None
+    if burned_row and burned_row['rate_30d_ago'] is not None:
+        burn_delta = float(burned_row['current_rate']) - float(burned_row['rate_30d_ago'])
 
     ai_usage = None
     ai_daily_cost = None
@@ -661,6 +685,9 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         "age_distribution": age_distribution,
         "daily_burn": daily_burn,
         "first_detection": first_detection,
+        "burned_total": burned_total,
+        "burned_since": burned_since,
+        "burn_delta": burn_delta,
         "ai_usage": ai_usage,
         "ai_daily_cost": ai_daily_cost,
         "ai_roi": ai_roi,
