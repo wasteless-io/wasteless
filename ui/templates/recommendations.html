@@ -124,7 +124,7 @@
                                 <span class="badge badge-info">Downsize</span>
                                 {% endif %}
                             </td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{% if rec.recommendation_type == 'stop_instance' %}CPU avg below {{ "%.1f"|format(rec.cpu_avg or 0) }}% for 7d{% elif rec.recommendation_type == 'terminate_instance' %}Stopped, still billing EBS{% else %}Underutilized — {{ "%.1f"|format(rec.cpu_avg or 0) }}% avg CPU{% endif %}</span></td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">{% if rec.recommendation_type == 'stop_instance' %}CPU avg below {{ "%.1f"|format(rec.cpu_avg or 0) }}% for 7d{% elif rec.recommendation_type == 'terminate_instance' %}Stopped, still billing EBS{% else %}Underutilized — {{ "%.1f"|format(rec.cpu_avg or 0) }}% avg CPU{% endif %}</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
@@ -190,7 +190,7 @@
                             <td style="padding: 0.4rem 0.5rem; white-space: nowrap;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span> <span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">Not attached to any instance</span></td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not attached to any instance</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -242,7 +242,7 @@
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">Not associated to any instance</span></td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not associated to any instance</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -291,7 +291,7 @@
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">Old snapshot — verify before deleting</span></td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Old snapshot — verify before deleting</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -341,7 +341,7 @@
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;">{{ rec.volume_name or rec.resource_id }}</code></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.action_required }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.action_required }}</span>{% if rec.ai_insight %}<div style="font-size: 0.75rem; color: var(--gray-700); margin-top: 0.2rem;" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight }}</div>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
