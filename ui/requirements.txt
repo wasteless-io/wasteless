@@ -15,4 +15,5 @@ apscheduler>=3.10.0
 boto3>=1.34.0
 
 # Testing (FastAPI TestClient)
-httpx2>=0.1
+# NB: httpx2 (successeur de httpx maintenu par Pydantic), pas une faute de frappe
+httpx2>=2.5.0

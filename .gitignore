@@ -11,6 +11,11 @@ venv
 venv.nosync/
 .venv/
 env/
+# Copies de conflit iCloud Drive ("venv 2", etc.)
+venv */
+
+# Homebrew
+Brewfile.lock.json
 
 # Environment variables
 .env
