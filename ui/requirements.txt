@@ -13,3 +13,6 @@ apscheduler>=3.10.0
 
 # Optional: AWS integration
 boto3>=1.34.0
+
+# Testing (FastAPI TestClient)
+httpx2>=0.1

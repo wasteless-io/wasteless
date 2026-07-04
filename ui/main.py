@@ -179,6 +179,7 @@ from datetime import datetime
 templates.env.globals['now'] = datetime.now
 
 # Add config_manager to template globals for mode badge
+from utils.action_registry import execution_mode
 from utils.config_manager import ConfigManager
 _config_manager = ConfigManager()
 templates.env.globals['get_dry_run'] = _config_manager.get_dry_run
@@ -991,11 +992,14 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     # Execute real AWS action if NOT in dry-run mode (read from config, ignore client value)
                     dry_run = _config_manager.get_dry_run()
 
-                    # gp2 migrations, NAT gateways and load balancers go through
-                    # the backend remediators (safeguards + rollback snapshot +
+                    # Execution mode comes from the central registry
+                    # (ui/utils/action_registry.py) — the guard test forces
+                    # every detector's recommendation type to be declared there
+                    mode = execution_mode(rec_type)
+
+                    # Backend remediators (safeguards + rollback snapshot +
                     # live waste re-verification), in dry-run and real mode alike
-                    if rec_type in ('migrate_gp2_to_gp3', 'delete_nat_gateway',
-                                    'delete_load_balancer'):
+                    if mode == 'remediator':
                         try:
                             from utils.remediator import RemediatorProxy
                             proxy = RemediatorProxy(dry_run=dry_run)
@@ -1016,8 +1020,7 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     # Every other type is manual-review: approving records the
                     # human decision, execution stays manual — attempting AWS
                     # calls here would fail with a misleading "not found".
-                    manual_review = rec_type not in ('stop_instance',
-                                                     'terminate_instance')
+                    manual_review = mode != 'boto3'
                     if not dry_run and not manual_review:
                         try:
                             import boto3
