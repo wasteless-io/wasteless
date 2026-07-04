@@ -2,203 +2,406 @@
 
 {% block title %}Dashboard - Wasteless.io{% endblock %}
 
+{# Single money format for the whole page: "<€0.01" under a cent, cents up
+   to €100, whole euros (grouped) above — large KPIs don't need cent noise. #}
+{% macro eur(v) -%}
+{%- set v = v or 0 -%}
+{%- if v > 0 and v < 0.01 -%}&lt;€0.01{%- elif v < 100 -%}€{{ "%.2f"|format(v) }}{%- else -%}€{{ "{:,.0f}".format(v) }}{%- endif -%}
+{%- endmacro %}
+
+{% block extra_css %}
+<style>
+    /* Text-only variants of the status colors: the base --success/--warning
+       are fine as icon backgrounds but fail WCAG contrast as text on white. */
+    :root {
+        --success-text: #15803d;
+        --warning-text: #b45309;
+        --danger-text: #b91c1c;
+    }
+
+    .card.compact { padding: 1rem; }
+    .card.slim { padding: 0.75rem; }
+    .btn-sm { padding: 0.4rem 0.75rem; }
+
+    .section-label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--gray-500);
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+    }
+
+    /* KPI tiles */
+    .kpi { text-align: center; }
+    .kpi + .kpi { border-left: 1px solid var(--gray-200); }
+    .kpi-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.5rem;
+    }
+    .kpi-icon span {
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .kpi-value { font-size: 1.75rem; font-weight: 700; color: var(--gray-800); }
+    .kpi-value .unit { font-size: 0.9rem; font-weight: 400; }
+    .kpi-label {
+        font-size: 0.75rem;
+        color: var(--gray-600);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .kpi-sub { font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem; }
+    .kpi-link { font-size: 0.8rem; color: var(--primary); text-decoration: none; font-weight: 500; }
+
+    .bg-success { background: var(--success); }
+    .bg-warning { background: var(--warning); }
+    .bg-danger { background: var(--danger); }
+    .bg-neutral { background: var(--gray-300); }
+    .text-success { color: var(--success-text); }
+    .text-warning { color: var(--warning-text); }
+    .text-danger { color: var(--danger-text); }
+    .is-muted { color: var(--gray-500); }
+
+    /* Chart / stat cards */
+    .charts-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        gap: 1rem;
+    }
+    .chart-card { padding: 1rem; display: flex; flex-direction: column; }
+    .chart-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+    .chart-title { margin: 0; font-size: 1rem; }
+    .chart-subtitle { font-size: 0.75rem; color: var(--gray-500); }
+    .chart-unit { font-size: 0.78rem; color: var(--gray-500); }
+    .chart-area { height: 180px; position: relative; }
+    .chart-empty {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 140px;
+    }
+    .chart-empty p { margin: 0; text-align: center; }
+
+    .stat-center {
+        text-align: center;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .stat-block { text-align: center; }
+    .stat-value { font-size: 2.25rem; font-weight: 700; color: var(--gray-900); }
+    .stat-arrow { font-size: 1.5rem; margin-left: 0.3rem; }
+    .stat-sub { font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem; }
+    .stat-sub + .stat-sub { margin-top: 0.2rem; }
+    .card-footnote {
+        font-size: 0.78rem;
+        color: var(--gray-500);
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--gray-100);
+        text-align: center;
+    }
+
+    .provider-logo { height: 26px; width: 26px; flex-shrink: 0; }
+    .feature-list { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; flex: 1; }
+    .feature-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        font-size: 0.8rem;
+    }
+    .feature-row .name { color: var(--gray-700); font-weight: 500; white-space: nowrap; }
+    .feature-row .detail { color: var(--gray-500); white-space: nowrap; }
+    .model-list {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        margin-top: 0.2rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Trend card */
+    .trend-controls { display: flex; align-items: center; gap: 1.25rem; }
+    .trend-ranges { display: flex; gap: 0.25rem; }
+    .trend-range-btn { padding: 0.2rem 0.55rem; font-size: 0.72rem; }
+    .trend-legend {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .legend-line { width: 20px; height: 2px; display: inline-block; }
+    .legend-line.actual { background: var(--gray-800); }
+    .legend-line.forecast { background: var(--gray-400); border-top: 2px dashed var(--gray-400); }
+    .trend-area { height: 160px; position: relative; }
+    .trend-empty {
+        height: 160px;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+    .trend-empty .headline { margin: 0 0 0.25rem; font-weight: 600; color: var(--gray-700); }
+    .trend-empty .hint { margin: 0; font-size: 0.85rem; }
+    .trend-progress { display: flex; gap: 4px; margin-top: 0.75rem; }
+
+    /* Quick actions */
+    .quick-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .quick-actions .links { display: flex; gap: 1.5rem; align-items: center; font-size: 0.85rem; flex-wrap: wrap; }
+    .quick-actions .links a:not(.btn) { text-decoration: none; color: var(--gray-600); }
+
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    @media (max-width: 1024px) {
+        .charts-grid { grid-template-columns: 1fr; }
+        /* .grid-4/.grid-3 wrap to 2 columns here (base.html): keep the
+           divider only where a left neighbour actually remains */
+        .grid-4 .kpi:nth-child(odd), .grid-3 .kpi:nth-child(odd) { border-left: none; }
+    }
+    @media (max-width: 768px) {
+        .kpi + .kpi {
+            border-left: none;
+            border-top: 1px solid var(--gray-200);
+            padding-top: 1rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header" style="margin-bottom: 1rem;">
-    <h1 style="margin-bottom: 0.25rem;">Dashboard</h1>
-    <p style="color: var(--gray-600); font-size: 0.85rem;">Live overview of your AWS waste and savings</p>
+<div class="page-header mb-1">
+    <h1>Dashboard</h1>
+    <p>Live overview of your AWS waste and savings</p>
 </div>
 
 <!-- KPIs Row 1 — Financial View -->
-<div class="card mb-1" style="padding: 1rem;">
-    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-400); font-weight: 600; margin-bottom: 0.75rem;">Financial Overview</div>
-    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem;">
+<div class="card compact mb-1">
+    <div class="section-label">Financial Overview</div>
+    <div class="grid grid-4">
 
         <!-- Monthly Waste -->
-        <div style="text-align: center;">
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
-                <span style="background: var(--warning); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+        <div class="kpi">
+            <div class="kpi-icon">
+                <span class="bg-warning"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
             </div>
-            <div style="font-size: 1.75rem; font-weight: 700; color: var(--warning);">€{{ "%.2f"|format(kpis.active_monthly or 0) }}<span style="font-size: 0.9rem; font-weight: 400;">/mo</span></div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Monthly Waste</div>
-            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">€{{ "%.0f"|format((kpis.active_monthly or 0) * 12) }}/year</div>
+            <div class="kpi-value text-warning">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></div>
+            <div class="kpi-label">Monthly Waste</div>
+            <div class="kpi-sub">{{ eur((kpis.active_monthly or 0) * 12) }}/year</div>
         </div>
 
         <!-- Savings Realized -->
-        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
-                <span style="background: {% if (kpis.cumulative_savings or 0) > 0 %}var(--success){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <div class="kpi">
+            <div class="kpi-icon">
+                <span class="{% if (kpis.cumulative_savings or 0) > 0 %}bg-success{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
             </div>
-            <div style="font-size: 1.75rem; font-weight: 700; color: {% if (kpis.cumulative_savings or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};">€{{ "%.2f"|format(kpis.cumulative_savings or 0) }}</div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Savings Realized</div>
-            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">Since launch</div>
+            <div class="kpi-value {% if (kpis.cumulative_savings or 0) > 0 %}text-success{% else %}is-muted{% endif %}">{{ eur(kpis.cumulative_savings) }}</div>
+            <div class="kpi-label">Savings Realized</div>
+            <div class="kpi-sub">Since launch · verified via Cost Explorer</div>
         </div>
 
         <!-- Capture Rate -->
-        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
+        <div class="kpi">
             {% set total_identified = (kpis.cumulative_savings or 0) + (kpis.potential_monthly or 0) %}
             {% set capture_rate = ((kpis.cumulative_savings or 0) / total_identified * 100) if total_identified > 0 else 0 %}
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
-                <span style="background: {% if capture_rate >= 50 %}var(--success){% elif capture_rate > 0 %}var(--primary){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
+            <div class="kpi-icon">
+                <span class="{% if capture_rate >= 50 %}bg-success{% elif capture_rate > 0 %}bg-warning{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
             </div>
-            <div style="font-size: 1.75rem; font-weight: 700; color: {% if capture_rate >= 50 %}var(--success){% elif capture_rate > 0 %}var(--primary){% else %}var(--gray-400){% endif %};">{{ "%.0f"|format(capture_rate) }}<span style="font-size: 0.9rem; font-weight: 400;"> %</span></div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Capture Rate</div>
-            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">Saved / Waste identified</div>
+            <div class="kpi-value {% if capture_rate >= 50 %}text-success{% elif capture_rate > 0 %}text-warning{% else %}is-muted{% endif %}">{{ "%.0f"|format(capture_rate) }}<span class="unit"> %</span></div>
+            <div class="kpi-label">Capture Rate</div>
+            <div class="kpi-sub">Saved / Waste identified</div>
         </div>
 
         <!-- Last Scan -->
-        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
+        <div class="kpi">
             {% if kpis.last_analysis %}
             {% set hours_ago = ((now() - kpis.last_analysis).total_seconds() / 3600) | int %}
             {% set days_ago = (hours_ago / 24) | int %}
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
-                <span style="background: {% if hours_ago < 24 %}var(--success){% elif hours_ago < 48 %}var(--warning){% else %}var(--danger){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            <div class="kpi-icon">
+                <span class="{% if hours_ago < 24 %}bg-success{% elif hours_ago < 48 %}bg-warning{% else %}bg-danger{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
             </div>
-            <div style="font-size: 1.75rem; font-weight: 700; color: var(--gray-800);">{{ kpis.last_analysis.strftime('%H:%M') }}</div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Last Scan</div>
-            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">
-                {{ kpis.last_analysis.strftime('%d %b') }} · {% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}
+            <div class="kpi-value">{{ kpis.last_analysis.strftime('%H:%M') }}</div>
+            <div class="kpi-label">Last Scan</div>
+            <div class="kpi-sub">
+                {{ kpis.last_analysis.strftime('%d %b') }} · {% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}{% if hours_ago >= 48 %} — overdue{% elif hours_ago >= 24 %} — stale{% endif %}
             </div>
             {% else %}
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
-                <span style="background: var(--gray-300); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            <div class="kpi-icon">
+                <span class="bg-neutral"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
             </div>
-            <div style="font-size: 1.75rem; font-weight: 700; color: var(--gray-400);">—</div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Last Scan</div>
-            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">No scan yet</div>
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">Last Scan</div>
+            <div class="kpi-sub">No scan yet</div>
             {% endif %}
         </div>
     </div>
 </div>
 
 <!-- KPIs Row 2 — Operational View -->
-<div class="card mb-1" style="padding: 1rem;">
-    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-400); font-weight: 600; margin-bottom: 0.75rem;">Operational Status</div>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
+<div class="card compact mb-1">
+    <div class="section-label">Operational Status</div>
+    <div class="grid grid-3">
 
         <!-- Waste Detected -->
-        <div style="text-align: center;">
-            <div style="font-size: 1.75rem; font-weight: 700; color: var(--gray-800);">{{ kpis.waste_count or 0 }}</div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Waste Detected</div>
-            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">resources identified</div>
+        <div class="kpi">
+            <div class="kpi-value">{{ kpis.waste_count or 0 }}</div>
+            <div class="kpi-label">Waste Detected</div>
+            <div class="kpi-sub">resources identified</div>
         </div>
 
         <!-- Actions Pending -->
-        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
-            <div style="font-size: 1.75rem; font-weight: 700; color: {% if (kpis.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ kpis.pending_count or 0 }}</div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Actions Pending</div>
-            <div style="margin-top: 0.35rem;">
+        <div class="kpi">
+            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}">{{ kpis.pending_count or 0 }}</div>
+            <div class="kpi-label">Actions Pending</div>
+            <div class="kpi-sub">
                 {% if (kpis.pending_count or 0) > 0 %}
-                <a href="/recommendations" style="font-size: 0.78rem; color: var(--primary); text-decoration: none; font-weight: 500;">Review &rarr;</a>
+                <a href="/recommendations" class="kpi-link">Review &rarr;</a>
                 {% else %}
-                <span style="font-size: 0.8rem; color: var(--gray-400);">All clear</span>
+                All clear
                 {% endif %}
             </div>
         </div>
 
         <!-- Success Rate -->
-        <div style="text-align: center; border-left: 1px solid var(--gray-200);">
-            <div style="font-size: 1.75rem; font-weight: 700; color: {% if (kpis.success_rate or 0) >= 80 %}var(--success){% elif (kpis.success_rate or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ "%.0f"|format(kpis.success_rate or 0) }}<span style="font-size: 0.9rem; font-weight: 400;"> %</span></div>
-            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em;">Success Rate</div>
-            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem;">of executed actions</div>
+        <div class="kpi">
+            <div class="kpi-value {% if (kpis.success_rate or 0) >= 80 %}text-success{% elif (kpis.success_rate or 0) > 0 %}text-warning{% else %}is-muted{% endif %}">{{ "%.0f"|format(kpis.success_rate or 0) }}<span class="unit"> %</span></div>
+            <div class="kpi-label">Success Rate</div>
+            <div class="kpi-sub">of executed actions</div>
         </div>
     </div>
 </div>
 
 <!-- Charts Row -->
-<div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem;">
+<div class="charts-grid">
 
     <!-- Cost by Resource Type (horizontal bar) -->
-    <div class="card" style="padding: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+    <div class="card chart-card">
+        <div class="chart-head">
             <div>
-                <h3 style="margin: 0; font-size: 1rem;">Cost by Resource Type</h3>
-                <span style="font-size: 0.75rem; color: var(--gray-500);">Monthly waste distribution</span>
+                <h3 class="chart-title">Cost by Resource Type</h3>
+                <span class="chart-subtitle">Monthly waste distribution</span>
             </div>
-            <span style="font-size: 0.78rem; color: var(--gray-400);">€/mo</span>
+            <span class="chart-unit">€/mo</span>
         </div>
         {% if waste_by_resource %}
-        <div style="height: 180px; position: relative;">
-            <canvas id="costByResourceChart"></canvas>
+        <div class="chart-area">
+            <canvas id="costByResourceChart" role="img" aria-label="Bar chart of monthly waste cost by resource type"></canvas>
         </div>
         {% else %}
-        <div style="height: 180px; display: flex; align-items: center; justify-content: center;">
-            <p class="text-muted" style="margin: 0;">No data yet</p>
+        <div class="chart-empty">
+            <p class="text-muted">No data yet</p>
         </div>
         {% endif %}
     </div>
 
     <!-- Already Burned (cost of inaction) -->
-    <div class="card" style="padding: 1rem; display: flex; flex-direction: column;">
-        <div style="margin-bottom: 0.75rem;">
-            <h3 style="margin: 0; font-size: 1rem;">Already Burned</h3>
-            <span style="font-size: 0.75rem; color: var(--gray-500);">Estimated cost of inaction</span>
+    <div class="card chart-card">
+        <div class="chart-head">
+            <div>
+                <h3 class="chart-title">Already Burned</h3>
+                <span class="chart-subtitle">Estimated cost of inaction</span>
+            </div>
         </div>
         {% if burned_total > 0 %}
-        <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center;">
-            <div style="font-size: 2.25rem; font-weight: 700; color: var(--gray-900);">
-                €{{ "%.2f"|format(burned_total) }}<span style="color: var(--danger); font-size: 1.5rem; margin-left: 0.3rem;" title="Money lost — this total only grows">&#8595;</span>
+        <div class="stat-center">
+            <div class="stat-value">
+                {{ eur(burned_total) }}<span class="text-danger stat-arrow" aria-hidden="true">&#8595;</span><span class="sr-only">(money lost, growing)</span>
             </div>
-            <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem;">
-                since {{ burned_since.strftime('%b %-d, %Y') }} · €{{ "%.2f"|format(daily_burn) }}/day now
+            <div class="stat-sub">
+                since {{ burned_since.strftime('%b %-d, %Y') }} · {{ eur(daily_burn) }}/day now
             </div>
             {% if burn_delta is not none %}
-            <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.2rem;">
-                {% if burn_delta|abs < 0.005 %}stable vs 30 days ago{% else %}{{ '+' if burn_delta > 0 else '−' }}€{{ "%.2f"|format(burn_delta|abs) }}/day vs 30 days ago{% endif %}
+            <div class="stat-sub">
+                {% if burn_delta|abs < 0.005 %}stable vs 30 days ago{% else %}{{ '+' if burn_delta > 0 else '−' }}{{ eur(burn_delta|abs) }}/day vs 30 days ago{% endif %}
             </div>
             {% endif %}
         </div>
-        <div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100); text-align: center;">
-            €{{ "%.0f"|format(daily_burn * 365) }}/yr at this rate
+        <div class="card-footnote">
+            {{ eur(daily_burn * 365) }}/yr at this rate
         </div>
         {% else %}
-        <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 140px;">
-            <p class="text-muted" style="margin: 0;">No history yet</p>
+        <div class="chart-empty">
+            <p class="text-muted">No history yet</p>
         </div>
         {% endif %}
     </div>
 
     <!-- AI Spend -->
-    <div class="card" style="padding: 1rem; display: flex; flex-direction: column;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.75rem;">
+    <div class="card chart-card">
+        <div class="chart-head">
             <div>
-                <h3 style="margin: 0; font-size: 1rem;">AI Spend</h3>
-                <span style="font-size: 0.75rem; color: var(--gray-500);">LLM usage · last 30 days</span>
+                <h3 class="chart-title">AI Spend</h3>
+                <span class="chart-subtitle">LLM usage · last 30 days</span>
             </div>
             {% if ai_usage and ai_usage.provider %}
-            <img src="/static/providers/{{ ai_usage.provider }}.svg" alt="{{ ai_usage.provider }}" title="{{ ai_usage.provider }}" style="height: 26px; width: 26px; flex-shrink: 0;">
+            <img class="provider-logo" src="/static/providers/{{ ai_usage.provider }}.svg" alt="{{ ai_usage.provider }}" title="{{ ai_usage.provider }}">
             {% endif %}
         </div>
         {% if ai_usage %}
         {% set feature_labels = {'insight': 'Insights', 'narrative': 'Report narratives'} %}
-        <div style="text-align: center;">
-            <div style="font-size: 2.25rem; font-weight: 700; color: var(--gray-900);">
-                {% if ai_usage.cost_eur < 0.01 %}&lt;€0.01{% else %}€{{ "%.2f"|format(ai_usage.cost_eur) }}{% endif %}
-            </div>
-            <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem;">
+        <div class="stat-block">
+            <div class="stat-value">{{ eur(ai_usage.cost_eur) }}</div>
+            <div class="stat-sub">
                 {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }} · {{ "{:,}".format(ai_usage.tokens) }} tokens
             </div>
             {% if ai_usage.models %}
-            <div style="font-size: 0.75rem; color: var(--gray-400); margin-top: 0.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ ai_usage.models | join(', ') }}">
+            <div class="model-list" title="{{ ai_usage.models | join(', ') }}">
                 {{ ai_usage.models | join(', ') }}
             </div>
             {% endif %}
         </div>
-        <div style="display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; flex: 1;">
+        <div class="feature-list">
             {% for f in ai_usage.features %}
-            <div style="display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-size: 0.8rem;">
-                <span style="color: var(--gray-700); font-weight: 500; white-space: nowrap;">{{ feature_labels.get(f.feature, f.feature) }}</span>
-                <span style="color: var(--gray-500); white-space: nowrap;">{{ f.calls }} call{{ 's' if f.calls > 1 }} · {% if f.cost_eur < 0.01 %}&lt;€0.01{% else %}€{{ "%.2f"|format(f.cost_eur) }}{% endif %}</span>
+            <div class="feature-row">
+                <span class="name">{{ feature_labels.get(f.feature, f.feature) }}</span>
+                <span class="detail">{{ f.calls }} call{{ 's' if f.calls > 1 }} · {{ eur(f.cost_eur) }}</span>
             </div>
             {% endfor %}
         </div>
         {% if ai_roi and ai_roi >= 2 %}
-        <div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100); text-align: center;">
+        <div class="card-footnote">
             Finds {% if ai_roi > 100 %}&gt;×100{% else %}×{{ "%.0f"|format(ai_roi) }}{% endif %} its cost in waste
         </div>
         {% endif %}
         {% else %}
-        <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 140px;">
-            <p class="text-muted" style="margin: 0; text-align: center;">No AI usage yet</p>
+        <div class="chart-empty">
+            <p class="text-muted">No AI usage yet</p>
         </div>
         {% endif %}
     </div>
@@ -206,72 +409,46 @@
 
 <!-- Forecast Line Chart -->
 {% if waste_trend %}
-<div class="card mt-1" style="padding: 1rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+<div class="card chart-card mt-1">
+    <div class="chart-head">
         <div>
-            <h3 style="margin: 0; font-size: 1rem;">Waste Trend & Forecast</h3>
-            <span id="trendSubtitle" style="font-size: 0.75rem; color: var(--gray-500);">{{ trend_subtitle }}</span>
+            <h3 class="chart-title">Waste Trend &amp; Forecast</h3>
+            <span id="trendSubtitle" class="chart-subtitle">{{ trend_subtitle }}</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 1.25rem;">
-            <div style="display: flex; gap: 0.25rem;">
+        <div class="trend-controls">
+            <div class="trend-ranges" role="group" aria-label="Trend time range">
                 {% for key in ['7d', '30d', '90d', '1y'] %}
                 <a href="/dashboard?trend={{ key }}" data-range="{{ key }}"
                    class="btn trend-range-btn {% if trend_range == key %}btn-primary{% else %}btn-outline{% endif %}"
-                   style="padding: 0.2rem 0.55rem; font-size: 0.72rem;">{{ key }}</a>
+                   {% if trend_range == key %}aria-current="true"{% endif %}>{{ key }}</a>
                 {% endfor %}
             </div>
-            <span id="forecastLegend" style="font-size: 0.75rem; color: var(--gray-400); display: flex; align-items: center; gap: 1rem;">
-                <span style="display: inline-flex; align-items: center; gap: 0.35rem;"><span style="width: 20px; height: 2px; background: var(--gray-800); display: inline-block;"></span> Actual</span>
-                <span style="display: inline-flex; align-items: center; gap: 0.35rem;"><span style="width: 20px; height: 2px; background: var(--gray-400); display: inline-block; border-top: 2px dashed var(--gray-400);"></span> Forecast</span>
+            <span id="forecastLegend" class="trend-legend">
+                <span class="legend-item"><span class="legend-line actual" aria-hidden="true"></span> Actual</span>
+                <span class="legend-item"><span class="legend-line forecast" aria-hidden="true"></span> Forecast</span>
             </span>
         </div>
     </div>
-    <div id="forecastChartWrap" style="height: 160px; position: relative;">
-        <canvas id="forecastChart"></canvas>
+    <div id="forecastChartWrap" class="trend-area">
+        <canvas id="forecastChart" role="img" aria-label="Line chart of monthly waste over time with forecast"></canvas>
     </div>
-    <div id="forecastEmpty" style="height: 160px; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-        <p style="margin: 0 0 0.25rem; font-weight: 600; color: var(--gray-700);">Building trend history</p>
-        <p class="text-muted" style="margin: 0; font-size: 0.85rem;">The trend and forecast appear once enough history is collected for this range.</p>
-        <div style="display: flex; gap: 4px; margin-top: 0.75rem;" id="forecastProgress"></div>
+    <div id="forecastEmpty" class="trend-empty">
+        <p class="headline">Building trend history</p>
+        <p class="text-muted hint">The trend and forecast appear once enough history is collected for this range.</p>
+        <div class="trend-progress" id="forecastProgress" aria-hidden="true"></div>
     </div>
 </div>
 {% endif %}
 
-<!-- ROI Summary -->
-<div class="card mt-1" style="padding: 1rem;">
-    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-400); font-weight: 600; margin-bottom: 0.75rem;">ROI Summary</div>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
-        <div>
-            <div style="font-size: 0.78rem; color: var(--gray-500); margin-bottom: 0.25rem;">Waste identified</div>
-            <div style="font-size: 1.25rem; font-weight: 700; color: var(--warning);">€{{ "%.2f"|format((kpis.active_monthly or 0) + (kpis.cumulative_savings or 0)) }}/mo</div>
-            <div style="font-size: 0.75rem; color: var(--gray-400);">Active + already saved</div>
-        </div>
-        <div style="border-left: 1px solid var(--gray-200); padding-left: 1.5rem;">
-            <div style="font-size: 0.78rem; color: var(--gray-500); margin-bottom: 0.25rem;">Savings realized</div>
-            <div style="font-size: 1.25rem; font-weight: 700; color: var(--success);">€{{ "%.2f"|format(kpis.cumulative_savings or 0) }}</div>
-            <div style="font-size: 0.75rem; color: var(--gray-400);">Verified via Cost Explorer</div>
-        </div>
-        <div style="border-left: 1px solid var(--gray-200); padding-left: 1.5rem;">
-            {% set total_id = (kpis.active_monthly or 0) + (kpis.cumulative_savings or 0) %}
-            {% set cap = ((kpis.cumulative_savings or 0) / total_id * 100) if total_id > 0 else 0 %}
-            <div style="font-size: 0.78rem; color: var(--gray-500); margin-bottom: 0.25rem;">Capture rate</div>
-            <div style="font-size: 1.25rem; font-weight: 700; color: var(--gray-800);">{{ "%.0f"|format(cap) }}%</div>
-            <div style="height: 6px; background: var(--gray-100); border-radius: 3px; margin-top: 0.4rem; overflow: hidden;">
-                <div style="height: 100%; width: {{ cap }}%; background: {% if cap >= 50 %}var(--success){% else %}var(--warning){% endif %}; border-radius: 3px; transition: width 0.4s;"></div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Quick Actions -->
-<div class="card mt-1" style="padding: 0.75rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; gap: 1.5rem; font-size: 0.85rem;">
-            <a href="/recommendations" class="btn btn-primary" style="padding: 0.4rem 0.75rem;">Review Recommendations &rarr;</a>
-            <a href="/history" style="text-decoration: none; color: var(--gray-600); display: flex; align-items: center;">View History</a>
-            <a href="/settings" style="text-decoration: none; color: var(--gray-600); display: flex; align-items: center;">Settings</a>
+<div class="card slim mt-1">
+    <div class="quick-actions">
+        <div class="links">
+            <a href="/recommendations" class="btn btn-primary btn-sm">Review Recommendations &rarr;</a>
+            <a href="/history">View History</a>
+            <a href="/settings">Settings</a>
         </div>
-        <button onclick="refreshData()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Refresh</button>
+        <button onclick="refreshData()" class="btn btn-outline btn-sm">Refresh</button>
     </div>
 </div>
 {% endblock %}
@@ -525,6 +702,8 @@ document.querySelectorAll('.trend-range-btn').forEach(btn => {
             document.querySelectorAll('.trend-range-btn').forEach(b => {
                 b.classList.toggle('btn-primary', b === btn);
                 b.classList.toggle('btn-outline', b !== btn);
+                if (b === btn) b.setAttribute('aria-current', 'true');
+                else b.removeAttribute('aria-current');
             });
             // Keep the URL shareable / refresh-safe without navigating
             history.replaceState(null, '', `/dashboard?trend=${data.range}`);
