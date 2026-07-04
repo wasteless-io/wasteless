@@ -1011,7 +1011,14 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                             }
                         results.append(result)
                         continue
-                    if not dry_run:
+
+                    # The boto3 block below only automates EC2 stop/terminate.
+                    # Every other type is manual-review: approving records the
+                    # human decision, execution stays manual — attempting AWS
+                    # calls here would fail with a misleading "not found".
+                    manual_review = rec_type not in ('stop_instance',
+                                                     'terminate_instance')
+                    if not dry_run and not manual_review:
                         try:
                             import boto3
                             regions = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
@@ -1077,7 +1084,8 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                         resource_type,
                         action_type,
                         action_status,
-                        dry_run,
+                        # manual approvals never touch AWS: log them as dry-run
+                        dry_run or manual_review,
                         aws_error
                     ))
 
@@ -1094,6 +1102,7 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                         "instance_id": instance_id,
                         "success": dry_run or aws_success,
                         "dry_run": dry_run,
+                        "manual": manual_review,
                         "action": rec_type
                     }
                     if aws_error:

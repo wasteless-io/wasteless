@@ -526,8 +526,13 @@
                 if (tc) tc.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--gray-500);">No more recommendations in this tab</div>';
             }
 
-            // Show success message
-            showToast(successCount + '/' + ids.length + ' actions completed successfully!', 'success');
+            // Red toast as soon as one action failed; note manual approvals
+            const manualCount = response.results.filter(r => r.success && r.manual).length;
+            let msg = successCount + '/' + ids.length + ' actions completed successfully!';
+            if (manualCount > 0) {
+                msg += ' (' + manualCount + ' approved — execute manually on AWS)';
+            }
+            showToast(msg, successCount === ids.length ? 'success' : 'error');
         } catch (error) {
             showToast('Error: ' + error.message, 'error');
         }
