@@ -540,11 +540,11 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
                    COALESCE(SUM(monthly_waste_eur), 0) as active_monthly
             FROM active_waste
         ),
-        actions AS (
-            SELECT
-                COUNT(CASE WHEN action_status='success' THEN 1 END)::float /
-                NULLIF(COUNT(*), 0) * 100 as success_rate
+        failed AS (
+            SELECT COUNT(*) as failed_7d
             FROM actions_log
+            WHERE action_status = 'failed'
+              AND action_date >= NOW() - INTERVAL '7 days'
         ),
         cumulative AS (
             SELECT COALESCE(SUM(actual_savings_eur), 0) as total_saved
@@ -564,14 +564,14 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             s.verified_savings,
             w.waste_count,
             w.active_monthly,
-            COALESCE(a.success_rate, 0) as success_rate,
+            f.failed_7d,
             c.total_saved as cumulative_savings,
             p.pending_count,
             l.last_analysis
         FROM metrics m
         CROSS JOIN savings s
         CROSS JOIN waste w
-        CROSS JOIN actions a
+        CROSS JOIN failed f
         CROSS JOIN cumulative c
         CROSS JOIN pending p
         CROSS JOIN last_scan l;
