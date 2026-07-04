@@ -17,6 +17,7 @@ from core.llm import (
     enrich_recommendations,
     generate_insight,
     is_enabled,
+    record_usage,
     MODEL_ENV_VAR,
 )
 
@@ -80,6 +81,52 @@ class TestGenerateInsight:
         monkeypatch.setenv(MODEL_ENV_VAR, 'gpt-4o-mini')
         with patch.dict(sys.modules, {'litellm': self._mock_litellm('')}):
             assert generate_insight('a', 'ebs_volume', 1, 0.9, {}) is None
+
+
+class TestRecordUsage:
+
+    def _response(self, prompt_tokens=100, completion_tokens=50):
+        response = MagicMock()
+        response.model = 'gpt-4o-mini'
+        response.usage.prompt_tokens = prompt_tokens
+        response.usage.completion_tokens = completion_tokens
+        return response
+
+    def test_inserts_tokens_and_cost(self):
+        conn = MagicMock()
+        cursor = conn.cursor.return_value
+        mock_litellm = MagicMock()
+        mock_litellm.completion_cost.return_value = 0.000123
+        with patch.dict(sys.modules, {'litellm': mock_litellm}):
+            record_usage(conn, 'insight', self._response())
+        sql, params = cursor.execute.call_args[0]
+        assert 'INSERT INTO llm_usage' in sql
+        assert params == ('insight', 'gpt-4o-mini', 100, 50, 0.000123)
+        conn.commit.assert_called_once()
+        cursor.close.assert_called_once()
+
+    def test_unknown_model_pricing_stores_null_cost(self):
+        conn = MagicMock()
+        cursor = conn.cursor.return_value
+        mock_litellm = MagicMock()
+        mock_litellm.completion_cost.side_effect = RuntimeError('unknown model')
+        with patch.dict(sys.modules, {'litellm': mock_litellm}):
+            record_usage(conn, 'narrative', self._response())
+        params = cursor.execute.call_args[0][1]
+        assert params[4] is None
+        conn.commit.assert_called_once()
+
+    def test_none_conn_is_noop(self):
+        with patch.dict(sys.modules, {'litellm': MagicMock()}):
+            record_usage(None, 'insight', self._response())
+
+    def test_db_failure_is_non_fatal(self):
+        conn = MagicMock()
+        conn.cursor.return_value.execute.side_effect = RuntimeError('db gone')
+        with patch.dict(sys.modules, {'litellm': MagicMock()}):
+            record_usage(conn, 'insight', self._response())
+        conn.rollback.assert_called_once()
+        conn.commit.assert_not_called()
 
 
 class TestEnrichRecommendations:

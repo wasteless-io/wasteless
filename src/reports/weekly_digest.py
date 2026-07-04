@@ -207,7 +207,7 @@ def format_digest(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def generate_narrative(data: Dict[str, Any]) -> Optional[str]:
+def generate_narrative(data: Dict[str, Any], conn=None) -> Optional[str]:
     """LLM narrative for the report, or None (never raises)."""
     if not llm.is_enabled():
         return None
@@ -222,6 +222,7 @@ def generate_narrative(data: Dict[str, Any]) -> Optional[str]:
             temperature=0.2,
             timeout=TIMEOUT_SECONDS,
         )
+        llm.record_usage(conn, 'narrative', response)
         narrative = response.choices[0].message.content
         return narrative.strip() if narrative else None
     except Exception as e:
@@ -233,7 +234,7 @@ def build_digest(conn, start_date: date, end_date: date) -> str:
     """Full report: LLM narrative when available, then the numbers."""
     data = collect_digest_data(conn, start_date, end_date)
     digest = format_digest(data)
-    narrative = generate_narrative(data)
+    narrative = generate_narrative(data, conn=conn)
     if narrative:
         digest = f"{narrative}\n\n{digest}"
     return digest
