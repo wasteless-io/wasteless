@@ -456,6 +456,39 @@ TREND_RANGES = {
 }
 
 
+def fetch_waste_trend(cursor, trend: str):
+    """Waste trend points from waste_snapshots for a given range key.
+
+    Returns (trend, granularity, subtitle, rows) — daily points for
+    7d/30d/90d, monthly averages for 1y.
+    """
+    if trend not in TREND_RANGES:
+        trend = "30d"
+    trend_days, granularity, subtitle = TREND_RANGES[trend]
+    if granularity == "month":
+        cursor.execute("""
+            SELECT date_trunc('month', snapshot_date)::date as date,
+                   AVG(daily_total) as total_waste
+            FROM (
+                SELECT snapshot_date, COALESCE(SUM(total_eur), 0) as daily_total
+                FROM waste_snapshots
+                WHERE snapshot_date >= CURRENT_DATE - %s * INTERVAL '1 day'
+                GROUP BY snapshot_date
+            ) d
+            GROUP BY 1
+            ORDER BY 1
+        """, (trend_days,))
+    else:
+        cursor.execute("""
+            SELECT snapshot_date as date, COALESCE(SUM(total_eur), 0) as total_waste
+            FROM waste_snapshots
+            WHERE snapshot_date >= CURRENT_DATE - %s * INTERVAL '1 day'
+            GROUP BY snapshot_date
+            ORDER BY snapshot_date
+        """, (trend_days,))
+    return trend, granularity, subtitle, cursor.fetchall()
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     """Executive dashboard with KPIs and charts."""
@@ -524,33 +557,8 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     inaction_row = cursor.fetchone()
 
     # Trend: active-waste totals from waste_snapshots (stable history written
-    # by detector runs + one-shot backfill). Daily points for 7d/30d/90d,
-    # monthly averages for 1y.
-    if trend not in TREND_RANGES:
-        trend = "30d"
-    trend_days, trend_granularity, trend_subtitle = TREND_RANGES[trend]
-    if trend_granularity == "month":
-        cursor.execute("""
-            SELECT date_trunc('month', snapshot_date)::date as date,
-                   AVG(daily_total) as total_waste
-            FROM (
-                SELECT snapshot_date, COALESCE(SUM(total_eur), 0) as daily_total
-                FROM waste_snapshots
-                WHERE snapshot_date >= CURRENT_DATE - %s * INTERVAL '1 day'
-                GROUP BY snapshot_date
-            ) d
-            GROUP BY 1
-            ORDER BY 1
-        """, (trend_days,))
-    else:
-        cursor.execute("""
-            SELECT snapshot_date as date, COALESCE(SUM(total_eur), 0) as total_waste
-            FROM waste_snapshots
-            WHERE snapshot_date >= CURRENT_DATE - %s * INTERVAL '1 day'
-            GROUP BY snapshot_date
-            ORDER BY snapshot_date
-        """, (trend_days,))
-    waste_trend = cursor.fetchall()
+    # by detector runs + one-shot backfill)
+    trend, trend_granularity, trend_subtitle, waste_trend = fetch_waste_trend(cursor, trend)
 
     # Age distribution: how long resources have actually been wasting.
     # Detectors store the resource age in metadata->>'age_days' (snapshot
@@ -603,6 +611,23 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         "daily_burn": daily_burn,
         "first_detection": first_detection,
     })
+
+
+@app.get("/api/dashboard/trend")
+async def api_dashboard_trend(conn=Depends(get_db), range: str = "30d"):
+    """Waste trend points for a range key — feeds the dashboard chart via AJAX."""
+    cursor = conn.cursor()
+    trend, granularity, subtitle, rows = fetch_waste_trend(cursor, range)
+    cursor.close()
+    return {
+        "range": trend,
+        "granularity": granularity,
+        "subtitle": subtitle,
+        "points": [
+            {"date": str(r["date"]), "total": float(r["total_waste"] or 0)}
+            for r in rows
+        ],
+    }
 
 
 @app.get("/recommendations", response_class=HTMLResponse)
