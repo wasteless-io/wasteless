@@ -15,7 +15,7 @@ Wasteless needs **read-only access** to your AWS account to:
 - ✅ Fetch resource metrics (CloudWatch API)
 - ✅ List EC2/RDS/EBS resources (Describe APIs)
 
-**Important**: Wasteless **NEVER** modifies your infrastructure. All permissions are read-only.
+**Important**: detection and collection are strictly read-only. Wasteless only modifies your infrastructure if you approve a remediation action (stop an idle instance, release an orphaned Elastic IP, …), which requires additional write permissions such as `ec2:StopInstances`. Auto-remediation is **disabled by default** and every action goes through the safeguards described in the [README](../README.md#safeguards). If you only want detection, the read-only policy below is all you need.
 
 ---
 
@@ -223,6 +223,10 @@ For **maximum security**, create a minimal custom policy instead of using `ViewO
 }
 ```
 
+**Optional — remediation permissions**
+
+The policy above is read-only and covers detection. If you plan to approve remediation actions from the UI, add the write actions matching the recommendations you want to execute (e.g. `ec2:StopInstances` for idle instances). Keep this in a separate statement so it stays easy to audit or remove.
+
 #### 3.2 Review Policy
 
 1. Click **Next: Tags** (add same tags as user if desired)
@@ -347,9 +351,9 @@ AWS_SECRET_ACCESS_KEY=wJalr...
 # ============================================
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=finops
-DB_USER=finops
-DB_PASSWORD=finops_dev_2025
+DB_NAME=wasteless
+DB_USER=wasteless
+DB_PASSWORD=your_secure_password
 
 # ============================================
 # Metabase
