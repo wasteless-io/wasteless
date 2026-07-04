@@ -520,6 +520,44 @@ def fetch_waste_trend(cursor, trend: str):
     return trend, granularity, subtitle, cursor.fetchall()
 
 
+def fetch_waste_by_resource(cursor, range_key: str):
+    """Waste by resource type averaged over a range window (waste_snapshots).
+
+    Monthly rate per type = sum over the window / number of snapshot days,
+    so a type absent on some days is correctly diluted instead of overstated.
+    The resource count shown is the latest snapshot's count in the window.
+    Returns (range_key, subtitle, rows).
+    """
+    if range_key not in TREND_RANGES:
+        range_key = "30d"
+    days = TREND_RANGES[range_key][0]
+    label = {"7d": "last 7 days", "30d": "last 30 days",
+             "90d": "last 90 days", "1y": "last 12 months"}[range_key]
+    cursor.execute("""
+        WITH win AS (
+            SELECT snapshot_date, resource_type, total_eur, resource_count
+            FROM waste_snapshots
+            WHERE snapshot_date >= CURRENT_DATE - %s * INTERVAL '1 day'
+        ),
+        days AS (
+            SELECT COUNT(DISTINCT snapshot_date) AS n FROM win
+        ),
+        latest AS (
+            SELECT DISTINCT ON (resource_type) resource_type, resource_count
+            FROM win
+            ORDER BY resource_type, snapshot_date DESC
+        )
+        SELECT w.resource_type,
+               SUM(w.total_eur) / NULLIF((SELECT n FROM days), 0) AS total_eur,
+               l.resource_count AS cnt
+        FROM win w
+        JOIN latest l USING (resource_type)
+        GROUP BY w.resource_type, l.resource_count
+        ORDER BY total_eur DESC
+    """, (days,))
+    return range_key, f"Avg monthly waste · {label}", cursor.fetchall()
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     """Executive dashboard with KPIs and charts."""
@@ -591,14 +629,9 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     # by detector runs + one-shot backfill)
     trend, trend_granularity, trend_subtitle, waste_trend = fetch_waste_trend(cursor, trend)
 
-    # Waste cost by resource type (kept for ROI summary) — active waste
-    cursor.execute("""
-        SELECT resource_type, SUM(monthly_waste_eur) as total_eur, COUNT(*) as cnt
-        FROM active_waste
-        GROUP BY resource_type
-        ORDER BY total_eur DESC
-    """)
-    waste_by_resource = cursor.fetchall()
+    # Waste cost by resource type, averaged over the default 30-day window
+    # (same source as the trend chart so both cards agree)
+    resource_range, resource_subtitle, waste_by_resource = fetch_waste_by_resource(cursor, "30d")
 
     # LLM spend over the last 30 days: totals averaged per day actually
     # covered (dividing by 30 would understate the rate when tracking just
@@ -692,6 +725,8 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         "trend_granularity": trend_granularity,
         "trend_subtitle": trend_subtitle,
         "waste_by_resource": waste_by_resource,
+        "resource_range": resource_range,
+        "resource_subtitle": resource_subtitle,
         "daily_burn": daily_burn,
         "first_detection": first_detection,
         "burned_total": burned_total,
@@ -715,6 +750,26 @@ async def api_dashboard_trend(conn=Depends(get_db), range: str = "30d"):
         "subtitle": subtitle,
         "points": [
             {"date": str(r["date"]), "total": float(r["total_waste"] or 0)}
+            for r in rows
+        ],
+    }
+
+
+@app.get("/api/dashboard/waste-by-resource")
+async def api_dashboard_waste_by_resource(conn=Depends(get_db), range: str = "30d"):
+    """Waste by resource type for a range key — feeds the bar chart via AJAX."""
+    cursor = conn.cursor()
+    range_key, subtitle, rows = fetch_waste_by_resource(cursor, range)
+    cursor.close()
+    return {
+        "range": range_key,
+        "subtitle": subtitle,
+        "items": [
+            {
+                "resource_type": r["resource_type"],
+                "total": float(r["total_eur"] or 0),
+                "count": r["cnt"] or 0,
+            }
             for r in rows
         ],
     }
