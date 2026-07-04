@@ -284,47 +284,38 @@
     </div>
 </div>
 
-<!-- KPIs Row 2 — Operational View -->
-<div class="card compact mb-1">
-    <div class="section-label">Operational Status</div>
-    <div class="grid grid-3">
-
-        <!-- Waste Detected -->
-        <div class="kpi">
-            <div class="kpi-value">{{ kpis.waste_count or 0 }}</div>
-            <div class="kpi-label">Waste Detected</div>
-            <div class="kpi-sub">resources identified</div>
+<!-- Forecast Line Chart -->
+{% if waste_trend %}
+<div class="card chart-card mb-1">
+    <div class="chart-head">
+        <div>
+            <h3 class="chart-title">Waste Trend &amp; Forecast</h3>
+            <span id="trendSubtitle" class="chart-subtitle">{{ trend_subtitle }}</span>
         </div>
-
-        <!-- Actions Pending -->
-        <div class="kpi">
-            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}">{{ kpis.pending_count or 0 }}</div>
-            <div class="kpi-label">Actions Pending</div>
-            <div class="kpi-sub">
-                {% if (kpis.pending_count or 0) > 0 %}
-                <a href="/recommendations" class="kpi-link">Review &rarr;</a>
-                {% else %}
-                All clear
-                {% endif %}
+        <div class="trend-controls">
+            <div class="trend-ranges" role="group" aria-label="Trend time range">
+                {% for key in ['7d', '30d', '90d', '1y'] %}
+                <a href="/dashboard?trend={{ key }}" data-range="{{ key }}"
+                   class="btn trend-range-btn {% if trend_range == key %}btn-primary{% else %}btn-outline{% endif %}"
+                   {% if trend_range == key %}aria-current="true"{% endif %}>{{ key }}</a>
+                {% endfor %}
             </div>
-        </div>
-
-        <!-- Last Scan: relative freshness is the signal, clock time is detail -->
-        <div class="kpi">
-            {% if kpis.last_analysis %}
-            {% set hours_ago = ((now() - kpis.last_analysis).total_seconds() / 3600) | int %}
-            {% set days_ago = (hours_ago / 24) | int %}
-            <div class="kpi-value {% if hours_ago >= 48 %}text-danger{% elif hours_ago >= 24 %}text-warning{% endif %}">{% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}</div>
-            <div class="kpi-label">Last Scan</div>
-            <div class="kpi-sub">{{ kpis.last_analysis.strftime('%d %b, %H:%M') }}{% if hours_ago >= 48 %} — overdue{% elif hours_ago >= 24 %} — stale{% endif %}</div>
-            {% else %}
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">Last Scan</div>
-            <div class="kpi-sub">No scan yet</div>
-            {% endif %}
+            <span id="forecastLegend" class="trend-legend">
+                <span class="legend-item"><span class="legend-line actual" aria-hidden="true"></span> Actual</span>
+                <span class="legend-item"><span class="legend-line forecast" aria-hidden="true"></span> Forecast</span>
+            </span>
         </div>
     </div>
+    <div id="forecastChartWrap" class="trend-area">
+        <canvas id="forecastChart" role="img" aria-label="Line chart of monthly waste over time with forecast"></canvas>
+    </div>
+    <div id="forecastEmpty" class="trend-empty">
+        <p class="headline">Building trend history</p>
+        <p class="text-muted hint">The trend and forecast appear once enough history is collected for this range.</p>
+        <div class="trend-progress" id="forecastProgress" aria-hidden="true"></div>
+    </div>
 </div>
+{% endif %}
 
 <!-- Charts Row -->
 <div class="charts-grid">
@@ -426,38 +417,47 @@
     </div>
 </div>
 
-<!-- Forecast Line Chart -->
-{% if waste_trend %}
-<div class="card chart-card mt-1">
-    <div class="chart-head">
-        <div>
-            <h3 class="chart-title">Waste Trend &amp; Forecast</h3>
-            <span id="trendSubtitle" class="chart-subtitle">{{ trend_subtitle }}</span>
+<!-- KPIs Row 2 — Operational View -->
+<div class="card compact mt-1">
+    <div class="section-label">Operational Status</div>
+    <div class="grid grid-3">
+
+        <!-- Waste Detected -->
+        <div class="kpi">
+            <div class="kpi-value">{{ kpis.waste_count or 0 }}</div>
+            <div class="kpi-label">Waste Detected</div>
+            <div class="kpi-sub">resources identified</div>
         </div>
-        <div class="trend-controls">
-            <div class="trend-ranges" role="group" aria-label="Trend time range">
-                {% for key in ['7d', '30d', '90d', '1y'] %}
-                <a href="/dashboard?trend={{ key }}" data-range="{{ key }}"
-                   class="btn trend-range-btn {% if trend_range == key %}btn-primary{% else %}btn-outline{% endif %}"
-                   {% if trend_range == key %}aria-current="true"{% endif %}>{{ key }}</a>
-                {% endfor %}
+
+        <!-- Actions Pending -->
+        <div class="kpi">
+            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}">{{ kpis.pending_count or 0 }}</div>
+            <div class="kpi-label">Actions Pending</div>
+            <div class="kpi-sub">
+                {% if (kpis.pending_count or 0) > 0 %}
+                <a href="/recommendations" class="kpi-link">Review &rarr;</a>
+                {% else %}
+                All clear
+                {% endif %}
             </div>
-            <span id="forecastLegend" class="trend-legend">
-                <span class="legend-item"><span class="legend-line actual" aria-hidden="true"></span> Actual</span>
-                <span class="legend-item"><span class="legend-line forecast" aria-hidden="true"></span> Forecast</span>
-            </span>
         </div>
-    </div>
-    <div id="forecastChartWrap" class="trend-area">
-        <canvas id="forecastChart" role="img" aria-label="Line chart of monthly waste over time with forecast"></canvas>
-    </div>
-    <div id="forecastEmpty" class="trend-empty">
-        <p class="headline">Building trend history</p>
-        <p class="text-muted hint">The trend and forecast appear once enough history is collected for this range.</p>
-        <div class="trend-progress" id="forecastProgress" aria-hidden="true"></div>
+
+        <!-- Last Scan: relative freshness is the signal, clock time is detail -->
+        <div class="kpi">
+            {% if kpis.last_analysis %}
+            {% set hours_ago = ((now() - kpis.last_analysis).total_seconds() / 3600) | int %}
+            {% set days_ago = (hours_ago / 24) | int %}
+            <div class="kpi-value {% if hours_ago >= 48 %}text-danger{% elif hours_ago >= 24 %}text-warning{% endif %}">{% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}</div>
+            <div class="kpi-label">Last Scan</div>
+            <div class="kpi-sub">{{ kpis.last_analysis.strftime('%d %b, %H:%M') }}{% if hours_ago >= 48 %} — overdue{% elif hours_ago >= 24 %} — stale{% endif %}</div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">Last Scan</div>
+            <div class="kpi-sub">No scan yet</div>
+            {% endif %}
+        </div>
     </div>
 </div>
-{% endif %}
 
 <!-- Quick Actions -->
 <div class="card slim mt-1">
