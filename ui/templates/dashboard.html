@@ -105,7 +105,7 @@
 </div>
 
 <!-- Charts Row -->
-<div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 1rem;">
+<div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem;">
 
     <!-- Cost by Resource Type (horizontal bar) -->
     <div class="card" style="padding: 1rem;">
@@ -153,36 +153,6 @@
         {% else %}
         <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 140px;">
             <p class="text-muted" style="margin: 0;">No history yet</p>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Age Distribution -->
-    <div class="card" style="padding: 1rem;">
-        <div style="margin-bottom: 0.75rem;">
-            <h3 style="margin: 0; font-size: 1rem;">Age Distribution</h3>
-            <span style="font-size: 0.75rem; color: var(--gray-500);">How long resources have been wasting</span>
-        </div>
-        {% if age_distribution %}
-        {% set max_cnt = age_distribution | map(attribute='cnt') | max %}
-        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem;">
-            {% for bucket in age_distribution %}
-            {% set color = 'var(--success)' if bucket.min_age <= 30 else ('var(--warning)' if bucket.min_age <= 90 else 'var(--danger)') %}
-            {% set pct = (bucket.cnt / max_cnt * 100) if max_cnt > 0 else 0 %}
-            <div>
-                <div style="display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-size: 0.8rem; margin-bottom: 0.2rem;">
-                    <span style="color: var(--gray-700); font-weight: 500; white-space: nowrap;">{{ bucket.age_bucket }}</span>
-                    <span style="color: var(--gray-500); white-space: nowrap;">{{ bucket.cnt }} res · €{{ "%.2f"|format(bucket.total_eur) }}/mo</span>
-                </div>
-                <div style="height: 8px; background: var(--gray-100); border-radius: 4px; overflow: hidden;">
-                    <div style="height: 100%; width: {{ pct }}%; background: {{ color }}; border-radius: 4px; transition: width 0.3s;"></div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div style="height: 140px; display: flex; align-items: center; justify-content: center;">
-            <p class="text-muted" style="margin: 0;">No data yet</p>
         </div>
         {% endif %}
     </div>
