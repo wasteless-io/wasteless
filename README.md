@@ -1,6 +1,6 @@
 # Wasteless
 
-Open-source cloud cost optimization. Detect idle EC2 instances. Remediate with one click.
+Open-source cloud cost optimization. Detect idle and orphaned AWS resources. Remediate with one click.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
@@ -45,9 +45,9 @@ python3 src/detectors/ec2_idle.py          # Detect waste
 ┌──────────────────────▼──────────────────────────────────┐
 │                     wasteless                           │
 │                                                         │
-│  collectors/    →   Fetch CloudWatch metrics            │
-│  detectors/     →   Identify idle EC2 instances         │
-│  remediators/   →   Stop / terminate instances          │
+│  collectors/    →   CloudWatch metrics + Steampipe      │
+│  detectors/     →   Identify idle / orphaned resources  │
+│  remediators/   →   Stop / release / delete (guarded)   │
 │  trackers/      →   Verify actual savings               │
 └──────────────────────┬──────────────────────────────────┘
                        │ psycopg2
@@ -71,11 +71,11 @@ python3 src/detectors/ec2_idle.py          # Detect waste
 ```
 wasteless/
 ├── src/
-│   ├── collectors/         # CloudWatch metrics collection
-│   ├── detectors/          # EC2 idle waste detection
-│   ├── remediators/        # Stop / terminate execution
+│   ├── collectors/         # CloudWatch + Steampipe collection
+│   ├── detectors/          # Waste detection (EC2, EBS, EIP, ELB, NAT, snapshots)
+│   ├── remediators/        # Stop / release / delete execution
 │   ├── trackers/           # Savings verification
-│   └── core/               # Database, safeguards
+│   └── core/               # Database, safeguards, AI insights (llm)
 ├── ui/                     # FastAPI web dashboard
 │   ├── main.py
 │   ├── templates/
@@ -169,8 +169,9 @@ Before executing any action, Wasteless validates 7 conditions:
 
 | Feature | Description |
 |---------|-------------|
-| **Detection** | CPU / network analysis with confidence scoring |
-| **Recommendations** | Stop / terminate / downsize actions |
+| **Detection** | Idle EC2 (CPU/network analysis) + orphaned EBS, EIP, ELB, NAT gateways, snapshots, gp2 volumes — with confidence scoring |
+| **Recommendations** | Stop / terminate / release / delete / downsize actions |
+| **AI Insights** | LLM-generated context per recommendation (provider-agnostic via litellm) |
 | **Dry-Run Mode** | Test safely before any AWS action |
 | **Auto-Sync** | Background sync every 5 min with AWS |
 | **Action History** | Full audit trail with rollback snapshots |
@@ -211,15 +212,19 @@ Before executing any action, Wasteless validates 7 conditions:
 ## Development
 
 ```bash
-# Backend tests
-python tests/test_end_to_end.py
+# Backend tests (root venv)
+source venv/bin/activate
+pytest
 
 # UI hot reload
-cd ui && ./start.sh
+cd ui && uvicorn main:app --reload --port 8888
 
 # UI tests
 cd ui && python run_tests.py
 ```
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full development guide
+and [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.
 
 ### Adding a new detector
 
@@ -239,10 +244,12 @@ cd ui && python run_tests.py
 ## Roadmap
 
 - [x] EC2 idle detection and remediation
+- [x] EBS / EIP / ELB / NAT gateway / snapshot detection (Steampipe)
 - [x] Web dashboard (FastAPI)
 - [x] Dry-run mode and safeguards
 - [x] Savings verification
-- [ ] RDS / EBS / S3 detection
+- [x] AI insights per recommendation
+- [ ] RDS / S3 detection
 - [ ] Multi-account AWS support
 - [ ] Slack / Teams notifications
 - [ ] Azure and GCP support
