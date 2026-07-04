@@ -426,7 +426,9 @@
             }
         });
         // Show automated vs manual action bar
-        const isAutomated = tab === 'ec2';
+        // 'other' holds gp2 migrations, NAT gateways and load balancers,
+        // which have automated remediators
+        const isAutomated = tab === 'ec2' || tab === 'other';
         document.getElementById('actions-automated').style.display = isAutomated ? 'flex' : 'none';
         document.getElementById('actions-manual').style.display    = isAutomated ? 'none' : 'flex';
 
