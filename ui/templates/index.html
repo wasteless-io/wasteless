@@ -130,9 +130,10 @@
             <tbody>
                 {% for item in waste_by_type %}
                 {% set bar_pct = ((item.total_eur / max_eur) * 100) if max_eur > 0 else 0 %}
-                {# Sequential green, same ramp as the dashboard charts: intensity follows magnitude #}
-                {% set green_steps = ['#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'] %}
-                {% set bar_color = green_steps[[(bar_pct / 100 * 5) | int, 4] | min] %}
+                {# Sequential amber, same ramp as the dashboard waste charts:
+                   intensity follows magnitude. Green is reserved for savings. #}
+                {% set amber_steps = ['#fde68a', '#fcd34d', '#fbbf24', '#f59e0b', '#d97706'] %}
+                {% set bar_color = amber_steps[[(bar_pct / 100 * 5) | int, 4] | min] %}
                 <tr>
                     <td style="padding: 0.5rem 0.5rem;">
                         {% if item.resource_type == 'ebs_snapshot' %}<span style="font-size: 0.8rem;">&#128190;</span> Snapshots
