@@ -18,11 +18,11 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, Request, Depends, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, Json
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import logging
 
@@ -68,12 +68,14 @@ def sync_aws_job():
 
         # Open recommendations grouped by resource type. Rejected ones are
         # included: a rejected resource still counts as active waste, so its
-        # disappearance must also be detected to stop counting it.
+        # disappearance must also be detected to stop counting it. Scheduled
+        # ones too: a resource that vanishes during its grace period must
+        # become obsolete instead of failing at execution time.
         cursor.execute("""
             SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
             FROM recommendations r
             JOIN waste_detected w ON r.waste_id = w.id
-            WHERE r.status IN ('pending', 'rejected')
+            WHERE r.status IN ('pending', 'rejected', 'scheduled')
             GROUP BY w.resource_type
         """)
         pending = {row['resource_type']: row['ids'] for row in cursor.fetchall()}
@@ -93,7 +95,7 @@ def sync_aws_job():
                 WHERE r.waste_id = w.id
                 AND w.resource_type = %s
                 AND w.resource_id = ANY(%s)
-                AND r.status IN ('pending', 'rejected')
+                AND r.status IN ('pending', 'rejected', 'scheduled')
             """, (resource_type, ids))
             obsolete_count += cursor.rowcount
 
@@ -109,6 +111,85 @@ def sync_aws_job():
         from datetime import datetime as _dt
         _aws_status["reachable"] = check_aws_reachable()
         _aws_status["checked_at"] = _dt.now()
+
+
+def grace_executor_job():
+    """Execute scheduled approvals whose grace period has elapsed.
+
+    Mirrors the /api/actions execution path: remediator mode goes through
+    the backend safeguards pipeline, boto3 mode acts on EC2 directly.
+    dry_run and per-action toggles are re-read at execution time.
+    """
+    try:
+        conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT r.id, r.recommendation_type,
+                   w.resource_id, w.resource_type, w.metadata
+            FROM recommendations r
+            JOIN waste_detected w ON r.waste_id = w.id
+            WHERE r.status = 'scheduled' AND r.execute_after <= NOW()
+            ORDER BY r.execute_after
+            LIMIT 20
+        """)
+        due = cursor.fetchall()
+        if not due:
+            conn.close()
+            return
+
+        from utils.remediator import RemediatorProxy
+        dry_run = _config_manager.get_dry_run()
+
+        for row in due:
+            rec_id        = row['id']
+            rec_type      = row['recommendation_type']
+            instance_id   = row['resource_id']
+            resource_type = row['resource_type']
+            metadata      = row['metadata'] or {}
+            action_type   = rec_type.replace('_instance', '').replace('_volume', '').replace('_snapshot', '')
+
+            mode = execution_mode(rec_type)
+            if mode != 'manual' and not _config_manager.get_action_enabled(rec_type):
+                mode = 'manual'
+
+            if mode == 'remediator':
+                try:
+                    proxy = RemediatorProxy(dry_run=dry_run)
+                    result = proxy.execute_recommendations(conn, [rec_id])[0]
+                    success = bool(result.get('success'))
+                    error = result.get('error')
+                except Exception as e:
+                    success, error = False, str(e)
+            elif mode == 'boto3' and not dry_run:
+                success, error = _execute_ec2_boto3(instance_id, rec_type, metadata)
+            else:
+                # dry-run, or action disabled since approval: record only
+                success, error = True, None
+
+            cursor.execute("""
+                INSERT INTO actions_log
+                (resource_id, recommendation_id, resource_type, action_type,
+                 action_status, dry_run, action_date, error_message, executed_by)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s, 'grace_executor')
+            """, (instance_id, rec_id, resource_type, action_type,
+                  'success' if success else 'failed',
+                  dry_run or mode == 'manual', error))
+
+            # On failure the recommendation returns to the pending queue
+            # instead of staying invisibly stuck in 'scheduled'.
+            cursor.execute("""
+                UPDATE recommendations
+                SET status = %s, applied_at = NOW(), execute_after = NULL
+                WHERE id = %s
+            """, ('approved' if success else 'pending', rec_id))
+            conn.commit()
+            print(f"⏲️ Grace executor: rec #{rec_id} ({rec_type}) → "
+                  f"{'OK' if success else f'FAILED: {error}'}")
+
+        conn.close()
+
+    except Exception as e:
+        print(f"⚠️ Grace executor error: {e}")
 
 
 # Scheduler instance
@@ -150,6 +231,8 @@ async def lifespan(app: FastAPI):
 
     # Start scheduler for auto-sync (every 5 minutes)
     scheduler.add_job(sync_aws_job, 'interval', minutes=5, id='aws_sync')
+    # Grace-period executor: applies scheduled approvals once due
+    scheduler.add_job(grace_executor_job, 'interval', minutes=5, id='grace_executor')
     scheduler.start()
     print("🔄 Auto-sync scheduler started (every 5 min)")
 
@@ -183,6 +266,10 @@ from utils.action_registry import execution_mode
 from utils.config_manager import ConfigManager
 _config_manager = ConfigManager()
 templates.env.globals['get_dry_run'] = _config_manager.get_dry_run
+
+# Live log capture for the /logs debug page (in-memory, nothing persisted)
+from utils.log_buffer import install_capture
+install_capture()
 
 
 # =============================================================================
@@ -561,6 +648,21 @@ async def recommendations(
     bucketed = {id(r) for r in ec2_recs + ebs_recs + eip_recs + snap_recs}
     other_recs = [r for r in recommendations if id(r) not in bucketed]
 
+    # Approvals waiting out their grace period (cancellable)
+    cursor.execute("""
+        SELECT r.id, r.recommendation_type, r.execute_after,
+               r.estimated_monthly_savings_eur,
+               w.resource_id, w.resource_type,
+               CEIL(EXTRACT(EPOCH FROM r.execute_after - NOW()) / 86400)::int
+                   AS days_left
+        FROM recommendations r
+        JOIN waste_detected w ON r.waste_id = w.id
+        WHERE r.status = 'scheduled'
+        ORDER BY r.execute_after
+        LIMIT 100
+    """)
+    scheduled_recs = cursor.fetchall()
+
     cursor.close()
 
     return templates.TemplateResponse(request, "recommendations.html", context={
@@ -570,6 +672,7 @@ async def recommendations(
         "eip_recs": eip_recs,
         "snap_recs": snap_recs,
         "other_recs": other_recs,
+        "scheduled_recs": scheduled_recs,
         "total_savings": total_savings,
         "avg_confidence": avg_confidence,
         "type_filter": type_filter,
@@ -635,6 +738,108 @@ async def history(
         "action_filter": action_filter,
         "days_back": days_back
     })
+
+
+def _resolve_report_period(month, start, end, days):
+    """Shared filter resolution for the report routes (400 on bad input)."""
+    from utils.reports import resolve_period
+    try:
+        return resolve_period(month=month, start=start, end=end, days=days)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/reports", response_class=HTMLResponse)
+def reports(
+    request: Request,
+    conn=Depends(get_db),
+    month: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    days: Optional[int] = None
+):
+    """Activity report over a date range, with download and AI summary."""
+    from utils.reports import collect_digest_data, llm_narrative_available
+    start_date, end_date = _resolve_report_period(month, start, end, days)
+    report = collect_digest_data(conn, start_date, end_date)
+
+    return templates.TemplateResponse(request, "reports.html", context={
+        "report": report,
+        "start": start_date.isoformat(),
+        "end": end_date.isoformat(),
+        "month": month or "",
+        "llm_enabled": llm_narrative_available(),
+    })
+
+
+@app.get("/api/reports/download")
+def reports_download(
+    conn=Depends(get_db),
+    month: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    days: Optional[int] = None
+):
+    """Download the report as Markdown. Deterministic content only."""
+    from utils.reports import collect_digest_data, format_digest, report_filename
+    start_date, end_date = _resolve_report_period(month, start, end, days)
+    content = format_digest(collect_digest_data(conn, start_date, end_date))
+    filename = report_filename(start_date, end_date)
+    return PlainTextResponse(content, media_type="text/markdown", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"'
+    })
+
+
+@app.post("/api/reports/narrative")
+def reports_narrative(
+    conn=Depends(get_db),
+    month: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    days: Optional[int] = None
+):
+    """Generate the AI narrative for a report period, on demand.
+
+    Sync route on purpose: the LLM call blocks up to 20s and must run in
+    the threadpool, not on the event loop.
+    """
+    from utils.reports import collect_digest_data, generate_narrative
+    start_date, end_date = _resolve_report_period(month, start, end, days)
+    narrative = generate_narrative(collect_digest_data(conn, start_date, end_date))
+    return JSONResponse({"narrative": narrative})
+
+
+@app.get("/logs", response_class=HTMLResponse)
+async def logs_page(request: Request):
+    """Live log viewer for debugging (in-memory, current UI process)."""
+    return templates.TemplateResponse(request, "logs.html")
+
+
+@app.get("/api/logs")
+async def api_logs(
+    after_id: int = 0,
+    level: str = "DEBUG",
+    q: str = "",
+    limit: int = Query(500, ge=1, le=2000)
+):
+    """Incremental poll of the in-memory log buffer.
+
+    `after_id` is the client's cursor: only newer entries are returned.
+    `level` is a minimum (DEBUG shows everything), `q` a case-insensitive
+    substring match on message and logger name.
+    """
+    import logging as _logging
+    from utils.log_buffer import get_handler
+    handler = get_handler()
+    if handler is None:
+        return JSONResponse({"entries": [], "last_id": 0})
+
+    min_levelno = _logging.getLevelName(level.upper())
+    if not isinstance(min_levelno, int):
+        raise HTTPException(status_code=400, detail=f"unknown level: {level}")
+
+    return JSONResponse(handler.query(
+        after_id=after_id, min_levelno=min_levelno, search=q, limit=limit))
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -954,6 +1159,57 @@ async def api_recommendations(
     return {"recommendations": results, "count": len(results)}
 
 
+def _execute_ec2_boto3(instance_id, rec_type, metadata):
+    """Stop/terminate an EC2 instance via boto3, trying likely regions.
+
+    Returns (success, error_message). Shared by the approval API and the
+    grace-period executor job.
+    """
+    try:
+        import boto3
+        regions = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
+        # Use stored region if available
+        stored_region = (metadata or {}).get('region')
+        if stored_region:
+            regions = [stored_region] + [r for r in regions if r != stored_region]
+        region_errors = []
+
+        for region in regions:
+            try:
+                ec2 = boto3.client('ec2', region_name=region)
+
+                # EC2 instance actions only
+                if rec_type in ('stop_instance', 'terminate_instance'):
+                    response = ec2.describe_instances(
+                        Filters=[{'Name': 'instance-id', 'Values': [instance_id]}]
+                    )
+                    if not response['Reservations']:
+                        continue
+                    instance_state = response['Reservations'][0]['Instances'][0]['State']['Name']
+                    if instance_state in ['terminated', 'shutting-down']:
+                        return True, None
+                    if rec_type == 'stop_instance':
+                        ec2.stop_instances(InstanceIds=[instance_id])
+                        print(f"✅ Stopped instance {instance_id} in {region}")
+                    elif rec_type == 'terminate_instance':
+                        ec2.terminate_instances(InstanceIds=[instance_id])
+                        print(f"✅ Terminated instance {instance_id} in {region}")
+                    return True, None
+
+            except Exception as e:
+                region_errors.append(f"{region}: {type(e).__name__}: {e}")
+                continue
+
+        if region_errors:
+            return False, "Errors: " + " | ".join(region_errors)
+        return False, f"Resource {instance_id} not found in any region"
+
+    except ImportError:
+        return False, "boto3 not installed"
+    except Exception as e:
+        return False, str(e)
+
+
 @app.post("/api/actions")
 async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db)):
     """Execute actions on recommendations."""
@@ -975,6 +1231,22 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     "recommendation_id": rec_id,
                     "success": result is not None,
                     "action": "rejected"
+                })
+
+            elif action_request.action == "cancel":
+                # Cancel a scheduled execution during its grace period
+                cursor.execute("""
+                    UPDATE recommendations
+                    SET status = 'pending', execute_after = NULL
+                    WHERE id = %s AND status = 'scheduled'
+                    RETURNING id
+                """, (rec_id,))
+                result = cursor.fetchone()
+                results.append({
+                    "recommendation_id": rec_id,
+                    "success": result is not None,
+                    "action": "cancelled",
+                    **({} if result else {"error": "not in scheduled state"})
                 })
 
             elif action_request.action in ("approve", "execute"):
@@ -1010,6 +1282,45 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     if mode != 'manual' and not _config_manager.get_action_enabled(rec_type):
                         mode = 'manual'
 
+                    # Grace period: a real approval is scheduled, not executed.
+                    # The grace_executor_job applies it once execute_after is
+                    # reached, unless cancelled meanwhile. Dry-run and manual
+                    # decisions stay immediate (nothing to delay).
+                    grace_days = _config_manager.get_grace_period_days()
+                    if grace_days > 0 and not dry_run and mode != 'manual':
+                        cursor.execute("""
+                            UPDATE recommendations
+                            SET status = 'scheduled',
+                                execute_after = NOW() + make_interval(days => %s)
+                            WHERE id = %s AND status = 'pending'
+                            RETURNING execute_after
+                        """, (grace_days, rec_id))
+                        scheduled = cursor.fetchone()
+                        if scheduled is None:
+                            results.append({
+                                "recommendation_id": rec_id,
+                                "success": False,
+                                "error": "not in pending state"
+                            })
+                            continue
+                        cursor.execute("""
+                            INSERT INTO actions_log
+                            (resource_id, recommendation_id, resource_type,
+                             action_type, action_status, dry_run, action_date, metadata)
+                            VALUES (%s, %s, %s, %s, 'pending', false, NOW(), %s)
+                        """, (instance_id, rec_id, resource_type, action_type,
+                              Json({'grace_period_days': grace_days,
+                                    'execute_after': scheduled['execute_after'].isoformat()})))
+                        results.append({
+                            "recommendation_id": rec_id,
+                            "instance_id": instance_id,
+                            "success": True,
+                            "scheduled": True,
+                            "execute_after": scheduled['execute_after'].isoformat(),
+                            "action": rec_type
+                        })
+                        continue
+
                     # Backend remediators (safeguards + rollback snapshot +
                     # live waste re-verification), in dry-run and real mode alike
                     if mode == 'remediator':
@@ -1035,57 +1346,8 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     # calls here would fail with a misleading "not found".
                     manual_review = mode != 'boto3'
                     if not dry_run and not manual_review:
-                        try:
-                            import boto3
-                            regions = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
-                            # Use stored region if available
-                            stored_region = metadata.get('region')
-                            if stored_region:
-                                regions = [stored_region] + [r for r in regions if r != stored_region]
-                            executed = False
-                            region_errors = []
-
-                            for region in regions:
-                                try:
-                                    ec2 = boto3.client('ec2', region_name=region)
-
-                                    # EC2 instance actions only
-                                    if rec_type in ('stop_instance', 'terminate_instance'):
-                                        response = ec2.describe_instances(
-                                            Filters=[{'Name': 'instance-id', 'Values': [instance_id]}]
-                                        )
-                                        if not response['Reservations']:
-                                            continue
-                                        instance_state = response['Reservations'][0]['Instances'][0]['State']['Name']
-                                        if instance_state in ['terminated', 'shutting-down']:
-                                            executed = True
-                                            break
-                                        if rec_type == 'stop_instance':
-                                            ec2.stop_instances(InstanceIds=[instance_id])
-                                            print(f"✅ Stopped instance {instance_id} in {region}")
-                                        elif rec_type == 'terminate_instance':
-                                            ec2.terminate_instances(InstanceIds=[instance_id])
-                                            print(f"✅ Terminated instance {instance_id} in {region}")
-                                        executed = True
-                                        break
-
-                                except Exception as e:
-                                    region_errors.append(f"{region}: {type(e).__name__}: {e}")
-                                    continue
-
-                            if not executed:
-                                aws_success = False
-                                if region_errors:
-                                    aws_error = "Errors: " + " | ".join(region_errors)
-                                else:
-                                    aws_error = f"Resource {instance_id} not found in any region"
-
-                        except ImportError:
-                            aws_success = False
-                            aws_error = "boto3 not installed"
-                        except Exception as e:
-                            aws_success = False
-                            aws_error = str(e)
+                        aws_success, aws_error = _execute_ec2_boto3(
+                            instance_id, rec_type, metadata)
 
                     # Log action
                     action_status = 'success' if (dry_run or aws_success) else 'failed'
@@ -1156,6 +1418,8 @@ async def api_update_config(update: ConfigUpdate):
             success = config_manager.set_auto_remediation_enabled(update.value)
         elif update.key == "dry_run_days":
             success = config_manager.set_dry_run_days(update.value)
+        elif update.key == "grace_period_days":
+            success = config_manager.set_grace_period_days(update.value)
         elif update.key == "dry_run":
             success = config_manager.set_dry_run(update.value)
         elif update.key.startswith("action:"):
@@ -1173,6 +1437,40 @@ async def api_update_config(update: ConfigUpdate):
         return {"success": success}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class PolicyImport(BaseModel):
+    """Policy-as-code import request (YAML text)."""
+    yaml_text: str
+
+
+@app.get("/api/policies/export")
+def api_policies_export():
+    """Download the current remediation policy as versionable YAML."""
+    from utils.policies import export_policy_yaml
+    from utils.config_manager import ConfigManager
+
+    content = export_policy_yaml(ConfigManager().load_config())
+    filename = f"wasteless-policies_{datetime.now().strftime('%Y-%m-%d')}.yaml"
+    return PlainTextResponse(content, media_type="application/x-yaml", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"'
+    })
+
+
+@app.post("/api/policies/import")
+def api_policies_import(payload: PolicyImport):
+    """Validate and apply a policy YAML document (rejects unknown keys)."""
+    from utils.policies import parse_policy_yaml
+    from utils.config_manager import ConfigManager, ConfigValidationError
+
+    try:
+        config = parse_policy_yaml(payload.yaml_text)
+    except ConfigValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not ConfigManager().save_config(config):
+        raise HTTPException(status_code=500, detail="failed to write the policy file")
+    return {"success": True, "sections": sorted(config.keys())}
 
 
 @app.post("/api/whitelist")

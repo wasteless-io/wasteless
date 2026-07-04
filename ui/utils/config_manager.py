@@ -101,6 +101,7 @@ CONFIG_PATH = os.path.join(BACKEND_PATH, 'config', 'remediation.yaml')
 # Validation limits for configuration values
 CONFIG_LIMITS = {
     'dry_run_days': {'min': 0, 'max': 30, 'type': int},
+    'grace_period_days': {'min': 0, 'max': 30, 'type': int},
     'min_instance_age_days': {'min': 1, 'max': 365, 'type': int},
     'min_idle_days': {'min': 1, 'max': 90, 'type': int},
     'min_confidence_score': {'min': 0.0, 'max': 1.0, 'type': float},
@@ -309,6 +310,20 @@ class ConfigManager:
         if 'auto_remediation' not in config:
             config['auto_remediation'] = {}
         config['auto_remediation']['enabled'] = enabled
+        return self.save_config(config)
+
+    def get_grace_period_days(self) -> int:
+        """Grace period between approval and execution (0 = immediate)."""
+        config = self.load_config()
+        return config.get('approval', {}).get('grace_period_days', 0)
+
+    def set_grace_period_days(self, days: int) -> bool:
+        """Set the approval grace period in days (0 disables it)."""
+        days = validate_config_value('grace_period_days', days)
+        config = self.load_config()
+        if 'approval' not in config:
+            config['approval'] = {}
+        config['approval']['grace_period_days'] = days
         return self.save_config(config)
 
     def get_action_enabled(self, action_type: str) -> bool:
