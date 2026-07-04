@@ -103,6 +103,9 @@
             <tbody>
                 {% for item in waste_by_type %}
                 {% set bar_pct = ((item.total_eur / max_eur) * 100) if max_eur > 0 else 0 %}
+                {# Sequential green, same ramp as the dashboard charts: intensity follows magnitude #}
+                {% set green_steps = ['#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'] %}
+                {% set bar_color = green_steps[[(bar_pct / 100 * 5) | int, 4] | min] %}
                 <tr>
                     <td style="padding: 0.5rem 0.5rem;">
                         {% if item.resource_type == 'ebs_snapshot' %}<span style="font-size: 0.8rem;">&#128190;</span> Snapshots
@@ -117,7 +120,7 @@
                     <td style="padding: 0.5rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
                     <td style="padding: 0.5rem 0.5rem;">
                         <div style="width: 100%; height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden;">
-                            <div style="height: 100%; width: {{ bar_pct }}%; background: var(--primary); border-radius: 3px;"></div>
+                            <div style="height: 100%; width: {{ bar_pct }}%; background: {{ bar_color }}; border-radius: 3px;"></div>
                         </div>
                     </td>
                 </tr>
