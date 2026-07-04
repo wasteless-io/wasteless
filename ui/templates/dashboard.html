@@ -127,23 +127,32 @@
         {% endif %}
     </div>
 
-    <!-- Daily Burn Rate -->
+    <!-- Already Burned (cost of inaction) -->
     <div class="card" style="padding: 1rem; display: flex; flex-direction: column;">
         <div style="margin-bottom: 0.75rem;">
-            <h3 style="margin: 0; font-size: 1rem;">Daily Burn Rate</h3>
-            <span style="font-size: 0.75rem; color: var(--gray-500);">Estimated from monthly waste</span>
+            <h3 style="margin: 0; font-size: 1rem;">Already Burned</h3>
+            <span style="font-size: 0.75rem; color: var(--gray-500);">Estimated cost of inaction</span>
         </div>
+        {% if burned_total > 0 %}
         <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center;">
-            <div style="font-size: 2.25rem; font-weight: 700; color: {% if daily_burn > 1 %}var(--danger){% elif daily_burn > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">
-                €{{ "%.2f"|format(daily_burn) }}<span style="font-size: 1rem; font-weight: 400; color: var(--gray-500);">/day</span>
+            <div style="font-size: 2.25rem; font-weight: 700; color: var(--gray-900);">
+                €{{ "%.2f"|format(burned_total) }}
             </div>
             <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem;">
-                €{{ "%.2f"|format(daily_burn * 30) }}/mo · €{{ "%.0f"|format(daily_burn * 30 * 12) }}/yr
+                since {{ burned_since.strftime('%b %-d, %Y') }} · €{{ "%.2f"|format(daily_burn) }}/day now
             </div>
+            {% if burn_delta is not none %}
+            <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.2rem;">
+                {% if burn_delta|abs < 0.005 %}stable vs 30 days ago{% else %}{{ '+' if burn_delta > 0 else '−' }}€{{ "%.2f"|format(burn_delta|abs) }}/day vs 30 days ago{% endif %}
+            </div>
+            {% endif %}
         </div>
-        {% if waste_trend %}
-        <div style="height: 50px; position: relative; margin-top: 0.5rem;">
-            <canvas id="burnSparkline"></canvas>
+        <div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100); text-align: center;">
+            €{{ "%.0f"|format(daily_burn * 365) }}/yr at this rate
+        </div>
+        {% else %}
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 140px;">
+            <p class="text-muted" style="margin: 0;">No history yet</p>
         </div>
         {% endif %}
     </div>
@@ -370,28 +379,6 @@
 {% endif %}
 
 {% if waste_trend %}
-new Chart(document.getElementById('burnSparkline'), {
-    type: 'line',
-    data: {
-        labels: [{% for item in waste_trend %}'{{ item.date }}'{% if not loop.last %},{% endif %}{% endfor %}],
-        datasets: [{
-            data: [{% for item in waste_trend %}{{ "%.4f"|format((item.total_waste or 0) / 30) }}{% if not loop.last %},{% endif %}{% endfor %}],
-            borderColor: '#f59e0b',
-            backgroundColor: 'rgba(245,158,11,0.08)',
-            fill: true,
-            tension: 0.4,
-            pointRadius: 0,
-            borderWidth: 1.5
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales: { x: { display: false }, y: { display: false, beginAtZero: true } }
-    }
-});
-
 // Vertical crosshair following the hovered x position
 const trendCrosshair = {
     id: 'crosshair',
