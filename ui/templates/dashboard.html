@@ -136,7 +136,7 @@
         {% if burned_total > 0 %}
         <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center;">
             <div style="font-size: 2.25rem; font-weight: 700; color: var(--gray-900);">
-                €{{ "%.2f"|format(burned_total) }}
+                €{{ "%.2f"|format(burned_total) }}<span style="color: var(--danger); font-size: 1.5rem; margin-left: 0.3rem;" title="Money lost — this total only grows">&#8595;</span>
             </div>
             <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem;">
                 since {{ burned_since.strftime('%b %-d, %Y') }} · €{{ "%.2f"|format(daily_burn) }}/day now
