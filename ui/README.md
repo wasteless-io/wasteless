@@ -1,23 +1,19 @@
-# Wasteless
+# Wasteless UI
 
-Open-source cloud cost optimization. Detect idle EC2 instances. Stop them with one click.
-
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-orange.svg)](https://fastapi.tiangolo.com/)
+FastAPI web dashboard for [Wasteless](../README.md). Lives in the main
+repository under `ui/` and runs in its **own virtualenv**, separate from the
+backend pipeline.
 
 ---
 
 ## Quick Start
 
-**Requirements:** Python 3.11+, PostgreSQL, AWS credentials
+From the repository root (PostgreSQL must be running — `docker-compose up -d postgres`):
 
 ```bash
-git clone https://github.com/wastelessio/wasteless.git && cd wasteless
-docker compose up -d
-
-git clone https://github.com/wastelessio/wasteless-ui.git && cd wasteless-ui
-./install.sh && ./start.sh
+cd ui
+./install.sh    # creates ui/venv and installs dependencies
+./start.sh      # starts the UI
 ```
 
 Open http://localhost:8888
@@ -28,28 +24,32 @@ Open http://localhost:8888
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                      wasteless-ui                        │
-│              FastAPI + Jinja2  :8888                     │
+│                     ui/  (this app)                     │
+│              FastAPI + Jinja2  :8888                    │
+│        APScheduler: AWS state sync every 5 min          │
 └──────────────────────┬──────────────────────────────────┘
                        │ psycopg2
 ┌──────────────────────▼──────────────────────────────────┐
-│                     PostgreSQL                           │
-│              waste_records · recommendations             │
+│                     PostgreSQL                          │
+│    waste_detected · recommendations · actions_log       │
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
-│                      wasteless                           │
-│         Detects idle EC2 · writes recommendations        │
+│               Backend pipeline (../src/)                │
+│      Collects metrics · detects waste · remediates      │
 └──────────────────────┬──────────────────────────────────┘
                        │ boto3
                   AWS CloudWatch / EC2
 ```
 
+The UI imports the backend remediator by injecting the repository root into
+`sys.path` at runtime (see `utils/remediator.py`).
+
 ---
 
 ## Configuration
 
-Copy and edit `.env`:
+Copy and edit `ui/.env`:
 
 ```bash
 cp .env.template .env
@@ -62,10 +62,10 @@ cp .env.template .env
 | `DB_NAME` | `wasteless` | Database name |
 | `DB_USER` | `wasteless` | Database user |
 | `DB_PASSWORD` | *(required)* | Database password |
-| `STREAMLIT_SERVER_PORT` | `8888` | UI port |
 | `LOG_LEVEL` | `INFO` | DEBUG / INFO / WARNING |
 
-AWS credentials are read from `~/.aws/credentials` (via `aws configure`).
+Use the same database credentials as the root `.env`. AWS credentials are
+read from the environment or `~/.aws/credentials`.
 
 ---
 
@@ -74,9 +74,9 @@ AWS credentials are read from `~/.aws/credentials` (via `aws configure`).
 | Feature | Description |
 |---------|-------------|
 | **Dashboard** | KPIs, savings metrics, recommendations overview |
-| **Recommendations** | Confidence-scored actions, approve/reject |
+| **Recommendations** | Confidence-scored actions with AI insights, approve/reject |
 | **Dry-Run Mode** | Test actions safely before production |
-| **Auto-Sync** | Background sync every 5 min with AWS |
+| **Auto-Sync** | Background sync every 5 min with AWS (APScheduler) |
 | **Manual Sync** | On-demand sync via UI or API |
 | **Action History** | Full audit trail of remediations |
 | **Cloud Inventory** | Live EC2 inventory across regions |
@@ -84,7 +84,7 @@ AWS credentials are read from `~/.aws/credentials` (via `aws configure`).
 
 ---
 
-## API
+## Routes
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -104,21 +104,10 @@ AWS credentials are read from `~/.aws/credentials` (via `aws configure`).
 
 ---
 
-## Compatibility
-
-| OS | Status |
-|----|--------|
-| macOS | Supported |
-| Linux | Supported |
-| Windows (WSL2) | Supported |
-| Windows (native) | Not supported |
-
----
-
 ## Development
 
 ```bash
-# Hot reload
+# Hot reload (from ui/, with ui/venv activated)
 uvicorn main:app --reload --port 8888
 
 # Tests
@@ -127,28 +116,22 @@ python run_tests.py
 
 ---
 
-## Project Structure
+## Structure
 
 ```
-wasteless-ui/
+ui/
 ├── main.py              # FastAPI app + all routes
 ├── templates/           # Jinja2 HTML templates
-├── utils/               # DB, config, remediator
-├── install.sh           # Setup script
+├── static/              # CSS / JS assets
+├── utils/               # database, config_manager, remediator, pagination, sidebar
+├── tests/               # UI tests (python run_tests.py)
+├── install.sh           # Setup script (creates ui/venv)
 ├── start.sh             # Start script
-└── requirements.txt
+└── requirements.txt     # UI-specific dependencies
 ```
 
 ---
 
 ## License
 
-Apache 2.0
-
----
-
-## Links
-
-- **Backend**: [wastelessio/wasteless](https://github.com/wastelessio/wasteless)
-- **Issues**: [GitHub Issues](https://github.com/wastelessio/wasteless-ui/issues)
-- **Contact**: wasteless.io.entreprise@gmail.com
+Apache 2.0 — see the [main repository](../README.md).

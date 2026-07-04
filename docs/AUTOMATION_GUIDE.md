@@ -249,7 +249,7 @@ The tasks are scheduled with time offsets to run sequentially:
                │ [Automated Cleanup - 4 AM]
                ↓
 ┌─────────────────────────────────────────────┐
-│      Frontend (Streamlit / Metabase)        │
+│         Web UI (FastAPI — port 8888)        │
 │         Shows up-to-date insights           │
 └─────────────────────────────────────────────┘
 ```
