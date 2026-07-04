@@ -36,8 +36,14 @@
 
     .card.compact { padding: 1rem; }
     .card.slim { padding: 0.75rem; }
-    /* 3 KPIs don't need the full page width */
-    .financial-card { max-width: 880px; }
+    /* Top row: 3 financial KPIs capped at 880px, Already Burned fills the rest */
+    .top-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 880px) 1fr;
+        gap: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    .top-grid > .card { margin-bottom: 0; }
     .btn-sm { padding: 0.4rem 0.75rem; }
 
     .section-label {
@@ -90,7 +96,7 @@
     /* Chart / stat cards */
     .charts-grid {
         display: grid;
-        grid-template-columns: 2fr 1fr 1fr;
+        grid-template-columns: 2fr 1fr;
         gap: 1rem;
     }
     .chart-card { padding: 1rem; display: flex; flex-direction: column; }
@@ -207,7 +213,7 @@
     }
 
     @media (max-width: 1024px) {
-        .charts-grid { grid-template-columns: 1fr; }
+        .top-grid, .charts-grid { grid-template-columns: 1fr; }
         /* .grid-3 wraps to 2 columns here (base.html): keep the divider
            only where a left neighbour actually remains */
         .grid-3 .kpi:nth-child(odd) { border-left: none; }
@@ -236,8 +242,9 @@
 </div>
 {% endif %}
 
-<!-- KPIs Row 1 — Financial View -->
-<div class="card compact financial-card mb-1">
+<!-- Top row: Financial Overview + Already Burned -->
+<div class="top-grid">
+<div class="card compact">
     <div class="section-label">Financial Overview</div>
     <div class="grid grid-3">
 
@@ -284,6 +291,39 @@
         </div>
 
     </div>
+</div>
+
+<!-- Already Burned (cost of inaction) -->
+<div class="card chart-card">
+    <div class="chart-head">
+        <div>
+            <h3 class="chart-title">Already Burned</h3>
+            <span class="chart-subtitle">Estimated cost of inaction</span>
+        </div>
+    </div>
+    {% if burned_total > 0 %}
+    <div class="stat-center">
+        <div class="stat-value">
+            {{ eur(burned_total) }}<span class="text-danger stat-arrow" aria-hidden="true">&#8595;</span><span class="sr-only">(money lost, growing)</span>
+        </div>
+        <div class="stat-sub">
+            since {{ burned_since.strftime('%b %-d, %Y') }} · {{ eur(daily_burn) }}/day now
+        </div>
+        {% if burn_delta is not none %}
+        <div class="stat-sub">
+            {% if burn_delta|abs < 0.005 %}stable vs 30 days ago{% else %}{{ '+' if burn_delta > 0 else '−' }}{{ eur(burn_delta|abs) }}/day vs 30 days ago{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-footnote">
+        {{ eur(daily_burn * 365) }}/yr at this rate
+    </div>
+    {% else %}
+    <div class="chart-empty">
+        <p class="text-muted">No history yet</p>
+    </div>
+    {% endif %}
+</div>
 </div>
 
 <!-- Forecast Line Chart -->
@@ -338,38 +378,6 @@
         {% else %}
         <div class="chart-empty">
             <p class="text-muted">No data yet</p>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Already Burned (cost of inaction) -->
-    <div class="card chart-card">
-        <div class="chart-head">
-            <div>
-                <h3 class="chart-title">Already Burned</h3>
-                <span class="chart-subtitle">Estimated cost of inaction</span>
-            </div>
-        </div>
-        {% if burned_total > 0 %}
-        <div class="stat-center">
-            <div class="stat-value">
-                {{ eur(burned_total) }}<span class="text-danger stat-arrow" aria-hidden="true">&#8595;</span><span class="sr-only">(money lost, growing)</span>
-            </div>
-            <div class="stat-sub">
-                since {{ burned_since.strftime('%b %-d, %Y') }} · {{ eur(daily_burn) }}/day now
-            </div>
-            {% if burn_delta is not none %}
-            <div class="stat-sub">
-                {% if burn_delta|abs < 0.005 %}stable vs 30 days ago{% else %}{{ '+' if burn_delta > 0 else '−' }}{{ eur(burn_delta|abs) }}/day vs 30 days ago{% endif %}
-            </div>
-            {% endif %}
-        </div>
-        <div class="card-footnote">
-            {{ eur(daily_burn * 365) }}/yr at this rate
-        </div>
-        {% else %}
-        <div class="chart-empty">
-            <p class="text-muted">No history yet</p>
         </div>
         {% endif %}
     </div>
