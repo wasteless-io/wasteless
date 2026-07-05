@@ -46,6 +46,13 @@ logging:
   level: INFO
   audit_all_decisions: true
   log_dry_run_results: true
+terraform_pr:
+  enabled: false
+  repo: ''
+  base_branch: main
+  terraform_dir: .
+  pr_threshold_eur: 50.0
+  pr_required_resource_types: []
 aws:
   region: us-east-1
   assume_role_arn: ''
