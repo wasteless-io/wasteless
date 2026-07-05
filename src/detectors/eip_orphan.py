@@ -27,6 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dotenv import load_dotenv
 import psycopg2
 
+from core.pricing import stamp_pricing
+
 load_dotenv()
 
 logging.basicConfig(
@@ -120,13 +122,13 @@ class EIPOrphanDetector:
                     'unassociated_ip',
                     eip['monthly_cost'],
                     0.99,  # unambiguous — no association = billing waste
-                    json.dumps({
+                    json.dumps(stamp_pricing({
                         'public_ip':        eip['public_ip'],
                         'allocation_id':    eip['allocation_id'],
                         'domain':           eip['domain'],
                         'region':           eip['region'],
                         'monthly_cost_eur': eip['monthly_cost'],
-                    })
+                    }))
                 ))
                 waste_ids.append(cursor.fetchone()[0])
 

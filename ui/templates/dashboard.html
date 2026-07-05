@@ -255,7 +255,7 @@
             </div>
             <div class="kpi-value text-warning">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></div>
             <div class="kpi-label">Monthly Waste</div>
-            <div class="kpi-sub">{{ eur((kpis.active_monthly or 0) * 12) }}/year</div>
+            <div class="kpi-sub">{{ eur((kpis.active_monthly or 0) * 12) }}/year{% if (kpis.declined_count or 0) > 0 %} · incl. {{ eur(kpis.declined_monthly) }}/mo declined after review{% endif %}</div>
         </div>
 
         <!-- Savings Realized -->
@@ -291,6 +291,9 @@
         </div>
 
     </div>
+    <div class="card-footnote">
+        All figures in EUR · AWS on-demand pricing at a fixed USD→EUR rate of {{ usd_to_eur }}
+    </div>
 </div>
 
 <!-- Already Burned (cost of inaction) -->
@@ -298,7 +301,7 @@
     <div class="chart-head">
         <div>
             <h3 class="chart-title">Already Burned</h3>
-            <span class="chart-subtitle">Estimated cost of inaction</span>
+            <span class="chart-subtitle">Estimated cost of inaction · early history partly reconstructed</span>
         </div>
     </div>
     {% if burned_total > 0 %}
@@ -316,7 +319,7 @@
         {% endif %}
     </div>
     <div class="card-footnote">
-        {{ eur(daily_burn * 365) }}/yr at this rate
+        {{ eur((kpis.active_monthly or 0) * 12) }}/yr at this rate
     </div>
     {% else %}
     <div class="chart-empty">

@@ -47,6 +47,11 @@ DB_CONFIG = {
 # src/constants.py — used for LLM costs and the Waste Rate denominator
 USD_TO_EUR = float(os.getenv('USD_TO_EUR', '0.92'))
 
+# Single monthly→daily convention (365/12): detectors price a month as
+# 730 hours, so dividing by a 30-day month would overstate daily rates
+# and make yearly figures disagree (×12 vs daily×365) across the UI.
+DAYS_PER_MONTH = 365 / 12
+
 
 def get_db():
     """Get database connection."""
@@ -292,6 +297,10 @@ from utils.config_manager import ConfigManager
 _config_manager = ConfigManager()
 templates.env.globals['get_dry_run'] = _config_manager.get_dry_run
 
+# Every EUR figure derives from AWS USD pricing through this fixed rate;
+# exposed to templates so the conversion is disclosed instead of implicit.
+templates.env.globals['usd_to_eur'] = USD_TO_EUR
+
 # Live log capture for the /logs debug page (in-memory, nothing persisted)
 from utils.log_buffer import install_capture
 install_capture()
@@ -341,6 +350,15 @@ async def home(request: Request, conn=Depends(get_db)):
             SELECT COALESCE(SUM(monthly_waste_eur), 0) as total_waste
             FROM active_waste
         ),
+        -- Reviewed-and-declined slice of the active waste (see /dashboard):
+        -- kept in the total (the spend is real) but labelled apart.
+        declined AS (
+            SELECT COUNT(*) as declined_count,
+                   COALESCE(SUM(w.monthly_waste_eur), 0) as declined_monthly
+            FROM active_waste w
+            JOIN recommendations r ON r.waste_id = w.id
+            WHERE r.status = 'rejected'
+        ),
         -- Dénominateur du Waste Rate : dernier mois calendaire complet,
         -- converti en EUR (les writers stockent de l'USD Cost Explorer).
         -- Le mois courant serait un month-to-date partiel face à un waste
@@ -360,6 +378,8 @@ async def home(request: Request, conn=Depends(get_db)):
             p.pending_count,
             p.pending_eur,
             w.total_waste,
+            d.declined_count,
+            d.declined_monthly,
             r.total_spend,
             s.savings_realized,
             CASE WHEN r.total_spend > 0
@@ -368,6 +388,7 @@ async def home(request: Request, conn=Depends(get_db)):
             END as waste_rate
         FROM pending p
         CROSS JOIN waste w
+        CROSS JOIN declined d
         CROSS JOIN raw_costs r
         CROSS JOIN savings s;
     """, (USD_TO_EUR,))
@@ -428,14 +449,12 @@ async def home(request: Request, conn=Depends(get_db)):
 
     # Daily / Monthly costs (active detected waste)
     cursor.execute("""
-        SELECT
-            COALESCE(SUM(monthly_waste_eur), 0) as monthly_cost,
-            COALESCE(SUM(monthly_waste_eur), 0) / 30.0 as daily_cost
+        SELECT COALESCE(SUM(monthly_waste_eur), 0) as monthly_cost
         FROM active_waste
     """)
     cost_row = cursor.fetchone()
-    daily_cost = float(cost_row['daily_cost']) if cost_row else 0
     monthly_cost = float(cost_row['monthly_cost']) if cost_row else 0
+    daily_cost = monthly_cost / DAYS_PER_MONTH
 
     # Trend: current waste vs the snapshot taken 7 days ago — same source
     # as the AI briefing, so the KPI delta and the prose never contradict.
@@ -623,6 +642,16 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
                    COALESCE(SUM(monthly_waste_eur), 0) as active_monthly
             FROM active_waste
         ),
+        -- Waste the user reviewed and declined to remediate: still real
+        -- spend (the resource keeps costing), but not actionable — shown
+        -- separately so "Monthly Waste" never reads as a pending backlog.
+        declined AS (
+            SELECT COUNT(*) as declined_count,
+                   COALESCE(SUM(w.monthly_waste_eur), 0) as declined_monthly
+            FROM active_waste w
+            JOIN recommendations r ON r.waste_id = w.id
+            WHERE r.status = 'rejected'
+        ),
         failed AS (
             SELECT COUNT(*) as failed_7d
             FROM actions_log
@@ -647,6 +676,8 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             s.verified_savings,
             w.waste_count,
             w.active_monthly,
+            d.declined_count,
+            d.declined_monthly,
             f.failed_7d,
             c.total_saved as cumulative_savings,
             p.pending_count,
@@ -654,6 +685,7 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         FROM metrics m
         CROSS JOIN savings s
         CROSS JOIN waste w
+        CROSS JOIN declined d
         CROSS JOIN failed f
         CROSS JOIN cumulative c
         CROSS JOIN pending p
@@ -665,9 +697,9 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     cursor.execute("""
         SELECT
             MIN(detection_date) as first_detection,
-            COALESCE(SUM(monthly_waste_eur), 0) / 30.0 as daily_burn
+            COALESCE(SUM(monthly_waste_eur), 0) / %s as daily_burn
         FROM active_waste
-    """)
+    """, (DAYS_PER_MONTH,))
     inaction_row = cursor.fetchone()
 
     # Trend: active-waste totals from waste_snapshots (stable history written
@@ -711,11 +743,12 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     llm_models = [r['model'] for r in cursor.fetchall()]
 
     # Already burned: cumulative EUR actually lost, one daily-rate slice per
-    # snapshot day (total_eur is a monthly rate, hence /30). Backfilled
-    # history is a floor: resources cleaned before tracking are invisible.
+    # snapshot day (total_eur is a monthly rate, hence /DAYS_PER_MONTH).
+    # Backfilled history is a floor: resources cleaned before tracking are
+    # invisible.
     cursor.execute("""
         WITH daily AS (
-            SELECT snapshot_date, SUM(total_eur) / 30.0 AS rate
+            SELECT snapshot_date, SUM(total_eur) / %s AS rate
             FROM waste_snapshots
             GROUP BY snapshot_date
         )
@@ -725,7 +758,7 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             (SELECT rate FROM daily ORDER BY snapshot_date DESC LIMIT 1) AS current_rate,
             (SELECT rate FROM daily WHERE snapshot_date <= CURRENT_DATE - 30
              ORDER BY snapshot_date DESC LIMIT 1) AS rate_30d_ago
-    """)
+    """, (DAYS_PER_MONTH,))
     burned_row = cursor.fetchone()
 
     cursor.close()

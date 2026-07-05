@@ -24,6 +24,8 @@ from dotenv import load_dotenv
 import psycopg2
 from psycopg2 import DatabaseError, OperationalError
 
+from core.pricing import stamp_pricing
+
 load_dotenv()
 
 logging.basicConfig(
@@ -219,7 +221,7 @@ class EC2StoppedDetector:
                     'stopped_instance',
                     inst['ebs_cost'],
                     0.95,  # high confidence — state=stopped is explicit
-                    json.dumps({
+                    json.dumps(stamp_pricing({
                         'instance_type':    inst['instance_type'],
                         'instance_state':   'stopped',
                         'region':           inst['region'],
@@ -228,7 +230,7 @@ class EC2StoppedDetector:
                         'volumes':          inst['volumes'],
                         'days_stopped':     inst['datapoints'],
                         'age_days':         inst.get('age_days'),
-                    })
+                    }))
                 ))
                 waste_ids.append(cursor.fetchone()[0])
 
@@ -275,7 +277,7 @@ class EC2StoppedDetector:
                     'terminate_instance',
                     f"TERMINATE stopped instance {instance_id} ({itype}) in {region} — "
                     f"stopped for >= {days} days, still billing {vol_count} EBS volume(s) "
-                    f"at {ebs_cost:.2f} EUR/mo",
+                    f"at {ebs_cost:.2f} EUR/mo; snapshot the volumes first",
                     ebs_cost,
                     'pending'
                 ))

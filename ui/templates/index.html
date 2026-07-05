@@ -44,7 +44,7 @@
             {% else %}
             <span style="color: var(--gray-500);">stable vs last week</span> <span style="color: var(--gray-400);">·</span>
             {% endif %}
-            <span style="color: var(--gray-400);">&approx; {{ "%.0f"|format(monthly_cost * 12) }} €/yr</span>
+            <span style="color: var(--gray-400);">&approx; {{ "%.0f"|format(monthly_cost * 12) }} €/yr{% if (metrics.declined_count or 0) > 0 %} · incl. {{ "%.2f"|format(metrics.declined_monthly) }} €/mo declined after review{% endif %}</span>
         </div>
     </div>
 

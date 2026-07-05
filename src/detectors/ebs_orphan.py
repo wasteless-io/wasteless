@@ -27,6 +27,8 @@ from dotenv import load_dotenv
 import psycopg2
 from psycopg2 import DatabaseError, OperationalError
 
+from core.pricing import stamp_pricing
+
 load_dotenv()
 
 logging.basicConfig(
@@ -154,7 +156,7 @@ class EBSOrphanDetector:
                     'orphaned_volume',
                     vol['monthly_cost'],
                     0.95,  # high confidence — state=available is unambiguous
-                    json.dumps({
+                    json.dumps(stamp_pricing({
                         'name':             vol['name'],
                         'size_gb':          vol['size_gb'],
                         'vol_type':         vol['vol_type'],
@@ -163,7 +165,7 @@ class EBSOrphanDetector:
                         'encrypted':        vol['encrypted'],
                         'monthly_cost_eur': vol['monthly_cost'],
                         'age_days':         vol.get('age_days'),
-                    })
+                    }))
                 ))
                 waste_ids.append(cursor.fetchone()[0])
 
