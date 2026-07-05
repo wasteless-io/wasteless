@@ -23,6 +23,7 @@ from psycopg2.extras import execute_values
 import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from constants import USD_TO_EUR
 from core.database import get_db_connection
 
 load_dotenv()
@@ -230,8 +231,8 @@ class SavingsTracker:
         # Calculate actual savings
         actual_monthly_savings = monthly_cost_before - monthly_cost_after
         
-        # Convert USD to EUR (rough approximation, use real exchange rate in prod)
-        usd_to_eur = 0.92  # TODO: Get real exchange rate from API
+        # Same env-driven rate as the detectors and the UI (src/constants.py)
+        usd_to_eur = USD_TO_EUR
         
         cost_before_eur = monthly_cost_before * usd_to_eur
         cost_after_eur = monthly_cost_after * usd_to_eur
@@ -367,7 +368,10 @@ class SavingsTracker:
         cursor.execute("""
             SELECT
                 COUNT(*) as total_actions,
-                SUM(actual_monthly_savings_eur) as total_savings_eur
+                SUM(actual_savings_eur) as total_savings_eur,
+                AVG(savings_accuracy_percent) as avg_accuracy_percent,
+                SUM(cost_before_eur) as total_cost_before,
+                SUM(cost_after_eur) as total_cost_after
             FROM savings_realized;
         """)
         
