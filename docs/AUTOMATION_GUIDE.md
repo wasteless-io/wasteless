@@ -429,7 +429,7 @@ find logs/ -name "*.log" -type f -mtime +30 -delete
 
 - [Cleanup Guide](CLEANUP_GUIDE.md) - Details on orphaned recommendations cleanup
 - [Main README](../README.md) - Installation and setup
-- [Configuration](../config/remediation.yaml) - Safeguard settings
+- [Configuration](../config/remediation.yaml.template) - Safeguard settings
 
 ---
 

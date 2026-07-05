@@ -289,7 +289,7 @@ aws configure list
 ## 📚 Related Documentation
 
 - [Main README](../README.md) - Installation and setup
-- [Remediation Configuration](../config/remediation.yaml) - Safeguard settings
+- [Remediation Configuration](../config/remediation.yaml.template) - Safeguard settings
 - [Database Schema](../README.md#-database-schema) - Table structure
 
 ---
