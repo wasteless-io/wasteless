@@ -29,6 +29,7 @@ import psycopg2
 
 from collectors.steampipe import run_query_file
 from core.llm import enrich_recommendations
+from core.pricing import stamp_pricing
 from core.snapshots import snapshot_active_waste
 
 load_dotenv()
@@ -81,6 +82,7 @@ class SteampipeWasteDetector:
 
         try:
             for item in items:
+                metadata = stamp_pricing(item['metadata'])
                 # waste_type is refreshed too: a resource can move between
                 # detections over time (e.g. an orphaned volume gets attached
                 # and is later flagged for gp2 migration)
@@ -107,7 +109,7 @@ class SteampipeWasteDetector:
                     self.waste_type,
                     item['monthly_cost'],
                     item['confidence'],
-                    json.dumps(item['metadata'])
+                    json.dumps(metadata)
                 ))
                 waste_ids.append(cursor.fetchone()[0])
 

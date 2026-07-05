@@ -27,6 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dotenv import load_dotenv
 import psycopg2
 
+from core.pricing import stamp_pricing
+
 load_dotenv()
 
 logging.basicConfig(
@@ -179,7 +181,7 @@ class SnapshotOrphanDetector:
                     'old_snapshot',
                     snap['monthly_cost'],
                     confidence,
-                    json.dumps({
+                    json.dumps(stamp_pricing({
                         'description':      snap['description'],
                         'volume_id':        snap['volume_id'],
                         'size_gb':          snap['size_gb'],
@@ -189,7 +191,7 @@ class SnapshotOrphanDetector:
                         'encrypted':        snap['encrypted'],
                         'region':           snap['region'],
                         'monthly_cost_eur': snap['monthly_cost'],
-                    })
+                    }))
                 ))
                 waste_ids.append(cursor.fetchone()[0])
 

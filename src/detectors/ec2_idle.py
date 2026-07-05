@@ -28,6 +28,8 @@ import psycopg2
 from psycopg2 import DatabaseError, OperationalError
 from psycopg2.extras import execute_values
 
+from core.pricing import stamp_pricing
+
 # Load environment variables
 load_dotenv()
 
@@ -254,6 +256,15 @@ class EC2IdleDetector:
                 confidence = round(1.0 - (float(cpu_avg) / cpu_threshold), 2)
                 confidence = max(0.0, min(1.0, confidence))
 
+                # A near-zero average backed by a couple of datapoints
+                # proves little: cap confidence until the observation
+                # window fills up. The 0.70 cap keeps single-datapoint
+                # detections below the 0.80 auto-remediation safeguard.
+                if datapoints < 3:
+                    confidence = min(confidence, 0.70)
+                elif datapoints < days:
+                    confidence = min(confidence, 0.85)
+
                 # Calculate waste proportional to idle percentage
                 waste_ratio = 1.0 - (float(cpu_avg) / 100.0)
                 monthly_waste = round(monthly_cost * waste_ratio, 2)
@@ -264,7 +275,7 @@ class EC2IdleDetector:
                     'waste_type': 'idle_compute',
                     'monthly_waste_eur': monthly_waste,
                     'confidence_score': confidence,
-                    'metadata': {
+                    'metadata': stamp_pricing({
                         'cpu_avg_7d': float(cpu_avg),
                         'cpu_max_7d': float(cpu_max),
                         'cpu_min_7d': float(cpu_min),
@@ -273,9 +284,10 @@ class EC2IdleDetector:
                         'monthly_cost_eur': monthly_cost,
                         'waste_ratio': waste_ratio,
                         'datapoints': datapoints,
+                        'observation_days': days,
                         'detection_method': 'cloudwatch_cpu_avg',
                         'threshold_used': cpu_threshold
-                    }
+                    })
                 }
 
                 waste_list.append(waste_record)
@@ -424,12 +436,18 @@ class EC2IdleDetector:
 
                 cpu_avg = metadata.get('cpu_avg_7d', 0)
 
-                # Determine recommendation type based on confidence
+                # Determine recommendation type based on confidence.
+                # Stop first, never terminate as a first move: even a
+                # zero-CPU instance may hold state on its root volume, and
+                # a stopped instance can be restarted — a terminated one
+                # cannot. Termination stays a manual follow-up once the
+                # instance has sat stopped without anyone noticing.
                 if confidence >= 0.90:
-                    recommendation_type = 'terminate_instance'
+                    recommendation_type = 'stop_instance'
                     action = (
-                        f"TERMINATE instance {resource_id} "
-                        f"(avg CPU: {cpu_avg:.1f}%)"
+                        f"STOP instance {resource_id} "
+                        f"(avg CPU: {cpu_avg:.1f}%) — terminate manually "
+                        f"once it has stayed stopped without impact"
                     )
                 elif confidence >= 0.60:
                     recommendation_type = 'stop_instance'
