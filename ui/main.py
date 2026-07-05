@@ -995,10 +995,8 @@ async def history(
             a.dry_run,
             a.action_date,
             a.error_message,
-            a.executed_by,
-            r.estimated_monthly_savings_eur
+            a.executed_by
         FROM actions_log a
-        LEFT JOIN recommendations r ON a.recommendation_id = r.id
         WHERE a.action_date >= NOW() - INTERVAL '%s days'
     """
     params = [days_back]
@@ -1019,7 +1017,6 @@ async def history(
     # Summary
     success_count = sum(1 for a in actions if a['action_status'] == 'success')
     failed_count = sum(1 for a in actions if a['action_status'] == 'failed')
-    total_savings = sum(a['estimated_monthly_savings_eur'] or 0 for a in actions)
 
     cursor.close()
 
@@ -1027,7 +1024,6 @@ async def history(
         "actions": actions,
         "success_count": success_count,
         "failed_count": failed_count,
-        "total_savings": total_savings,
         "status_filter": status_filter,
         "action_filter": action_filter,
         "days_back": days_back
