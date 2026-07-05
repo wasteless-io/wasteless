@@ -225,11 +225,12 @@ class AWSCostCollector:
             execute_values(
                 cursor,
                 """
-                INSERT INTO cloud_costs_raw 
-                (provider, account_id, service, resource_id, usage_date, 
+                INSERT INTO cloud_costs_raw
+                (provider, account_id, service, resource_id, usage_date,
                  cost, currency, region, raw_data)
                 VALUES %s
-                ON CONFLICT DO NOTHING
+                ON CONFLICT ON CONSTRAINT uq_cloud_costs
+                DO UPDATE SET cost = EXCLUDED.cost, currency = EXCLUDED.currency
                 """,
                 insert_values
             )

@@ -80,7 +80,7 @@
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Waste Rate</div>
         <div style="font-size: 1.5rem; font-weight: 700; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};">{{ "%.1f"|format(metrics.waste_rate) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
-        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">of this month's spend</div>
+        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">of last month's spend</div>
     </div>
     {% endif %}
 </div>

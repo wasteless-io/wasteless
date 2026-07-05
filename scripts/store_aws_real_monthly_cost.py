@@ -108,10 +108,15 @@ def store(rows):
         user=os.environ['DB_USER'],
         password=os.environ['DB_PASSWORD'],
     )
+    # Upsert : la ligne du mois courant est un month-to-date Cost Explorer,
+    # elle doit se rafraîchir à chaque run (DO NOTHING la laisserait figée
+    # à sa première valeur partielle).
     sql = f"""
         INSERT INTO {TABLE} (provider, account_id, service, usage_date, cost, currency, raw_data)
         VALUES (%(provider)s, %(account_id)s, %(service)s, %(usage_date)s, %(cost)s, %(currency)s, %(raw_data)s::jsonb)
-        ON CONFLICT DO NOTHING
+        ON CONFLICT ON CONSTRAINT uq_cloud_costs
+        DO UPDATE SET cost = EXCLUDED.cost, currency = EXCLUDED.currency,
+                      raw_data = EXCLUDED.raw_data, created_at = NOW()
     """
     with conn:
         with conn.cursor() as cur:
