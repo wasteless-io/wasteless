@@ -92,7 +92,7 @@ aws cloudformation describe-stacks --stack-name wasteless-onboarding \
 
 ```hcl
 module "wasteless_onboarding" {
-  source                 = "github.com/wasteless-io/wasteless.io//onboarding/terraform"
+  source                 = "github.com/wasteless-io/wasteless//onboarding/terraform"
   trusted_principal_arns = ["arn:aws:iam::123456789012:user/wasteless"]
   external_id            = "a-random-shared-secret"  # optional
 }

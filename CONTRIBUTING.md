@@ -6,7 +6,7 @@ Thank you for considering contributing to Wasteless.
 
 ## Ways to contribute
 
-- **Bug reports** — Open an [issue](https://github.com/wastelessio/wasteless/issues) with steps to reproduce, expected vs actual behavior, and your environment (OS, Python, Docker versions)
+- **Bug reports** — Open an [issue](https://github.com/wasteless-io/wasteless/issues) with steps to reproduce, expected vs actual behavior, and your environment (OS, Python, Docker versions)
 - **Feature requests** — Open an issue describing the problem, proposed solution, and use case
 - **Documentation** — Fix typos, clarify sections, add examples
 - **Code** — Fix bugs, add detectors, improve the UI
@@ -21,7 +21,7 @@ git clone https://github.com/YOUR_USERNAME/wasteless.git
 cd wasteless
 
 # Add upstream
-git remote add upstream https://github.com/wastelessio/wasteless.git
+git remote add upstream https://github.com/wasteless-io/wasteless.git
 
 # Backend
 python3 -m venv venv && source venv/bin/activate

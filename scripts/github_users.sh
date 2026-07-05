@@ -11,7 +11,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-REPO_OWNER="${GITHUB_OWNER:-wastelessio}"
+REPO_OWNER="${GITHUB_OWNER:-wasteless-io}"
 REPO_NAME="${GITHUB_REPO:-wasteless}"
 REPO="${REPO_OWNER}/${REPO_NAME}"
 
@@ -203,7 +203,7 @@ ${BOLD}PERMISSIONS${RESET}
   pull · push · triage · maintain · admin
 
 ${BOLD}VARIABLES D'ENVIRONNEMENT${RESET}
-  GITHUB_OWNER   Propriétaire du dépôt (défaut: wastelessio)
+  GITHUB_OWNER   Propriétaire du dépôt (défaut: wasteless-io)
   GITHUB_REPO    Nom du dépôt          (défaut: wasteless)
 
 ${BOLD}EXEMPLES${RESET}

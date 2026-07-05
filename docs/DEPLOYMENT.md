@@ -66,7 +66,7 @@ systemctl enable docker
 
 ```bash
 su - wasteless
-git clone https://github.com/wastelessio/wasteless.git
+git clone https://github.com/wasteless-io/wasteless.git
 cd wasteless
 
 cp .env.template .env
