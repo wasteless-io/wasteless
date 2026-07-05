@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Wasteless onboarding: creates the cross-account IAM roles wasteless uses
+  to analyze (read-only) and, optionally, remediate (write) cloud waste in
+  this account. The policy actions are kept in sync with
+  onboarding/policies/*.json by a unit test in the wasteless repository.
+
+Parameters:
+  TrustedPrincipalArn:
+    Type: String
+    Default: ''
+    Description: >
+      ARN of the IAM principal allowed to assume the roles (the identity
+      wasteless runs with, e.g. arn:aws:iam::123456789012:user/wasteless or
+      a role ARN). Leave empty to trust this account's root (self-hosted
+      in the same account).
+  ExternalId:
+    Type: String
+    Default: ''
+    Description: >
+      Optional ExternalId the caller must present in sts:AssumeRole.
+      Recommended when the trusted principal lives in another account.
+  RoleNamePrefix:
+    Type: String
+    Default: wasteless
+    Description: Prefix for the created role names (<prefix>-readonly, <prefix>-remediation).
+  CreateRemediationRole:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >
+      Set to 'false' for detection-only onboarding: wasteless will analyze
+      waste but will not be able to modify anything in this account.
+
+Conditions:
+  HasTrustedPrincipal: !Not [!Equals [!Ref TrustedPrincipalArn, '']]
+  HasExternalId: !Not [!Equals [!Ref ExternalId, '']]
+  WantRemediation: !Equals [!Ref CreateRemediationRole, 'true']
+
+Resources:
+  WastelessReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${RoleNamePrefix}-readonly'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !If
+                - HasTrustedPrincipal
+                - !Ref TrustedPrincipalArn
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+            Condition: !If
+              - HasExternalId
+              - StringEquals:
+                  sts:ExternalId: !Ref ExternalId
+              - !Ref AWS::NoValue
+      Policies:
+        - PolicyName: wasteless-readonly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WastelessReadOnly
+                Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                  - cloudwatch:GetMetricStatistics
+                  - ec2:DescribeAddresses
+                  - ec2:DescribeImages
+                  - ec2:DescribeInstances
+                  - ec2:DescribeNatGateways
+                  - ec2:DescribeSnapshots
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeVpcs
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - elasticloadbalancing:DescribeTargetGroups
+                  - elasticloadbalancing:DescribeTargetHealth
+                  - s3:GetBucketLocation
+                  - s3:ListAllMyBuckets
+                Resource: '*'
+      Tags:
+        - Key: Application
+          Value: wasteless
+
+  WastelessRemediationRole:
+    Type: AWS::IAM::Role
+    Condition: WantRemediation
+    Properties:
+      RoleName: !Sub '${RoleNamePrefix}-remediation'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !If
+                - HasTrustedPrincipal
+                - !Ref TrustedPrincipalArn
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+            Condition: !If
+              - HasExternalId
+              - StringEquals:
+                  sts:ExternalId: !Ref ExternalId
+              - !Ref AWS::NoValue
+      Policies:
+        # Remediators describe resources before acting: attach read too
+        - PolicyName: wasteless-readonly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WastelessReadOnly
+                Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                  - cloudwatch:GetMetricStatistics
+                  - ec2:DescribeAddresses
+                  - ec2:DescribeImages
+                  - ec2:DescribeInstances
+                  - ec2:DescribeNatGateways
+                  - ec2:DescribeSnapshots
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeVpcs
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - elasticloadbalancing:DescribeTargetGroups
+                  - elasticloadbalancing:DescribeTargetHealth
+                  - s3:GetBucketLocation
+                  - s3:ListAllMyBuckets
+                Resource: '*'
+        - PolicyName: wasteless-remediation
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: Ec2Remediation
+                Effect: Allow
+                Action:
+                  - ec2:CreateSnapshot
+                  - ec2:DeleteNatGateway
+                  - ec2:DeleteVolume
+                  - ec2:ModifyVolume
+                  - ec2:ReleaseAddress
+                  - ec2:StartInstances
+                  - ec2:StopInstances
+                  - ec2:TerminateInstances
+                Resource: '*'
+              - Sid: TagRollbackSnapshots
+                Effect: Allow
+                Action:
+                  - ec2:CreateTags
+                Resource: 'arn:aws:ec2:*::snapshot/*'
+                Condition:
+                  StringEquals:
+                    ec2:CreateAction: CreateSnapshot
+              - Sid: ElbRemediation
+                Effect: Allow
+                Action:
+                  - elasticloadbalancing:DeleteLoadBalancer
+                Resource: '*'
+      Tags:
+        - Key: Application
+          Value: wasteless
+
+Outputs:
+  ReadOnlyRoleArn:
+    Description: Value for AWS_ROLE_ARN in the wasteless .env
+    Value: !GetAtt WastelessReadOnlyRole.Arn
+  RemediationRoleArn:
+    Condition: WantRemediation
+    Description: Value for AWS_WRITE_ROLE_ARN in the wasteless .env
+    Value: !GetAtt WastelessRemediationRole.Arn

@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Ec2Remediation",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateSnapshot",
+        "ec2:DeleteNatGateway",
+        "ec2:DeleteVolume",
+        "ec2:ModifyVolume",
+        "ec2:ReleaseAddress",
+        "ec2:StartInstances",
+        "ec2:StopInstances",
+        "ec2:TerminateInstances"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "TagRollbackSnapshots",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateTags"
+      ],
+      "Resource": "arn:aws:ec2:*::snapshot/*",
+      "Condition": {
+        "StringEquals": {
+          "ec2:CreateAction": "CreateSnapshot"
+        }
+      }
+    },
+    {
+      "Sid": "ElbRemediation",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:DeleteLoadBalancer"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
