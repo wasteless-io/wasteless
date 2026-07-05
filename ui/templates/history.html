@@ -51,9 +51,11 @@
                 <tr>
                     <th style="padding: 0.5rem;">ID</th>
                     <th style="padding: 0.5rem;">Instance</th>
+                    <th style="padding: 0.5rem;">Type</th>
                     <th style="padding: 0.5rem;">Action</th>
                     <th style="padding: 0.5rem;">Status</th>
                     <th style="padding: 0.5rem;">Mode</th>
+                    <th style="padding: 0.5rem;">User</th>
                     <th style="padding: 0.5rem;">Date</th>
                     <th style="padding: 0.5rem;">Savings</th>
                 </tr>
@@ -62,13 +64,16 @@
                 {% for action in actions %}
                 <tr>
                     <td style="padding: 0.4rem 0.5rem;">{{ action.id }}</td>
-                    <td style="padding: 0.4rem 0.5rem;"><code>{{ action.resource_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem; max-width: 260px;" title="{{ action.resource_id }}">
+                        <code style="display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;">{{ action.resource_id }}</code>
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;" class="text-muted">{{ action.resource_type or '-' }}</td>
                     <td style="padding: 0.4rem 0.5rem;">{{ action.action_type }}</td>
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if action.action_status == 'success' %}
                         <span class="badge badge-success">Success</span>
                         {% elif action.action_status == 'failed' %}
-                        <span class="badge badge-danger">Failed</span>
+                        <span class="badge badge-danger" {% if action.error_message %}title="{{ action.error_message }}"{% endif %}>Failed</span>
                         {% else %}
                         <span class="badge badge-info">{{ action.action_status }}</span>
                         {% endif %}
@@ -80,6 +85,7 @@
                         <span class="badge badge-warning">Prod</span>
                         {% endif %}
                     </td>
+                    <td style="padding: 0.4rem 0.5rem;" class="text-muted">{{ action.executed_by or '-' }}</td>
                     <td style="padding: 0.4rem 0.5rem;" class="text-muted">{{ action.action_date.strftime('%d/%m/%y %H:%M') if action.action_date else '-' }}</td>
                     <td style="padding: 0.4rem 0.5rem;">EUR {{ "%.2f"|format(action.estimated_monthly_savings_eur or 0) }}</td>
                 </tr>

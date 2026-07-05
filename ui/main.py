@@ -989,6 +989,7 @@ async def history(
         SELECT
             a.id,
             a.resource_id,
+            a.resource_type,
             a.action_type,
             a.action_status,
             a.dry_run,
