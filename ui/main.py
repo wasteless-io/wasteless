@@ -1330,7 +1330,8 @@ async def api_metrics(conn=Depends(get_db)):
     cursor.execute("""
         WITH metrics AS (
             SELECT
-                COALESCE(SUM(estimated_monthly_savings_eur), 0) as potential_savings,
+                COALESCE(SUM(estimated_monthly_savings_eur)
+                         FILTER (WHERE status = 'pending'), 0) as potential_savings,
                 COUNT(*) FILTER (WHERE status = 'pending') as pending_count
             FROM recommendations
         ),
