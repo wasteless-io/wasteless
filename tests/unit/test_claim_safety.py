@@ -78,3 +78,16 @@ def test_forbidden_words_case_insensitive():
     with pytest.raises(FinOpsInvariantError):
         validate_claim_wording(
             "GUARANTEED cloud cost reduction", savings_type='potential')
+
+
+def test_potential_savings_not_labeled_as_guaranteed():
+    metric = {
+        'type': 'potential_savings',
+        'label': '€93,600/year in guaranteed savings',
+    }
+    with pytest.raises(FinOpsInvariantError):
+        validate_claim_wording(metric['label'], savings_type='potential_savings')
+    # Formulation défendable pour le même montant
+    assert validate_claim_wording(
+        '€93,600/year in potential savings identified',
+        savings_type='potential_savings') is not None

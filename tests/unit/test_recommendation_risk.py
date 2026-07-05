@@ -60,6 +60,24 @@ def test_missing_environment_increases_risk_level():
     assert levels.index(floor_missing_env) > levels.index(floor_with_env)
 
 
+def test_unknown_environment_destructive_action_is_high_risk():
+    # Environnement inconnu + delete affiché low : indéfendable
+    recommendation = {
+        'resource_id': 'vol-bbb222', 'service': 'EBS', 'environment': 'unknown',
+        'owner': None, 'recommended_action': 'delete', 'risk': 'low',
+    }
+    with pytest.raises(FinOpsInvariantError):
+        validate_risk_level(
+            recommendation['recommended_action'], recommendation['environment'],
+            recommendation['risk'], recommendation['owner'])
+    # Plancher réel : critical, jamais en dessous de high
+    floor = minimum_risk_for(
+        recommendation['recommended_action'], recommendation['environment'],
+        recommendation['owner'])
+    levels = ('low', 'medium', 'high', 'critical')
+    assert levels.index(floor) >= levels.index('high')
+
+
 # --- Fenêtre d'observation ------------------------------------------------
 
 def test_production_idle_detection_requires_minimum_observation_window():
