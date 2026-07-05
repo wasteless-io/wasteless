@@ -418,6 +418,12 @@ async def home(request: Request, conn=Depends(get_db)):
     week_ago_eur = trend_row['week_ago_eur'] if trend_row else None
     current_waste = float(result['total_waste']) if result else 0
     savings_trend = (current_waste - float(week_ago_eur)) if week_ago_eur is not None else None
+    # Percentage variant for the KPI banner; None when week-ago base is 0
+    # (division impossible), the template then falls back to the € delta.
+    savings_trend_pct = (
+        savings_trend / float(week_ago_eur) * 100
+        if savings_trend is not None and float(week_ago_eur) > 0 else None
+    )
 
     cursor.close()
 
@@ -439,6 +445,7 @@ async def home(request: Request, conn=Depends(get_db)):
         "daily_cost": daily_cost,
         "monthly_cost": monthly_cost,
         "savings_trend": savings_trend,
+        "savings_trend_pct": savings_trend_pct,
     })
 
 

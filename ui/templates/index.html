@@ -38,9 +38,9 @@
             {% if savings_trend is none %}
             {# No snapshot from a week ago yet: no trend beats a fake one #}
             {% elif savings_trend > 0.01 %}
-            <span style="color: var(--danger); font-weight: 600;">&#9650; +{{ "%.2f"|format(savings_trend) }} € vs last week</span> <span style="color: var(--gray-400);">·</span>
+            <span style="color: var(--danger); font-weight: 600;">&#9650; {% if savings_trend_pct is not none %}+{{ "%.1f"|format(savings_trend_pct) }} %{% else %}+{{ "%.2f"|format(savings_trend) }} €{% endif %} vs last week</span> <span style="color: var(--gray-400);">·</span>
             {% elif savings_trend < -0.01 %}
-            <span style="color: var(--success); font-weight: 600;">&#9660; {{ "%.2f"|format(savings_trend) }} € vs last week</span> <span style="color: var(--gray-400);">·</span>
+            <span style="color: var(--success); font-weight: 600;">&#9660; {% if savings_trend_pct is not none %}{{ "%.1f"|format(savings_trend_pct) }} %{% else %}{{ "%.2f"|format(savings_trend) }} €{% endif %} vs last week</span> <span style="color: var(--gray-400);">·</span>
             {% else %}
             <span style="color: var(--gray-500);">stable vs last week</span> <span style="color: var(--gray-400);">·</span>
             {% endif %}
