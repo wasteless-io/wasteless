@@ -26,7 +26,7 @@ SAMPLE_DATA = {
     'pending': {'count': 2, 'monthly_eur': 3.4, 'oldest_days': 12, 'top': []},
     'actions_7d': {'succeeded': 1, 'failed': 0, 'dry_run': 5},
     'verified_savings_eur': 0.0,
-    'month_spend_eur': None,
+    'last_month_spend_eur': None,
     'waste_rate_pct': None,
     'last_scan_hours_ago': 2.0,
 }

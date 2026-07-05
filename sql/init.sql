@@ -85,6 +85,9 @@
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_rec_waste') THEN
       ALTER TABLE recommendations ADD CONSTRAINT uq_rec_waste UNIQUE (waste_id);
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_cloud_costs') THEN
+      ALTER TABLE cloud_costs_raw ADD CONSTRAINT uq_cloud_costs UNIQUE (provider, account_id, service, usage_date);
+    END IF;
   END $$;
 
   -- Index pour performance

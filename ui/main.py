@@ -43,6 +43,10 @@ DB_CONFIG = {
     'password': os.getenv('DB_PASSWORD', '')
 }
 
+# Fixed USD→EUR rate, same convention as the detectors' AWS pricing and
+# src/constants.py — used for LLM costs and the Waste Rate denominator
+USD_TO_EUR = float(os.getenv('USD_TO_EUR', '0.92'))
+
 
 def get_db():
     """Get database connection."""
@@ -316,10 +320,16 @@ async def home(request: Request, conn=Depends(get_db)):
             SELECT COALESCE(SUM(monthly_waste_eur), 0) as total_waste
             FROM active_waste
         ),
+        -- Dénominateur du Waste Rate : dernier mois calendaire complet,
+        -- converti en EUR (les writers stockent de l'USD Cost Explorer).
+        -- Le mois courant serait un month-to-date partiel face à un waste
+        -- exprimé en taux mensuel : ratio mécaniquement surévalué.
         raw_costs AS (
-            SELECT COALESCE(SUM(cost), 0) as total_spend
+            SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
+                                     ELSE cost END), 0) as total_spend
             FROM cloud_costs_raw
-            WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+            WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+              AND usage_date < DATE_TRUNC('month', CURRENT_DATE)
         ),
         savings AS (
             SELECT COALESCE(SUM(actual_savings_eur), 0) as savings_realized
@@ -339,7 +349,7 @@ async def home(request: Request, conn=Depends(get_db)):
         CROSS JOIN waste w
         CROSS JOIN raw_costs r
         CROSS JOIN savings s;
-    """)
+    """, (USD_TO_EUR,))
     result = cursor.fetchone()
 
     # Waste by type (grouped) — active waste only
@@ -448,9 +458,6 @@ async def home(request: Request, conn=Depends(get_db)):
         "savings_trend_pct": savings_trend_pct,
     })
 
-
-# Fixed USD→EUR rate for LLM costs, same convention as the detectors' AWS pricing
-USD_TO_EUR = float(os.getenv('USD_TO_EUR', '0.92'))
 
 # Provider logo detection: keyword in the model name → logo slug in
 # ui/static/providers/. First match wins across the models list.

@@ -30,6 +30,7 @@ from typing import Any, Dict, Optional
 # Allow running as a script: python3 src/reports/daily_briefing.py
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from constants import USD_TO_EUR
 from core import llm
 
 logger = logging.getLogger(__name__)
@@ -149,11 +150,17 @@ def collect_briefing_data(conn) -> Dict[str, Any]:
             SELECT COALESCE(SUM(actual_savings_eur), 0) AS eur FROM savings_realized;
         """)
 
-        # Waste rate needs Cost Explorer data, which may not be collected
+        # Waste rate needs Cost Explorer data, which may not be collected.
+        # Denominator: last complete calendar month, converted to EUR (the
+        # writers store USD) — the current month would be a partial
+        # month-to-date against a monthly waste rate.
         month_spend, = one("""
-            SELECT COALESCE(SUM(cost), 0) AS eur FROM cloud_costs_raw
-            WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE);
-        """)
+            SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
+                                     ELSE cost END), 0) AS eur
+            FROM cloud_costs_raw
+            WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+              AND usage_date < DATE_TRUNC('month', CURRENT_DATE);
+        """, (USD_TO_EUR,))
 
         last_scan_hours, = one("""
             SELECT EXTRACT(EPOCH FROM (NOW() - MAX(updated_at))) / 3600 AS hours
@@ -183,7 +190,7 @@ def collect_briefing_data(conn) -> Dict[str, Any]:
                 'dry_run': int(dry_run_7d),
             },
             'verified_savings_eur': float(savings_total),
-            'month_spend_eur': float(month_spend) if month_spend else None,
+            'last_month_spend_eur': float(month_spend) if month_spend else None,
             'waste_rate_pct': round(float(total_eur) / float(month_spend) * 100, 1)
                               if month_spend else None,
             'last_scan_hours_ago': round(float(last_scan_hours), 1)
