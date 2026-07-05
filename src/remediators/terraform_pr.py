@@ -22,10 +22,14 @@ Author: Wasteless
 """
 
 import logging
+import os
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from remediators.terraform_editor import (
     TerraformEditError,
@@ -155,10 +159,13 @@ class TerraformPRRemediator:
         return proposal
 
     def _clone(self) -> str:
-        """Shallow-clone the configured repo into a temp dir."""
+        """Shallow-clone the configured repo and init Terraform (providers
+        for validate, backend for `terraform show`)."""
         workdir = tempfile.mkdtemp(prefix='wasteless-tf-')
         self._run(['gh', 'repo', 'clone', self.config.repo, workdir,
                    '--', '--depth', '1'], cwd=None)
+        tf_dir = f"{workdir}/{self.config.terraform_dir}".rstrip('/.')
+        self._run(['terraform', 'init', '-input=false'], cwd=tf_dir)
         return workdir
 
     def _open_pr(self, workdir: str, proposal: PRProposal) -> str:

@@ -32,6 +32,35 @@
     </form>
 </div>
 
+{% if pr_open_recs %}
+<!-- Remediations proposed as Terraform PRs, awaiting review on GitHub -->
+<div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid var(--primary);">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+        <strong style="font-size: 0.9rem;">Open Terraform PRs</strong>
+        <span class="badge badge-info">{{ pr_open_recs|length }}</span>
+        <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280);">
+            Merging applies the change through your Terraform pipeline; closing rejects it.
+        </span>
+    </div>
+    <div class="table-container">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+            <tbody>
+                {% for p in pr_open_recs %}
+                <tr style="border-top: 1px solid var(--gray-200, #e5e7eb);">
+                    <td style="padding: 0.4rem 0.6rem; font-family: monospace;">{{ p.resource_id }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">{{ p.recommendation_type }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">EUR {{ "%.2f"|format(p.estimated_monthly_savings_eur or 0) }}/mo</td>
+                    <td style="padding: 0.4rem 0.6rem; text-align: right;">
+                        <a href="{{ p.pr_url }}" target="_blank" rel="noopener" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">Review PR &rarr;</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 {% if scheduled_recs %}
 <!-- Approvals waiting out their grace period -->
 <div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid #d29922;">

@@ -419,6 +419,40 @@ class ConfigManager:
         config['protection'][key] = value
         return self.save_config(config)
 
+    def get_terraform_pr(self) -> Dict[str, Any]:
+        """Get the Terraform PR (GitOps) remediation section"""
+        config = self.load_config()
+        return config.get('terraform_pr', {}) or {}
+
+    def set_terraform_pr_field(self, key: str, value: Any) -> bool:
+        """
+        Update one terraform_pr field (enabled, repo, base_branch,
+        terraform_dir, pr_threshold_eur).
+
+        Raises:
+            ConfigValidationError: If key or value is invalid
+        """
+        validators = {
+            'enabled': lambda v: bool(v),
+            'repo': lambda v: str(v).strip(),
+            'base_branch': lambda v: str(v).strip() or 'main',
+            'terraform_dir': lambda v: str(v).strip() or '.',
+            'pr_threshold_eur': lambda v: float(v),
+        }
+        if key not in validators:
+            raise ConfigValidationError(f"Unknown terraform_pr field: {key}")
+        value = validators[key](value)
+        if key == 'pr_threshold_eur' and value < 0:
+            raise ConfigValidationError("pr_threshold_eur must be >= 0")
+        if key == 'repo' and value and '/' not in value:
+            raise ConfigValidationError("repo must be 'owner/name'")
+
+        config = self.load_config()
+        if 'terraform_pr' not in config or not config['terraform_pr']:
+            config['terraform_pr'] = {}
+        config['terraform_pr'][key] = value
+        return self.save_config(config)
+
     def get_whitelist(self) -> Dict[str, Any]:
         """Get whitelist configuration"""
         config = self.load_config()

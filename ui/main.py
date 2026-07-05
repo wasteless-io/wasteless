@@ -117,6 +117,25 @@ def sync_aws_job():
         _aws_status["checked_at"] = _dt.now()
 
 
+def terraform_pr_sync_job():
+    """Reconcile open Terraform remediation PRs with GitHub.
+
+    A merged PR means the change went through the user's Terraform
+    pipeline (recommendation -> approved); a closed PR is a human
+    rejection (-> rejected). Still-open PRs are left alone.
+    """
+    try:
+        conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
+        from utils.terraform_pr import sync_open_prs
+        updated = sync_open_prs(conn)
+        conn.commit()
+        conn.close()
+        if updated > 0:
+            print(f"🔀 Terraform PR sync: {updated} recommendation(s) updated")
+    except Exception as e:
+        print(f"⚠️ Terraform PR sync error: {e}")
+
+
 def grace_executor_job():
     """Execute scheduled approvals whose grace period has elapsed.
 
@@ -237,6 +256,8 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(sync_aws_job, 'interval', minutes=5, id='aws_sync')
     # Grace-period executor: applies scheduled approvals once due
     scheduler.add_job(grace_executor_job, 'interval', minutes=5, id='grace_executor')
+    # Terraform PR reconciliation: merged -> approved, closed -> rejected
+    scheduler.add_job(terraform_pr_sync_job, 'interval', minutes=5, id='terraform_pr_sync')
     scheduler.start()
     print("🔄 Auto-sync scheduler started (every 5 min)")
 
@@ -888,9 +909,23 @@ async def recommendations(
     """)
     scheduled_recs = cursor.fetchall()
 
+    # Remediations awaiting human review as a Terraform PR
+    cursor.execute("""
+        SELECT r.id, r.recommendation_type, r.pr_url,
+               r.estimated_monthly_savings_eur,
+               w.resource_id, w.resource_type
+        FROM recommendations r
+        JOIN waste_detected w ON r.waste_id = w.id
+        WHERE r.status = 'pr_open'
+        ORDER BY r.estimated_monthly_savings_eur DESC
+        LIMIT 100
+    """)
+    pr_open_recs = cursor.fetchall()
+
     cursor.close()
 
     return templates.TemplateResponse(request, "recommendations.html", context={
+        "pr_open_recs": pr_open_recs,
         "recommendations": recommendations,
         "ec2_recs": ec2_recs,
         "ebs_recs": ebs_recs,
@@ -1504,7 +1539,9 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
             elif action_request.action in ("approve", "execute"):
                 # Get resource info
                 cursor.execute("""
-                    SELECT w.resource_id, w.resource_type, r.recommendation_type, w.metadata
+                    SELECT w.resource_id, w.resource_type, r.recommendation_type,
+                           w.metadata, w.confidence_score,
+                           r.estimated_monthly_savings_eur, r.action_required
                     FROM recommendations r
                     JOIN waste_detected w ON r.waste_id = w.id
                     WHERE r.id = %s
@@ -1522,6 +1559,16 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
 
                     # Execute real AWS action if NOT in dry-run mode (read from config, ignore client value)
                     dry_run = _config_manager.get_dry_run()
+
+                    # GitOps routing: recommendations above the terraform_pr
+                    # threshold (or of a PR-required type) become a Terraform
+                    # PR instead of an AWS action. Not-Terraform-managed
+                    # resources return None and take the normal path below.
+                    from utils.terraform_pr import maybe_open_pr
+                    pr_result = maybe_open_pr(conn, rec_id, row, dry_run)
+                    if pr_result is not None:
+                        results.append(pr_result)
+                        continue
 
                     # Execution mode comes from the central registry
                     # (ui/utils/action_registry.py) — the guard test forces
@@ -1674,6 +1721,9 @@ async def api_update_config(update: ConfigUpdate):
             success = config_manager.set_grace_period_days(update.value)
         elif update.key == "dry_run":
             success = config_manager.set_dry_run(update.value)
+        elif update.key.startswith("terraform_pr:"):
+            field = update.key[len("terraform_pr:"):]
+            success = config_manager.set_terraform_pr_field(field, update.value)
         elif update.key.startswith("action:"):
             action_type = update.key[len("action:"):]
             from utils.action_registry import EXECUTION_MODES
