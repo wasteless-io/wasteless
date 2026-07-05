@@ -1,0 +1,40 @@
+[
+  {
+    "resource_id": "rds-prod-01",
+    "resource_type": "rds",
+    "detector_type": "rds_underutilized",
+    "environment": "production",
+    "owner": null,
+    "cpu_avg_pct": 3,
+    "observation_days": 7,
+    "monthly_cost": 1200,
+    "potential_saving": 1200,
+    "action": "delete",
+    "risk": "low"
+  },
+  {
+    "resource_id": "vol-orphan-01",
+    "resource_type": "ebs",
+    "environment": "unknown",
+    "owner": null,
+    "age_days": 90,
+    "has_snapshot": false,
+    "has_retention_policy": false,
+    "monthly_cost": 35,
+    "potential_saving": 35,
+    "action": "delete",
+    "risk": "low"
+  },
+  {
+    "resource_id": "i-prod-04",
+    "resource_type": "ec2",
+    "environment": "production",
+    "owner": "team-x",
+    "cpu_avg_pct": 4,
+    "observation_days": 1,
+    "monthly_cost": 96,
+    "potential_saving": 96,
+    "action": "stop",
+    "risk": "low"
+  }
+]

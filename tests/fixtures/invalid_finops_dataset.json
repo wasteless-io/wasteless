@@ -1,0 +1,47 @@
+{
+  "cloud_spend_monthly": 50000,
+  "currency": "EUR",
+  "forecast_end_of_month": 42000,
+  "budget_monthly": 60000,
+  "budget_used_percentage": 90,
+  "detected_waste_monthly": 12000,
+  "potential_savings_monthly": 15000,
+  "potential_savings_yearly": 120000,
+  "reduction_percentage": 40,
+  "services": [
+    { "name": "EC2", "monthly_cost": 18000 },
+    { "name": "RDS", "monthly_cost": 12000 },
+    { "name": "EKS", "monthly_cost": 9000 },
+    { "name": "S3", "monthly_cost": 4000 },
+    { "name": "CloudWatch", "monthly_cost": 3000 }
+  ],
+  "recommendations": [
+    {
+      "resource_id": "i-123",
+      "service": "EC2",
+      "environment": "dev",
+      "monthly_cost": 500,
+      "potential_saving": 500,
+      "action": "stop",
+      "risk": "low"
+    },
+    {
+      "resource_id": "i-123",
+      "service": "EC2",
+      "environment": "dev",
+      "monthly_cost": 500,
+      "potential_saving": 500,
+      "action": "delete",
+      "risk": "low"
+    },
+    {
+      "resource_id": "rds-prod-01",
+      "service": "RDS",
+      "environment": "production",
+      "monthly_cost": 2000,
+      "potential_saving": 2000,
+      "action": "delete",
+      "risk": "low"
+    }
+  ]
+}
