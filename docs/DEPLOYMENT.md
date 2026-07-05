@@ -78,8 +78,11 @@ Production `.env`:
 ```bash
 AWS_REGION=eu-west-1
 AWS_ACCOUNT_ID=123456789012
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
+# Roles created by the onboarding stack/module (see AWS_SETUP.md)
+AWS_ROLE_ARN=arn:aws:iam::123456789012:role/wasteless-readonly
+AWS_WRITE_ROLE_ARN=arn:aws:iam::123456789012:role/wasteless-remediation
+# Source credentials that assume the roles: ~/.aws, instance profile,
+# or legacy static keys (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY)
 
 DB_HOST=localhost
 DB_PORT=5432

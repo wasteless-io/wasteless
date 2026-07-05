@@ -107,9 +107,11 @@ Copy `.env.template` to `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AWS_REGION` | `us-east-1` | AWS region |
-| `AWS_ACCESS_KEY_ID` | *(required)* | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | *(required)* | AWS secret key |
+| `AWS_REGION` | `eu-west-1` | AWS region |
+| `AWS_ROLE_ARN` | *(recommended)* | Read-only role assumed for all detection ([AWS setup](docs/AWS_SETUP.md)) |
+| `AWS_WRITE_ROLE_ARN` | *(optional)* | Remediation role, only assumed for approved write actions |
+| `AWS_EXTERNAL_ID` | *(optional)* | ExternalId if the roles were created with one |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | *(legacy)* | Static keys, used only when `AWS_ROLE_ARN` is unset |
 | `DB_HOST` | `localhost` | PostgreSQL host |
 | `DB_PORT` | `5432` | PostgreSQL port |
 | `DB_NAME` | `wasteless` | Database name |
@@ -142,19 +144,13 @@ whitelist:
 
 ### AWS IAM permissions
 
-Minimum required policy:
-
-```json
-{
-  "Action": [
-    "cloudwatch:GetMetricStatistics",
-    "cloudwatch:ListMetrics",
-    "ec2:Describe*",
-    "ec2:StopInstances",
-    "ce:GetCostAndUsage"
-  ]
-}
-```
+Wasteless assumes two separate least-privilege roles in your account:
+`wasteless-readonly` (detection, Describe/Get/List only) and the optional
+`wasteless-remediation` (write actions you approved). Create them in one
+step with the [CloudFormation template](onboarding/cloudformation/wasteless-onboarding.yaml)
+or the [Terraform module](onboarding/terraform/); the exact policies live
+in [`onboarding/policies/`](onboarding/policies/) and are explained
+action-by-action in [docs/AWS_SETUP.md](docs/AWS_SETUP.md).
 
 ---
 
