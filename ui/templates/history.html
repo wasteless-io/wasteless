@@ -36,7 +36,6 @@
                 <span><strong>{{ actions|length }}</strong> actions</span>
                 <span class="text-success"><strong>{{ success_count }}</strong> success</span>
                 <span class="text-danger"><strong>{{ failed_count }}</strong> failed</span>
-                <span><strong>EUR {{ "%.2f"|format(total_savings) }}</strong>/mo saved</span>
             </div>
         </div>
     </form>
@@ -57,7 +56,6 @@
                     <th style="padding: 0.5rem;">Mode</th>
                     <th style="padding: 0.5rem;">User</th>
                     <th style="padding: 0.5rem;">Date</th>
-                    <th style="padding: 0.5rem;">Savings</th>
                 </tr>
             </thead>
             <tbody>
@@ -87,7 +85,6 @@
                     </td>
                     <td style="padding: 0.4rem 0.5rem;" class="text-muted">{{ action.executed_by or '-' }}</td>
                     <td style="padding: 0.4rem 0.5rem;" class="text-muted">{{ action.action_date.strftime('%d/%m/%y %H:%M') if action.action_date else '-' }}</td>
-                    <td style="padding: 0.4rem 0.5rem;">EUR {{ "%.2f"|format(action.estimated_monthly_savings_eur or 0) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
