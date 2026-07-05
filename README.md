@@ -2,7 +2,7 @@
 
 Open-source cloud cost optimization. Detect idle and orphaned AWS resources. Remediate with one click.
 
-[![Tests](https://github.com/wastelessio/wasteless/actions/workflows/tests.yml/badge.svg)](https://github.com/wastelessio/wasteless/actions/workflows/tests.yml)
+[![Tests](https://github.com/wasteless-io/wasteless/actions/workflows/tests.yml/badge.svg)](https://github.com/wasteless-io/wasteless/actions/workflows/tests.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-orange.svg)](https://fastapi.tiangolo.com/)
@@ -27,7 +27,7 @@ brew bundle           # Installs Python, Docker Desktop, uv, AWS CLI (see Brewfi
 On Windows, use WSL2 — the native path is not supported (see [Windows setup](#windows-wsl2) below).
 
 ```bash
-git clone https://github.com/wastelessio/wasteless.git
+git clone https://github.com/wasteless-io/wasteless.git
 cd wasteless
 ./install.sh          # Installs everything (backend + UI + DB)
 
@@ -256,7 +256,7 @@ Wasteless runs on Windows through WSL2. One-time setup:
 
    ```bash
    cd ~
-   git clone https://github.com/wastelessio/wasteless.git
+   git clone https://github.com/wasteless-io/wasteless.git
    cd wasteless
    ./install.sh
    ```
@@ -320,5 +320,5 @@ Apache 2.0
 
 ## Links
 
-- **Issues**: [GitHub Issues](https://github.com/wastelessio/wasteless/issues)
+- **Issues**: [GitHub Issues](https://github.com/wasteless-io/wasteless/issues)
 - **Contact**: wasteless.io.entreprise@gmail.com

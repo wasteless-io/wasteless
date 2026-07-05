@@ -36,7 +36,7 @@ Each has its own `requirements.txt`. The UI imports the backend remediator by in
 ## Setup
 
 ```bash
-git clone https://github.com/wastelessio/wasteless.git
+git clone https://github.com/wasteless-io/wasteless.git
 cd wasteless
 
 # Backend

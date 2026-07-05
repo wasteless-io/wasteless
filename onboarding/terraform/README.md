@@ -16,7 +16,7 @@ same JSON files documented action-by-action in
 
 ```hcl
 module "wasteless_onboarding" {
-  source = "github.com/wasteless-io/wasteless.io//onboarding/terraform"
+  source = "github.com/wasteless-io/wasteless//onboarding/terraform"
 
   # The identity wasteless runs with (IAM user or role ARN)
   trusted_principal_arns = ["arn:aws:iam::123456789012:user/wasteless"]

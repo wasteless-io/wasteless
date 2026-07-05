@@ -418,7 +418,7 @@ def validate_backend_at_startup() -> tuple[bool, str]:
             f"To fix this, clone the wasteless backend:\n"
             f"```\n"
             f"cd {os.path.dirname(BACKEND_PATH)}\n"
-            f"git clone https://github.com/wastelessio/wasteless.git\n"
+            f"git clone https://github.com/wasteless-io/wasteless.git\n"
             f"```"
         )
 
