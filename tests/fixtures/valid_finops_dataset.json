@@ -1,0 +1,38 @@
+{
+  "cloud_spend_monthly": 50000,
+  "currency": "EUR",
+  "forecast_end_of_month": 51000,
+  "budget_monthly": 60000,
+  "budget_used_percentage": 83.3,
+  "detected_waste_monthly": 7500,
+  "potential_savings_monthly": 7500,
+  "potential_savings_yearly": 90000,
+  "reduction_percentage": 15,
+  "services": [
+    { "name": "EC2", "monthly_cost": 30000 },
+    { "name": "RDS", "monthly_cost": 15000 },
+    { "name": "Other", "monthly_cost": 5000 }
+  ],
+  "recommendations": [
+    {
+      "resource_id": "i-456",
+      "service": "EC2",
+      "environment": "dev",
+      "owner": "team-platform",
+      "monthly_cost": 240,
+      "potential_saving": 220,
+      "action": "stop",
+      "risk": "low"
+    },
+    {
+      "resource_id": "eip-789",
+      "service": "EIP",
+      "environment": "dev",
+      "owner": "team-platform",
+      "monthly_cost": 3.36,
+      "potential_saving": 3.36,
+      "action": "release",
+      "risk": "medium"
+    }
+  ]
+}

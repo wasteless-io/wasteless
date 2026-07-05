@@ -1,0 +1,22 @@
+[
+  {
+    "resource_type": "elastic_ip",
+    "monthly_cost": 40.0,
+    "expected_cost": 3.36,
+    "note": "Exercice 12 : coût suspect, un ordre de grandeur au-dessus du tarif AWS réel"
+  },
+  {
+    "resource_type": "ebs",
+    "volume_type": "gp3",
+    "size_gb": 100,
+    "monthly_cost": 22.08,
+    "expected_cost": 7.36,
+    "note": "Coût gonflé x3 sans rapport avec la taille/type déclarés"
+  },
+  {
+    "resource_type": "nat_gateway",
+    "monthly_cost": 32.24,
+    "data_processed_gb": 500,
+    "note": "Coût affiché sans la composante data processing : sous-estimation"
+  }
+]
