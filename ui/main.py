@@ -1059,6 +1059,7 @@ def reports(
         "end": end_date.isoformat(),
         "month": month or "",
         "llm_enabled": llm_narrative_available(),
+        "generated_at": datetime.now(),
     })
 
 
