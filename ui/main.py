@@ -112,10 +112,10 @@ def sync_aws_job():
         conn.close()
 
         if obsolete_count > 0:
-            print(f"🔄 Auto-sync: marked {obsolete_count} recommendations as obsolete")
+            print(f"Auto-sync: marked {obsolete_count} recommendations as obsolete")
 
     except Exception as e:
-        print(f"⚠️ Auto-sync error: {e}")
+        print(f"Auto-sync error: {e}")
     finally:
         from datetime import datetime as _dt
         _aws_status["reachable"] = check_aws_reachable()
@@ -136,9 +136,9 @@ def terraform_pr_sync_job():
         conn.commit()
         conn.close()
         if updated > 0:
-            print(f"🔀 Terraform PR sync: {updated} recommendation(s) updated")
+            print(f"Terraform PR sync: {updated} recommendation(s) updated")
     except Exception as e:
-        print(f"⚠️ Terraform PR sync error: {e}")
+        print(f"Terraform PR sync error: {e}")
 
 
 def grace_executor_job():
@@ -211,13 +211,13 @@ def grace_executor_job():
                 WHERE id = %s
             """, ('approved' if success else 'pending', rec_id))
             conn.commit()
-            print(f"⏲️ Grace executor: rec #{rec_id} ({rec_type}) → "
+            print(f"Grace executor: rec #{rec_id} ({rec_type}) → "
                   f"{'OK' if success else f'FAILED: {error}'}")
 
         conn.close()
 
     except Exception as e:
-        print(f"⚠️ Grace executor error: {e}")
+        print(f"Grace executor error: {e}")
 
 
 # Scheduler instance
@@ -247,15 +247,15 @@ async def lifespan(app: FastAPI):
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         conn.close()
-        print("✅ Database connection OK")
+        print("Database connection OK")
     except Exception as e:
-        print(f"⚠️ Database connection failed: {e}")
+        print(f"Database connection failed: {e}")
 
     # Initial AWS connectivity check (avoids "Not checked" on first page load)
     from datetime import datetime as _dt
     _aws_status["reachable"] = check_aws_reachable()
     _aws_status["checked_at"] = _dt.now()
-    print(f"{'✅' if _aws_status['reachable'] else '⚠️'} AWS connectivity: {'OK' if _aws_status['reachable'] else 'not reachable'}")
+    print(f"AWS connectivity: {'OK' if _aws_status['reachable'] else 'not reachable'}")
 
     # Start scheduler for auto-sync (every 5 minutes)
     scheduler.add_job(sync_aws_job, 'interval', minutes=5, id='aws_sync')
@@ -264,13 +264,13 @@ async def lifespan(app: FastAPI):
     # Terraform PR reconciliation: merged -> approved, closed -> rejected
     scheduler.add_job(terraform_pr_sync_job, 'interval', minutes=5, id='terraform_pr_sync')
     scheduler.start()
-    print("🔄 Auto-sync scheduler started (every 5 min)")
+    print("Auto-sync scheduler started (every 5 min)")
 
     yield
 
     # Shutdown
     scheduler.shutdown()
-    print("👋 Shutting down...")
+    print("Shutting down...")
 
 
 # Create FastAPI app
@@ -1508,10 +1508,10 @@ def _execute_ec2_boto3(instance_id, rec_type, metadata):
                         return True, None
                     if rec_type == 'stop_instance':
                         ec2.stop_instances(InstanceIds=[instance_id])
-                        print(f"✅ Stopped instance {instance_id} in {region}")
+                        print(f"Stopped instance {instance_id} in {region}")
                     elif rec_type == 'terminate_instance':
                         ec2.terminate_instances(InstanceIds=[instance_id])
-                        print(f"✅ Terminated instance {instance_id} in {region}")
+                        print(f"Terminated instance {instance_id} in {region}")
                     return True, None
 
             except Exception as e:

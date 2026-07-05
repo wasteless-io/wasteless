@@ -196,10 +196,10 @@ class RemediatorProxy:
                     # Cache at class level
                     RemediatorProxy._instances[self.dry_run] = self._remediator
 
-                    logger.info(f"✅ EC2Remediator initialized (dry_run={self.dry_run})")
+                    logger.info(f"EC2Remediator initialized (dry_run={self.dry_run})")
 
             except ImportError as e:
-                logger.error(f"❌ Cannot import EC2Remediator: {e}")
+                logger.error(f"Cannot import EC2Remediator: {e}")
                 logger.error(f"   Backend path: {BACKEND_PATH}")
                 logger.error(f"   Make sure wasteless backend is cloned next to wasteless-ui")
                 raise RuntimeError(
@@ -207,7 +207,7 @@ class RemediatorProxy:
                     f"Ensure wasteless backend is installed at: {BACKEND_PATH}"
                 ) from e
             except Exception as e:
-                logger.error(f"❌ Failed to initialize EC2Remediator: {e}")
+                logger.error(f"Failed to initialize EC2Remediator: {e}")
                 raise RuntimeError(f"Failed to initialize remediator: {e}") from e
 
         return self._remediator
@@ -413,7 +413,7 @@ def validate_backend_at_startup() -> tuple[bool, str]:
     """
     if not _backend_exists:
         return False, (
-            f"❌ Backend not found at: {BACKEND_PATH}\n\n"
+            f"Backend not found at: {BACKEND_PATH}\n\n"
             f"Error: {_backend_error}\n\n"
             f"To fix this, clone the wasteless backend:\n"
             f"```\n"
@@ -424,9 +424,9 @@ def validate_backend_at_startup() -> tuple[bool, str]:
 
     if not check_backend_available():
         return False, (
-            f"❌ Backend found but cannot import EC2Remediator\n\n"
+            f"Backend found but cannot import EC2Remediator\n\n"
             f"Backend path: {BACKEND_PATH}\n\n"
             f"Check that all dependencies are installed in the backend."
         )
 
-    return True, "✅ Backend available and ready"
+    return True, "Backend available and ready"
