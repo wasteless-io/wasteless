@@ -123,6 +123,36 @@ class DetectorConfig:
 
 
 @dataclass
+class TerraformPRConfig:
+    """Configuration for Terraform PR remediation (GitOps mode)."""
+    enabled: bool = False
+    repo: str = ''  # GitHub repo "owner/name" holding the Terraform code
+    base_branch: str = 'main'
+    terraform_dir: str = '.'  # Path of the Terraform root module within the repo
+    pr_threshold_eur: float = 50.0  # Monthly savings above which a PR is required
+    pr_required_resource_types: list = field(default_factory=list)
+
+    def requires_pr(self, resource_type: str, monthly_savings_eur: float) -> bool:
+        """Route a remediation to the PR flow when the stakes justify human review."""
+        if not self.enabled:
+            return False
+        if resource_type in self.pr_required_resource_types:
+            return True
+        return monthly_savings_eur >= self.pr_threshold_eur
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'TerraformPRConfig':
+        return cls(
+            enabled=data.get('enabled', False),
+            repo=data.get('repo', ''),
+            base_branch=data.get('base_branch', 'main'),
+            terraform_dir=data.get('terraform_dir', '.'),
+            pr_threshold_eur=float(data.get('pr_threshold_eur', 50.0)),
+            pr_required_resource_types=data.get('pr_required_resource_types', []) or [],
+        )
+
+
+@dataclass
 class RemediationConfig:
     """Configuration for auto-remediation."""
     enabled: bool = False
@@ -137,6 +167,7 @@ class RemediationConfig:
     allowed_hours: list = field(default_factory=list)
     # Per-action opt-out (auto_remediation.actions); missing key = enabled
     action_toggles: dict = field(default_factory=dict)
+    terraform_pr: TerraformPRConfig = field(default_factory=TerraformPRConfig)
 
     def is_action_enabled(self, action_type: str) -> bool:
         return self.action_toggles.get(action_type, True)
@@ -173,6 +204,7 @@ class RemediationConfig:
             allowed_days=schedule.get('allowed_days', []),
             allowed_hours=schedule.get('allowed_hours', []),
             action_toggles=auto_rem.get('actions', {}) or {},
+            terraform_pr=TerraformPRConfig.from_dict(config.get('terraform_pr', {}) or {}),
         )
 
 
