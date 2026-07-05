@@ -206,11 +206,11 @@ _aws_status = {"reachable": None, "checked_at": None}
 def check_aws_reachable() -> bool:
     """Quick AWS connectivity check via STS."""
     try:
-        import boto3
         from botocore.config import Config
+        from utils.aws_clients import get_client
         # Short timeouts: this runs during startup and must never block the app
         cfg = Config(connect_timeout=3, read_timeout=3, retries={'max_attempts': 1})
-        boto3.client('sts', config=cfg).get_caller_identity()
+        get_client('sts', config=cfg).get_caller_identity()
         return True
     except Exception:
         return False
@@ -1140,16 +1140,17 @@ async def cloud_resources(
 ):
     """Cloud resources inventory page - EC2, Volumes, Elastic IPs, VPCs."""
     try:
-        import boto3
+        import boto3  # noqa: F401 - fail fast if the AWS SDK is missing
     except ImportError:
         raise HTTPException(status_code=500, detail="boto3 not installed")
+    from utils.aws_clients import get_client
 
     def _tag_name(tags):
         return next((t['Value'] for t in (tags or []) if t['Key'] == 'Name'), '-')
 
     def _fetch_ec2(region):
         try:
-            ec2 = boto3.client('ec2', region_name=region)
+            ec2 = get_client('ec2', region=region)
             result = []
             for r in ec2.describe_instances().get('Reservations', []):
                 for inst in r.get('Instances', []):
@@ -1171,7 +1172,7 @@ async def cloud_resources(
 
     def _fetch_volumes(region):
         try:
-            ec2 = boto3.client('ec2', region_name=region)
+            ec2 = get_client('ec2', region=region)
             result = []
             for vol in ec2.describe_volumes().get('Volumes', []):
                 attachments = vol.get('Attachments', [])
@@ -1193,7 +1194,7 @@ async def cloud_resources(
 
     def _fetch_ips(region):
         try:
-            ec2 = boto3.client('ec2', region_name=region)
+            ec2 = get_client('ec2', region=region)
             result = []
             for addr in ec2.describe_addresses().get('Addresses', []):
                 result.append({
@@ -1212,7 +1213,7 @@ async def cloud_resources(
 
     def _fetch_vpcs(region):
         try:
-            ec2 = boto3.client('ec2', region_name=region)
+            ec2 = get_client('ec2', region=region)
             result = []
             for vpc in ec2.describe_vpcs().get('Vpcs', []):
                 result.append({
@@ -1230,7 +1231,7 @@ async def cloud_resources(
 
     def _fetch_snapshots(region):
         try:
-            ec2 = boto3.client('ec2', region_name=region)
+            ec2 = get_client('ec2', region=region)
             result = []
             for snap in ec2.describe_snapshots(OwnerIds=['self']).get('Snapshots', []):
                 start = snap.get('StartTime')
@@ -1251,7 +1252,7 @@ async def cloud_resources(
 
     def _fetch_s3():
         try:
-            s3 = boto3.client('s3')
+            s3 = get_client('s3')
             result = []
             for bucket in s3.list_buckets().get('Buckets', []):
                 created = bucket.get('CreationDate')
@@ -1416,7 +1417,7 @@ def _execute_ec2_boto3(instance_id, rec_type, metadata):
     grace-period executor job.
     """
     try:
-        import boto3
+        from utils.aws_clients import get_client
         regions = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
         # Use stored region if available
         stored_region = (metadata or {}).get('region')
@@ -1426,7 +1427,8 @@ def _execute_ec2_boto3(instance_id, rec_type, metadata):
 
         for region in regions:
             try:
-                ec2 = boto3.client('ec2', region_name=region)
+                # Stop/terminate: remediation context, use the write role
+                ec2 = get_client('ec2', region=region, write=True)
 
                 # EC2 instance actions only
                 if rec_type in ('stop_instance', 'terminate_instance'):
@@ -1799,7 +1801,8 @@ async def api_sync_aws(conn=Depends(get_db)):
 
         for region in regions_to_check:
             try:
-                ec2 = boto3.client('ec2', region_name=region)
+                from utils.aws_clients import get_client
+                ec2 = get_client('ec2', region=region)
                 # Use filters instead of InstanceIds to avoid errors for non-existent instances
                 response = ec2.describe_instances(
                     Filters=[{'Name': 'instance-id', 'Values': pending_instances}]

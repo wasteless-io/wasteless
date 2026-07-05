@@ -54,8 +54,8 @@ def _ebs_cost(size_gb: int, vol_type: str) -> float:
 def _fetch_ebs_cost_for_instance(instance_id: str, region: str) -> Dict[str, Any]:
     """Return total EBS cost and volume details for a stopped instance."""
     try:
-        import boto3
-        ec2 = boto3.client('ec2', region_name=region)
+        from core.aws_clients import get_client
+        ec2 = get_client('ec2', region=region)
 
         # Get block device mappings
         resp = ec2.describe_instances(

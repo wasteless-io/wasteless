@@ -359,9 +359,20 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
         read -p "AWS Account ID (12 chiffres): " AWS_ACCOUNT_ID
     done
 
-    # Credentials AWS (optionnel)
+    # Roles AssumeRole (recommande — voir docs/AWS_SETUP.md)
     echo ""
-    print_info "Credentials AWS (laissez vide pour utiliser IAM roles)"
+    print_info "Roles wasteless (recommande, crees via onboarding/cloudformation ou onboarding/terraform)"
+    read -p "ARN du role read-only (optionnel): " AWS_ROLE_ARN
+    AWS_WRITE_ROLE_ARN=""
+    AWS_EXTERNAL_ID=""
+    if [ -n "$AWS_ROLE_ARN" ]; then
+        read -p "ARN du role remediation (optionnel): " AWS_WRITE_ROLE_ARN
+        read -p "ExternalId (optionnel): " AWS_EXTERNAL_ID
+    fi
+
+    # Credentials AWS statiques (legacy)
+    echo ""
+    print_info "Credentials AWS statiques (laissez vide pour utiliser ~/.aws ou un IAM role)"
     read -p "AWS Access Key ID (optionnel): " AWS_ACCESS_KEY_ID
     if [ -n "$AWS_ACCESS_KEY_ID" ]; then
         read -sp "AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
@@ -414,6 +425,12 @@ DB_PASSWORD=$DB_PASSWORD
 AWS_REGION=$AWS_REGION
 AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID
 EOF
+
+    if [ -n "$AWS_ROLE_ARN" ]; then
+        echo "AWS_ROLE_ARN=$AWS_ROLE_ARN" >> .env
+        [ -n "$AWS_WRITE_ROLE_ARN" ] && echo "AWS_WRITE_ROLE_ARN=$AWS_WRITE_ROLE_ARN" >> .env
+        [ -n "$AWS_EXTERNAL_ID" ] && echo "AWS_EXTERNAL_ID=$AWS_EXTERNAL_ID" >> .env
+    fi
 
     if [ -n "$AWS_ACCESS_KEY_ID" ]; then
         cat >> .env << EOF
@@ -636,7 +653,13 @@ WASTELESS_BACKEND_PATH=$CURRENT_PATH
 STREAMLIT_SERVER_PORT=8888
 STREAMLIT_SERVER_ADDRESS=localhost
 LOG_LEVEL=INFO
+AWS_REGION=${AWS_REGION:-eu-west-1}
 UIENV
+    if [ -n "${AWS_ROLE_ARN:-}" ]; then
+        echo "AWS_ROLE_ARN=$AWS_ROLE_ARN" >> ui/.env
+        [ -n "${AWS_WRITE_ROLE_ARN:-}" ] && echo "AWS_WRITE_ROLE_ARN=$AWS_WRITE_ROLE_ARN" >> ui/.env
+        [ -n "${AWS_EXTERNAL_ID:-}" ] && echo "AWS_EXTERNAL_ID=$AWS_EXTERNAL_ID" >> ui/.env
+    fi
     chmod 600 ui/.env
     print_step "Configuration UI creee (ui/.env)"
 fi

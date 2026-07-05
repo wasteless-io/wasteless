@@ -41,8 +41,8 @@ REGIONS = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
 
 def _fetch_unassociated_eips(region: str) -> List[Dict[str, Any]]:
     try:
-        import boto3
-        ec2 = boto3.client('ec2', region_name=region)
+        from core.aws_clients import get_client
+        ec2 = get_client('ec2', region=region)
         result = []
         for addr in ec2.describe_addresses().get('Addresses', []):
             # Skip if associated with an instance or network interface

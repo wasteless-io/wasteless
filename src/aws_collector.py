@@ -26,6 +26,9 @@ from dotenv import load_dotenv
 import os
 import sys
 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from core.aws_clients import get_client
+
 
 class AWSCostCollector:
     """
@@ -53,7 +56,8 @@ class AWSCostCollector:
         load_dotenv()
         
         # Vérifier que toutes les variables AWS requises sont présentes
-        required_vars = ['AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']
+        # (les credentials viennent de la factory : AssumeRole ou chaîne par défaut)
+        required_vars = ['AWS_REGION']
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         
         if missing_vars:
@@ -63,12 +67,7 @@ class AWSCostCollector:
         
         # Initialiser le client Cost Explorer AWS
         try:
-            self.ce_client = boto3.client(
-                'ce',  # Cost Explorer service
-                region_name=os.getenv('AWS_REGION'),
-                aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-                aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-            )
+            self.ce_client = get_client('ce', region=os.getenv('AWS_REGION'))
             print("✅ Connexion AWS Cost Explorer établie")
         except Exception as e:
             print(f"❌ Erreur de connexion AWS: {e}")

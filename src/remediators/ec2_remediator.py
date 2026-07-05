@@ -35,6 +35,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.safeguards import Safeguards, SafeguardException
 from core.database import get_db_connection
+from core.aws_clients import get_client
 
 load_dotenv()
 
@@ -62,14 +63,8 @@ class EC2Remediator:
         self.region = os.getenv('AWS_REGION')
         self.account_id = os.getenv('AWS_ACCOUNT_ID')
 
-        # Initialize AWS client
-        # Use boto3 default credential provider chain (IAM role / env vars)
-        self.ec2_client = boto3.client(
-            'ec2',
-            region_name=self.region
-        )
-
-        logger.debug("Using boto3 default credential provider (IAM role / env vars)")
+        # Remediation acts on AWS: use the write role when configured
+        self.ec2_client = get_client('ec2', region=self.region, write=True)
         
         # Initialize safeguards
         self.safeguards = Safeguards()

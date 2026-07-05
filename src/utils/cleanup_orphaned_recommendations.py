@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.database import get_db_connection
+from core.aws_clients import get_client
 
 load_dotenv()
 
@@ -55,7 +56,7 @@ class RecommendationCleaner:
         self.region = os.getenv('AWS_REGION', 'eu-west-1')
 
         # Initialize AWS client
-        self.ec2_client = boto3.client('ec2', region_name=self.region)
+        self.ec2_client = get_client('ec2', region=self.region)
 
         # Database connection
         self.conn = get_db_connection()

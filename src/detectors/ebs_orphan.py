@@ -57,8 +57,8 @@ def _volume_monthly_cost(size_gb: int, vol_type: str) -> float:
 
 def _fetch_orphaned_volumes(region: str) -> List[Dict[str, Any]]:
     try:
-        import boto3
-        ec2 = boto3.client('ec2', region_name=region)
+        from core.aws_clients import get_client
+        ec2 = get_client('ec2', region=region)
         response = ec2.describe_volumes(
             Filters=[{'Name': 'status', 'Values': ['available']}]
         )

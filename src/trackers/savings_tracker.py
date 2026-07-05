@@ -25,6 +25,7 @@ import json
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from constants import USD_TO_EUR
 from core.database import get_db_connection
+from core.aws_clients import get_client
 
 load_dotenv()
 
@@ -47,12 +48,8 @@ class SavingsTracker:
         self.account_id = os.getenv('AWS_ACCOUNT_ID')
         
         # Initialize AWS Cost Explorer client
-        self.ce_client = boto3.client(
-            'ce',  # Cost Explorer
-            region_name='us-east-1',  # Cost Explorer is only in us-east-1
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-        )
+        # Cost Explorer is only served from us-east-1 — do not "fix" to AWS_REGION
+        self.ce_client = get_client('ce', region='us-east-1')
         
         # Database connection
         self.conn = get_db_connection()

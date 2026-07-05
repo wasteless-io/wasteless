@@ -13,6 +13,10 @@ Author: Wasteless
 import boto3
 import os
 import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core.aws_clients import get_client
+
 from datetime import datetime, timedelta, date
 from dotenv import load_dotenv
 import psycopg2
@@ -63,16 +67,10 @@ class AWSCloudWatchCollector:
 
             # EC2 client (for listing instances)
             # No explicit credentials - uses boto3 credential provider chain
-            self.ec2_client = boto3.client(
-                'ec2',
-                region_name=self.region
-            )
+            self.ec2_client = get_client('ec2', region=self.region)
 
             # CloudWatch client (for metrics)
-            self.cw_client = boto3.client(
-                'cloudwatch',
-                region_name=self.region
-            )
+            self.cw_client = get_client('cloudwatch', region=self.region)
 
             logger.info(f"✅ AWS clients initialized for region {self.region}")
             logger.info("   Using boto3 default credential provider (IAM role / env vars)")
