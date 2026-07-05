@@ -101,8 +101,10 @@ def find_vanished_resources(
         resource_type -> list of resource IDs that vanished
     """
     if client_factory is None:
-        import boto3
-        client_factory = boto3.client
+        from utils.aws_clients import get_client
+
+        def client_factory(service, region_name=None):
+            return get_client(service, region=region_name)
 
     checkers = {
         'ec2_instance': _existing_instances,

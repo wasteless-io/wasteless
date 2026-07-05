@@ -12,11 +12,14 @@ Env vars:
 """
 import os
 import sys
-import boto3
 import datetime
 import psycopg2
 from dateutil import relativedelta
 from dotenv import load_dotenv
+
+sys.path.insert(0, os.path.abspath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'src')))
+from core.aws_clients import get_client
 
 load_dotenv()
 
@@ -26,7 +29,9 @@ TABLE = 'cloud_costs_raw'
 def get_accounts():
     """Return {account_id: account_name} for all accessible accounts."""
     try:
-        org = boto3.client('organizations')
+        # organizations:ListAccounts only works from the management account
+        # and is NOT part of the wasteless onboarding policies (opt-in).
+        org = get_client('organizations')
         paginator = org.get_paginator('list_accounts')
         accounts = {}
         for page in paginator.paginate():
@@ -38,7 +43,7 @@ def get_accounts():
     except Exception:
         pass
     # fallback: current account only
-    sts = boto3.client('sts')
+    sts = get_client('sts')
     identity = sts.get_caller_identity()
     account_id = identity['Account']
     return {account_id: os.environ.get('AWS_ACCOUNT_NAME', account_id)}
@@ -46,7 +51,7 @@ def get_accounts():
 
 def fetch_monthly_costs(account_id, start_date, end_date):
     """Return list of (month, cost_usd) for a single account."""
-    ce = boto3.client('ce')
+    ce = get_client('ce')
     results = []
     kwargs = {
         'TimePeriod': {'Start': start_date, 'End': end_date},

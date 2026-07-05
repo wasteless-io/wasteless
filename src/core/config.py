@@ -32,6 +32,13 @@ class AWSConfig:
     account_id: str
     access_key_id: Optional[str] = None
     secret_access_key: Optional[str] = None
+    # Cross-account AssumeRole (preferred over static keys).
+    # role_arn: read-only role used for all collection/detection.
+    # write_role_arn: remediation role, only assumed for write actions.
+    role_arn: Optional[str] = None
+    write_role_arn: Optional[str] = None
+    external_id: Optional[str] = None
+    role_session_name: str = 'wasteless'
 
     @classmethod
     def from_env(cls) -> 'AWSConfig':
@@ -47,6 +54,10 @@ class AWSConfig:
             account_id=account_id,
             access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
             secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+            role_arn=os.getenv('AWS_ROLE_ARN'),
+            write_role_arn=os.getenv('AWS_WRITE_ROLE_ARN'),
+            external_id=os.getenv('AWS_EXTERNAL_ID'),
+            role_session_name=os.getenv('AWS_ROLE_SESSION_NAME', 'wasteless'),
         )
 
 
@@ -284,6 +295,8 @@ def validate_environment() -> Dict[str, bool]:
 
     optional_vars = [
         'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY',
+        'AWS_ROLE_ARN', 'AWS_WRITE_ROLE_ARN', 'AWS_EXTERNAL_ID',
+        'AWS_ROLE_SESSION_NAME',
         'METABASE_URL', 'LOG_LEVEL', 'DRY_RUN'
     ]
 

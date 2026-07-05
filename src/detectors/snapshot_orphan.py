@@ -57,8 +57,8 @@ def _fetch_ami_snapshot_ids(ec2_client) -> set:
 
 def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
     try:
-        import boto3
-        ec2 = boto3.client('ec2', region_name=region)
+        from core.aws_clients import get_client
+        ec2 = get_client('ec2', region=region)
         now = datetime.now(timezone.utc)
 
         # Exclude snapshots still backing a registered AMI

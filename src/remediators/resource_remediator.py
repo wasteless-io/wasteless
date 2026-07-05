@@ -30,6 +30,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.safeguards import Safeguards, SafeguardException
 from core.database import get_db_connection
+from core.aws_clients import get_client
 
 load_dotenv()
 
@@ -248,7 +249,7 @@ class Gp2MigrationRemediator(ResourceRemediator):
     can_rollback = True   # modify back to gp2
 
     def get_resource_state(self, resource_id, region):
-        ec2 = boto3.client('ec2', region_name=region)
+        ec2 = get_client('ec2', region=region, write=True)
         try:
             volume = ec2.describe_volumes(VolumeIds=[resource_id])['Volumes'][0]
         except ec2.exceptions.ClientError:
@@ -270,7 +271,7 @@ class Gp2MigrationRemediator(ResourceRemediator):
             )
 
     def execute_action(self, resource_id, region, state):
-        ec2 = boto3.client('ec2', region_name=region)
+        ec2 = get_client('ec2', region=region, write=True)
         ec2.modify_volume(VolumeId=resource_id, VolumeType='gp3')
 
 
@@ -289,7 +290,7 @@ class VolumeDeleteRemediator(ResourceRemediator):
     can_rollback = True   # recreate the volume from the pre-delete snapshot
 
     def get_resource_state(self, resource_id, region):
-        ec2 = boto3.client('ec2', region_name=region)
+        ec2 = get_client('ec2', region=region, write=True)
         try:
             volume = ec2.describe_volumes(VolumeIds=[resource_id])['Volumes'][0]
         except ec2.exceptions.ClientError:
@@ -315,7 +316,7 @@ class VolumeDeleteRemediator(ResourceRemediator):
             )
 
     def execute_action(self, resource_id, region, state):
-        ec2 = boto3.client('ec2', region_name=region)
+        ec2 = get_client('ec2', region=region, write=True)
         snapshot = ec2.create_snapshot(
             VolumeId=resource_id,
             Description=(f"wasteless rollback before delete_volume "
@@ -364,7 +365,7 @@ class NATGatewayRemediator(ResourceRemediator):
     can_rollback = False
 
     def get_resource_state(self, resource_id, region):
-        ec2 = boto3.client('ec2', region_name=region)
+        ec2 = get_client('ec2', region=region, write=True)
         try:
             nat = ec2.describe_nat_gateways(
                 NatGatewayIds=[resource_id])['NatGateways'][0]
@@ -386,7 +387,7 @@ class NATGatewayRemediator(ResourceRemediator):
         pass
 
     def execute_action(self, resource_id, region, state):
-        ec2 = boto3.client('ec2', region_name=region)
+        ec2 = get_client('ec2', region=region, write=True)
         ec2.delete_nat_gateway(NatGatewayId=resource_id)
 
 
@@ -406,7 +407,7 @@ class LoadBalancerRemediator(ResourceRemediator):
 
     def get_resource_state(self, resource_id, region):
         if self._is_classic(resource_id):
-            elb = boto3.client('elb', region_name=region)
+            elb = get_client('elb', region=region, write=True)
             try:
                 lb = elb.describe_load_balancers(
                     LoadBalancerNames=[resource_id]
@@ -420,7 +421,7 @@ class LoadBalancerRemediator(ResourceRemediator):
                 'tags':      {},
             }
 
-        elbv2 = boto3.client('elbv2', region_name=region)
+        elbv2 = get_client('elbv2', region=region, write=True)
         try:
             lb = elbv2.describe_load_balancers(
                 LoadBalancerArns=[resource_id]
@@ -459,10 +460,10 @@ class LoadBalancerRemediator(ResourceRemediator):
 
     def execute_action(self, resource_id, region, state):
         if self._is_classic(resource_id):
-            boto3.client('elb', region_name=region).delete_load_balancer(
+            get_client('elb', region=region, write=True).delete_load_balancer(
                 LoadBalancerName=resource_id)
         else:
-            boto3.client('elbv2', region_name=region).delete_load_balancer(
+            get_client('elbv2', region=region, write=True).delete_load_balancer(
                 LoadBalancerArn=resource_id)
 
 

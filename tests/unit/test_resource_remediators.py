@@ -99,8 +99,8 @@ class TestVolumeDelete:
         ec2.create_snapshot.side_effect = lambda **kw: (
             calls.append('snapshot'), {'SnapshotId': 'snap-rollback1'})[1]
         ec2.delete_volume.side_effect = lambda **kw: calls.append('delete')
-        with patch('remediators.resource_remediator.boto3') as mock_boto3:
-            mock_boto3.client.return_value = ec2
+        with patch('remediators.resource_remediator.get_client',
+                   return_value=ec2):
             r.execute_action('vol-1', 'eu-west-3', self._available())
         assert calls == ['snapshot', 'delete']
         # the rollback row gets the EBS snapshot id merged in
@@ -113,8 +113,8 @@ class TestVolumeDelete:
         r = _bare(VolumeDeleteRemediator)
         ec2 = MagicMock()
         ec2.create_snapshot.return_value = {'SnapshotId': 'snap-1'}
-        with patch('remediators.resource_remediator.boto3') as mock_boto3:
-            mock_boto3.client.return_value = ec2
+        with patch('remediators.resource_remediator.get_client',
+                   return_value=ec2):
             r.execute_action('vol-1', 'eu-west-3', self._available())
         tags = ec2.create_snapshot.call_args.kwargs['TagSpecifications'][0]['Tags']
         assert {'Key': 'wasteless:rollback', 'Value': 'true'} in tags
@@ -207,25 +207,25 @@ class TestRemediateFlow:
 
 class TestExecuteActions:
 
-    @patch('remediators.resource_remediator.boto3')
-    def test_gp2_migration_calls_modify_volume(self, mock_boto3):
+    @patch('remediators.resource_remediator.get_client')
+    def test_gp2_migration_calls_modify_volume(self, mock_get_client):
         ec2 = MagicMock()
-        mock_boto3.client.return_value = ec2
+        mock_get_client.return_value = ec2
         _bare(Gp2MigrationRemediator).execute_action('vol-1', 'eu-west-3', {})
         ec2.modify_volume.assert_called_once_with(
             VolumeId='vol-1', VolumeType='gp3')
 
-    @patch('remediators.resource_remediator.boto3')
-    def test_nat_deletion_calls_delete(self, mock_boto3):
+    @patch('remediators.resource_remediator.get_client')
+    def test_nat_deletion_calls_delete(self, mock_get_client):
         ec2 = MagicMock()
-        mock_boto3.client.return_value = ec2
+        mock_get_client.return_value = ec2
         _bare(NATGatewayRemediator).execute_action('nat-1', 'eu-west-3', {})
         ec2.delete_nat_gateway.assert_called_once_with(NatGatewayId='nat-1')
 
-    @patch('remediators.resource_remediator.boto3')
-    def test_lb_deletion_routes_by_id_shape(self, mock_boto3):
+    @patch('remediators.resource_remediator.get_client')
+    def test_lb_deletion_routes_by_id_shape(self, mock_get_client):
         client = MagicMock()
-        mock_boto3.client.return_value = client
+        mock_get_client.return_value = client
         r = _bare(LoadBalancerRemediator)
 
         r.execute_action('arn:aws:elasticloadbalancing:...', 'eu-west-3', {})
