@@ -6,6 +6,7 @@ Thread-safe file operations with file locking to prevent race conditions.
 """
 
 import os
+import shutil
 import yaml
 from typing import Dict, Any, Optional
 import logging
@@ -229,6 +230,13 @@ class ConfigManager:
             logger.info(f"✅ Configuration loaded from {self.config_path}")
             return self._config_cache
         except FileNotFoundError:
+            template_path = f"{self.config_path}.template"
+            if os.path.exists(template_path):
+                shutil.copyfile(template_path, self.config_path)
+                logger.warning(
+                    f"⚠️ Config file not found, seeded from {template_path}"
+                )
+                return self.load_config()
             logger.error(f"❌ Config file not found: {self.config_path}")
             raise
         except yaml.YAMLError as e:

@@ -319,6 +319,12 @@ print_step "Dependances Python installees"
 # =============================================================================
 print_header "3/7 - Configuration de l'application"
 
+# Politique de remediation locale (non versionnee, comme .env)
+if [ ! -f "config/remediation.yaml" ]; then
+    cp config/remediation.yaml.template config/remediation.yaml
+    print_step "config/remediation.yaml cree depuis le template (remediation desactivee)"
+fi
+
 if [ -f ".env" ]; then
     print_warning "Fichier .env existant detecte"
     read -p "Voulez-vous le reconfigurer? (o/N): " RECONFIG_ENV

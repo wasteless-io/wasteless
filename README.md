@@ -2,10 +2,15 @@
 
 Open-source cloud cost optimization. Detect idle and orphaned AWS resources. Remediate with one click.
 
+[![Tests](https://github.com/wastelessio/wasteless/actions/workflows/tests.yml/badge.svg)](https://github.com/wastelessio/wasteless/actions/workflows/tests.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-orange.svg)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+
+<!-- TODO avant lancement : screenshot du dashboard avec de vraies donnees
+![Wasteless dashboard](docs/img/dashboard.png)
+-->
 
 ---
 
@@ -92,7 +97,7 @@ wasteless/
 │   └── start.sh
 ├── sql/                    # Database schema + migrations
 ├── config/
-│   └── remediation.yaml   # Safeguards and policies
+│   └── remediation.yaml.template   # Safeguards and policies (copied to remediation.yaml locally)
 ├── docker-compose.yml      # PostgreSQL (+ Metabase optionnel)
 └── requirements.txt
 ```
@@ -120,7 +125,7 @@ Copy `.env.template` to `.env`:
 
 ### Remediation policy
 
-Edit `config/remediation.yaml`:
+Edit `config/remediation.yaml` (created from [`config/remediation.yaml.template`](config/remediation.yaml.template) by `install.sh`; it is local and never committed):
 
 | Setting | Default | Description |
 |---------|---------|-------------|

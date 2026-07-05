@@ -21,6 +21,9 @@ Brewfile.lock.json
 .env
 *.env
 
+# Local remediation policy (copied from config/remediation.yaml.template)
+config/remediation.yaml
+
 # Logs
 *.log
 
