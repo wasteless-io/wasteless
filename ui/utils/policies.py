@@ -34,6 +34,7 @@ KNOWN_SECTIONS = {
     'rollback': dict,
     'logging': dict,
     'aws': dict,
+    'terraform_pr': dict,
     'dry_run': bool,
 }
 
