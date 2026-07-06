@@ -305,6 +305,8 @@ templates.env.globals['usd_to_eur'] = USD_TO_EUR
 from utils.log_buffer import install_capture
 install_capture()
 
+from utils.logger import log_remediation_action
+
 
 # =============================================================================
 # PYDANTIC MODELS
@@ -1545,11 +1547,13 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     RETURNING id
                 """, (rec_id,))
                 result = cursor.fetchone()
-                results.append({
+                reject_result = {
                     "recommendation_id": rec_id,
                     "success": result is not None,
                     "action": "rejected"
-                })
+                }
+                results.append(reject_result)
+                log_remediation_action("reject", [rec_id], reject_result, dry_run=False)
 
             elif action_request.action == "cancel":
                 # Cancel a scheduled execution during its grace period
