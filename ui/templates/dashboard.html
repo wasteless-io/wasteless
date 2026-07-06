@@ -674,11 +674,19 @@ function renderTrendChart(labels, raw, granularity) {
     wrap.style.display = 'block';
     empty.style.display = 'none';
 
-    // Linear regression on actual data
-    let sx = 0, sy = 0, sxy = 0, sxx = 0;
-    for (let i = 0; i < n; i++) { sx += i; sy += raw[i]; sxy += i * raw[i]; sxx += i * i; }
-    const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
-    const intercept = (sy - slope * sx) / n;
+    // Weighted linear regression on actual data: recent points count more,
+    // so a real structural break (e.g. a batch of waste dismissed) shows up
+    // in the forecast within a couple of points instead of being diluted
+    // across the whole window by a long flat history before it.
+    // Half-life in points, not days/months, since granularity varies.
+    const halfLife = granularity === 'day' ? 10 : 2;
+    let sw = 0, swx = 0, swy = 0, swxy = 0, swxx = 0;
+    for (let i = 0; i < n; i++) {
+        const w = Math.pow(0.5, (n - 1 - i) / halfLife);
+        sw += w; swx += w * i; swy += w * raw[i]; swxy += w * i * raw[i]; swxx += w * i * i;
+    }
+    const slope = (sw * swxy - swx * swy) / (sw * swxx - swx * swx);
+    const intercept = (swy - slope * swx) / sw;
 
     // Forecast labels: next `horizon` steps (days or months)
     const lastDate = new Date(labels[n - 1]);
