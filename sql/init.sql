@@ -98,14 +98,16 @@
   CREATE INDEX IF NOT EXISTS idx_llm_usage_called_at ON llm_usage(called_at);
 
   -- Gaspillage actif : ressource encore existante et non traitée.
-  -- Exclut obsolete (ressource disparue) et applied/approved (action faite) ;
-  -- garde pending et rejected (la ressource coûte toujours).
+  -- Exclut obsolete (ressource disparue), applied/approved (action faite)
+  -- et dismissed (l'utilisateur a explicitement choisi de ne plus compter
+  -- cet item) ; garde pending et rejected (la ressource coûte toujours,
+  -- l'utilisateur peut revenir dessus).
   -- Tous les agrégats Home/Dashboard lisent cette vue.
   CREATE OR REPLACE VIEW active_waste AS
   SELECT w.*
   FROM waste_detected w
   LEFT JOIN recommendations r ON r.waste_id = w.id
-  WHERE COALESCE(r.status, 'pending') NOT IN ('obsolete', 'applied', 'approved');
+  WHERE COALESCE(r.status, 'pending') NOT IN ('obsolete', 'applied', 'approved', 'dismissed');
 
 
   -- Base de données séparée pour Metabase
