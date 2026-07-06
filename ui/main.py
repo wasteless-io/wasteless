@@ -315,7 +315,7 @@ from utils.logger import log_remediation_action
 class ActionRequest(BaseModel):
     """Request to execute actions on recommendations."""
     recommendation_ids: List[int]
-    action: str  # 'approve', 'reject', 'execute'
+    action: str  # 'approve', 'reject', 'dismiss', 'execute'
     dry_run: bool = True
 
 
@@ -1554,6 +1554,24 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                 }
                 results.append(reject_result)
                 log_remediation_action("reject", [rec_id], reject_result, dry_run=False)
+
+            elif action_request.action == "dismiss":
+                # Permanently stop counting this item as active waste
+                # (unlike reject, it drops out of active_waste for good).
+                cursor.execute("""
+                    UPDATE recommendations
+                    SET status = 'dismissed', applied_at = NOW()
+                    WHERE id = %s
+                    RETURNING id
+                """, (rec_id,))
+                result = cursor.fetchone()
+                dismiss_result = {
+                    "recommendation_id": rec_id,
+                    "success": result is not None,
+                    "action": "dismissed"
+                }
+                results.append(dismiss_result)
+                log_remediation_action("dismiss", [rec_id], dismiss_result, dry_run=False)
 
             elif action_request.action == "cancel":
                 # Cancel a scheduled execution during its grace period

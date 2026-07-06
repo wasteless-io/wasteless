@@ -131,8 +131,11 @@
                 <button type="button" id="approveBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-success" style="padding: 0.4rem 0.75rem;">
                     &#9654; Approve Selected
                 </button>
-                <button type="button" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
+                <button type="button" id="rejectBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
                     Reject
+                </button>
+                <button type="button" id="dismissBtn" onclick="executeAction('dismiss')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" title="Stop counting this item as active waste for good">
+                    Dismiss
                 </button>
             </div>
         </div>
@@ -145,6 +148,9 @@
             <span id="manualSelectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
             <button type="button" id="markReviewedBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" disabled>
                 Mark as Reviewed
+            </button>
+            <button type="button" id="dismissManualBtn" onclick="executeAction('dismiss')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" title="Stop counting this item as active waste for good" disabled>
+                Dismiss
             </button>
         </div>
 
@@ -516,15 +522,20 @@
         const count = document.querySelectorAll('.rec-checkbox-' + currentTab + ':checked').length;
         if (currentTab === 'ec2') {
             document.getElementById('selectedCount').textContent = count + ' selected';
-            const approveBtn = document.querySelector('#actions-automated .btn-success');
-            const rejectBtn  = document.querySelector('#actions-automated .btn-outline');
-            if (approveBtn) { approveBtn.disabled = count === 0; approveBtn.style.opacity = count === 0 ? '0.4' : '1'; approveBtn.style.cursor = count === 0 ? 'not-allowed' : 'pointer'; }
-            if (rejectBtn)  { rejectBtn.disabled  = count === 0; rejectBtn.style.opacity  = count === 0 ? '0.4' : '1'; rejectBtn.style.cursor  = count === 0 ? 'not-allowed' : 'pointer'; }
+            const approveBtn = document.getElementById('approveBtn');
+            const rejectBtn  = document.getElementById('rejectBtn');
+            const dismissBtn = document.getElementById('dismissBtn');
+            [approveBtn, rejectBtn, dismissBtn].forEach(btn => {
+                if (btn) { btn.disabled = count === 0; btn.style.opacity = count === 0 ? '0.4' : '1'; btn.style.cursor = count === 0 ? 'not-allowed' : 'pointer'; }
+            });
         } else {
             const manualCount = document.getElementById('manualSelectedCount');
             if (manualCount) manualCount.textContent = count + ' selected';
             const btn = document.getElementById('markReviewedBtn');
-            if (btn) { btn.disabled = count === 0; btn.style.opacity = count === 0 ? '0.4' : '1'; btn.style.cursor = count === 0 ? 'pointer' : 'pointer'; }
+            const dismissBtn = document.getElementById('dismissManualBtn');
+            [btn, dismissBtn].forEach(b => {
+                if (b) { b.disabled = count === 0; b.style.opacity = count === 0 ? '0.4' : '1'; b.style.cursor = count === 0 ? 'pointer' : 'pointer'; }
+            });
         }
     }
 
@@ -540,7 +551,7 @@
             return;
         }
 
-        const actionText = action === 'approve' ? 'approve' : 'reject';
+        const actionText = action === 'approve' ? 'approve' : action === 'dismiss' ? 'dismiss (stop counting as active waste)' : 'reject';
         if (!confirm('Are you sure you want to ' + actionText + ' ' + ids.length + ' recommendation(s)?')) {
             return;
         }
