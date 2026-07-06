@@ -20,16 +20,20 @@ def snapshot_active_waste(conn) -> int:
 
     Aggregates the active_waste view (all types, not just the calling
     detector's), so any detector run keeps today's snapshot complete.
+    Starts from every resource_type ever seen in waste_detected (not just
+    those still in active_waste) so a type that drops to zero waste today
+    is recorded as 0 instead of silently keeping yesterday's total forever.
     Returns the number of resource types snapshotted.
     """
     cursor = conn.cursor()
     try:
         cursor.execute("""
             INSERT INTO waste_snapshots (snapshot_date, resource_type, total_eur, resource_count)
-            SELECT CURRENT_DATE, resource_type,
-                   COALESCE(SUM(monthly_waste_eur), 0), COUNT(*)
-            FROM active_waste
-            GROUP BY resource_type
+            SELECT CURRENT_DATE, rt.resource_type,
+                   COALESCE(SUM(aw.monthly_waste_eur), 0), COUNT(aw.id)
+            FROM (SELECT DISTINCT resource_type FROM waste_detected) rt
+            LEFT JOIN active_waste aw ON aw.resource_type = rt.resource_type
+            GROUP BY rt.resource_type
             ON CONFLICT (snapshot_date, resource_type) DO UPDATE SET
                 total_eur      = EXCLUDED.total_eur,
                 resource_count = EXCLUDED.resource_count
