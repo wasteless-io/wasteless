@@ -142,6 +142,24 @@ def terraform_pr_sync_job():
         print(f"Terraform PR sync error: {e}")
 
 
+def _grace_execution_status(success: bool, error: Optional[str],
+                             dry_run: bool, mode: str) -> str:
+    """The recommendation's next status after a grace-period execution attempt.
+
+    - real success (not dry-run, not manual) -> approved: genuinely done.
+    - resource gone (deleted outside wasteless during the grace period) ->
+      obsolete: retrying forever every 5 minutes would never resolve it,
+      same terminal state sync_aws_job would apply on its own.
+    - anything else (failure, dry-run, manual) -> pending: back in the
+      queue for a human to reconsider, nothing was actually touched.
+    """
+    if success and not dry_run and mode != 'manual':
+        return 'approved'
+    if not success and error and 'not found' in error:
+        return 'obsolete'
+    return 'pending'
+
+
 def grace_executor_job():
     """Execute scheduled approvals whose grace period has elapsed.
 
@@ -204,16 +222,15 @@ def grace_executor_job():
                   'success' if success else 'failed',
                   dry_run or mode == 'manual', error))
 
-            # On failure — or if dry-run/manual meant nothing was actually
-            # touched — the recommendation returns to the pending queue
-            # instead of staying invisibly stuck in 'scheduled' or looking
-            # remediated when it isn't.
-            real_action_taken = success and not dry_run and mode != 'manual'
+            # See _grace_execution_status: approved on real success,
+            # obsolete if the resource vanished during the grace period,
+            # pending otherwise (nothing actually touched, human decides).
+            new_status = _grace_execution_status(success, error, dry_run, mode)
             cursor.execute("""
                 UPDATE recommendations
                 SET status = %s, applied_at = NOW(), execute_after = NULL
                 WHERE id = %s
-            """, ('approved' if real_action_taken else 'pending', rec_id))
+            """, (new_status, rec_id))
             conn.commit()
             print(f"Grace executor: rec #{rec_id} ({rec_type}) → "
                   f"{'OK' if success else f'FAILED: {error}'}")
