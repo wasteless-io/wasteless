@@ -63,6 +63,15 @@ def get_db():
         conn.close()
 
 
+# Statuses whose resource might still vanish out from under us and needs
+# checking: pending/rejected (still active waste), scheduled (grace period
+# in flight), pr_open (Terraform PR still open). Not dismissed/obsolete/
+# applied/approved — those are already terminal. Both the background job
+# and the manual "Sync AWS" button use this same list so they can't drift
+# apart and cover different scopes under the same "sync" name.
+SYNCABLE_STATUSES = ('pending', 'rejected', 'scheduled', 'pr_open')
+
+
 def sync_aws_job():
     """Background job to sync recommendations with AWS state.
 
@@ -76,18 +85,15 @@ def sync_aws_job():
         conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
         cursor = conn.cursor()
 
-        # Open recommendations grouped by resource type. Rejected ones are
-        # included: a rejected resource still counts as active waste, so its
-        # disappearance must also be detected to stop counting it. Scheduled
-        # ones too: a resource that vanishes during its grace period must
-        # become obsolete instead of failing at execution time.
+        # Open recommendations grouped by resource type — see
+        # SYNCABLE_STATUSES for which statuses are checked and why.
         cursor.execute("""
             SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
             FROM recommendations r
             JOIN waste_detected w ON r.waste_id = w.id
-            WHERE r.status IN ('pending', 'rejected', 'scheduled')
+            WHERE r.status = ANY(%s)
             GROUP BY w.resource_type
-        """)
+        """, (list(SYNCABLE_STATUSES),))
         pending = {row['resource_type']: row['ids'] for row in cursor.fetchall()}
 
         if not pending:
@@ -105,8 +111,8 @@ def sync_aws_job():
                 WHERE r.waste_id = w.id
                 AND w.resource_type = %s
                 AND w.resource_id = ANY(%s)
-                AND r.status IN ('pending', 'rejected', 'scheduled')
-            """, (resource_type, ids))
+                AND r.status = ANY(%s)
+            """, (resource_type, ids, list(SYNCABLE_STATUSES)))
             obsolete_count += cursor.rowcount
 
         conn.commit()
@@ -1981,9 +1987,9 @@ async def api_sync_aws(conn=Depends(get_db)):
             SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
             FROM recommendations r
             JOIN waste_detected w ON r.waste_id = w.id
-            WHERE r.status IN ('pending', 'rejected')
+            WHERE r.status = ANY(%s)
             GROUP BY w.resource_type
-        """)
+        """, (list(SYNCABLE_STATUSES),))
         pending_by_type = {row['resource_type']: row['ids']
                            for row in cursor.fetchall()}
         pending_instances = pending_by_type.pop('ec2_instance', [])
@@ -2007,8 +2013,8 @@ async def api_sync_aws(conn=Depends(get_db)):
                     WHERE r.waste_id = w.id
                     AND w.resource_type = %s
                     AND w.resource_id = ANY(%s)
-                    AND r.status IN ('pending', 'rejected')
-                """, (resource_type, ids))
+                    AND r.status = ANY(%s)
+                """, (resource_type, ids, list(SYNCABLE_STATUSES)))
                 obsolete_count += cursor.rowcount
 
         # Query AWS for instance states (check multiple regions)
@@ -2049,8 +2055,8 @@ async def api_sync_aws(conn=Depends(get_db)):
                     FROM waste_detected w
                     WHERE r.waste_id = w.id
                     AND w.resource_id = %s
-                    AND r.status IN ('pending', 'rejected')
-                """, (instance_id,))
+                    AND r.status = ANY(%s)
+                """, (instance_id, list(SYNCABLE_STATUSES)))
                 obsolete_count += cursor.rowcount
             else:
                 aws_state = aws_info['state']
