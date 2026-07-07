@@ -133,8 +133,7 @@ class Safeguards:
             )
         allowed_hours = schedule.get("allowed_hours", [])
         if not isinstance(allowed_hours, list) or not all(
-            isinstance(h, int) and not isinstance(h, bool) and 0 <= h <= 23
-            for h in allowed_hours
+            isinstance(h, int) and not isinstance(h, bool) and 0 <= h <= 23 for h in allowed_hours
         ):
             raise InvalidSafeguardConfig(
                 f"schedule.allowed_hours must be a list of integers 0-23, got {allowed_hours!r}"
