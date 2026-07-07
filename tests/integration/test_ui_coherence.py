@@ -412,3 +412,104 @@ def test_recommendations_summary_totals_survive_past_500_rows(conn):
     assert float(displayed_sum) == float(total_sum) - 15
     # The fixed header must show the uncapped total, not the truncated one
     assert float(total_sum) != float(displayed_sum)
+
+
+# --- Exercice 14 : les KPI partagés de Home et Dashboard ne divergent jamais ---
+
+def _home_kpis(cur):
+    """Mirrors ui/main.py's GET / KPI CTE (pending/waste/declined slice)."""
+    cur.execute("""
+        WITH pending AS (
+            SELECT COUNT(*) as pending_count,
+                   COALESCE(SUM(estimated_monthly_savings_eur), 0) as pending_eur
+            FROM recommendations
+            WHERE status = 'pending'
+        ),
+        waste AS (
+            SELECT COALESCE(SUM(monthly_waste_eur), 0) as total_waste
+            FROM active_waste
+        ),
+        declined AS (
+            SELECT COUNT(*) as declined_count,
+                   COALESCE(SUM(w.monthly_waste_eur), 0) as declined_monthly
+            FROM active_waste w
+            JOIN recommendations r ON r.waste_id = w.id
+            WHERE r.status = 'rejected'
+        )
+        SELECT p.pending_count, p.pending_eur, w.total_waste,
+               d.declined_count, d.declined_monthly
+        FROM pending p CROSS JOIN waste w CROSS JOIN declined d;
+    """)
+    pending_count, pending_eur, total_waste, declined_count, declined_monthly = cur.fetchone()
+    return {
+        'pending_count': pending_count, 'pending_eur': float(pending_eur),
+        'total_waste': float(total_waste), 'declined_count': declined_count,
+        'declined_monthly': float(declined_monthly),
+    }
+
+
+def _dashboard_kpis(cur):
+    """Mirrors ui/main.py's GET /dashboard KPI CTE (same slice, different names)."""
+    cur.execute("""
+        WITH metrics AS (
+            SELECT COALESCE(SUM(estimated_monthly_savings_eur), 0) as potential_monthly
+            FROM recommendations WHERE status = 'pending'
+        ),
+        waste AS (
+            SELECT COUNT(*) as waste_count,
+                   COALESCE(SUM(monthly_waste_eur), 0) as active_monthly
+            FROM active_waste
+        ),
+        declined AS (
+            SELECT COUNT(*) as declined_count,
+                   COALESCE(SUM(w.monthly_waste_eur), 0) as declined_monthly
+            FROM active_waste w
+            JOIN recommendations r ON r.waste_id = w.id
+            WHERE r.status = 'rejected'
+        ),
+        pending AS (
+            SELECT COUNT(*) as pending_count
+            FROM recommendations WHERE status = 'pending'
+        )
+        SELECT m.potential_monthly, w.waste_count, w.active_monthly,
+               d.declined_count, d.declined_monthly, p.pending_count
+        FROM metrics m CROSS JOIN waste w CROSS JOIN declined d CROSS JOIN pending p;
+    """)
+    (potential_monthly, waste_count, active_monthly,
+     declined_count, declined_monthly, pending_count) = cur.fetchone()
+    return {
+        'pending_count': pending_count, 'pending_eur': float(potential_monthly),
+        'total_waste': float(active_monthly), 'declined_count': declined_count,
+        'declined_monthly': float(declined_monthly),
+    }
+
+
+def test_home_and_dashboard_kpis_never_diverge(conn):
+    """Home et Dashboard lisent la même vue active_waste et le même statut
+    'pending'/'rejected' sur recommendations, sans aucun filtre supplémentaire
+    d'un côté ou de l'autre — jamais vérifié littéralement jusqu'ici. Compare
+    les deux requêtes telles qu'elles existent réellement dans main.py plutôt
+    que des valeurs figées, pour rester valide quel que soit le contenu de la
+    base (données réelles ou autres tests).
+    """
+    cur = conn.cursor()
+
+    before = _home_kpis(cur)
+    assert before == _dashboard_kpis(cur)
+
+    _insert_waste(cur, 'ec2_instance', 'test-kpi-pending', 40.0, status='pending')
+    _insert_waste(cur, 'ebs_volume', 'test-kpi-rejected', 25.0, status='rejected')
+    _insert_waste(cur, 'elastic_ip', 'test-kpi-dismissed', 12.0, status='dismissed')
+    _insert_waste(cur, 'ebs_snapshot', 'test-kpi-none', 8.0, status=None)
+
+    after_home = _home_kpis(cur)
+    after_dashboard = _dashboard_kpis(cur)
+    assert after_home == after_dashboard
+
+    # And the fixtures did move the shared numbers, so the equality above
+    # isn't trivially true because both sides stayed untouched.
+    assert after_home['pending_count'] == before['pending_count'] + 1
+    assert after_home['declined_count'] == before['declined_count'] + 1
+    # 40 (pending) + 25 (rejected) + 8 (no recommendation row) stay active;
+    # 12 (dismissed) is excluded from active_waste.
+    assert after_home['total_waste'] == pytest.approx(before['total_waste'] + 73.0)
