@@ -1034,9 +1034,13 @@ async def history(
     cursor.execute(query, tuple(params))
     actions = cursor.fetchall()
 
-    # Summary
+    # Summary. Anything that isn't success/failed (pending, blocked, ...)
+    # is bucketed as "other" so the three counts always add up to the
+    # total shown — a status this doesn't yet know about still gets
+    # counted somewhere instead of silently vanishing from the header.
     success_count = sum(1 for a in actions if a['action_status'] == 'success')
     failed_count = sum(1 for a in actions if a['action_status'] == 'failed')
+    other_count = len(actions) - success_count - failed_count
 
     cursor.close()
 
@@ -1044,6 +1048,7 @@ async def history(
         "actions": actions,
         "success_count": success_count,
         "failed_count": failed_count,
+        "other_count": other_count,
         "status_filter": status_filter,
         "action_filter": action_filter,
         "days_back": days_back
