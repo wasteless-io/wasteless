@@ -613,6 +613,16 @@ fi
 print_verbose "installation des dependances UI (ui/requirements.txt)"
 install_deps ui/venv ui/requirements.txt
 
+# Backend (src/core, src/remediators, ...) installe en editable dans le venv
+# UI: ui/utils/remediator.py fait `from remediators.ec2_remediator import ...`
+# directement, sans sys.path.insert() pointant vers la racine du repo.
+print_verbose "installation du backend en editable dans ui/venv (pyproject.toml)"
+if [ $USE_UV -eq 1 ]; then
+    silence uv pip install --python ui/venv/bin/python3 -e .
+else
+    silence ui/venv/bin/pip install -e . $PIP_OPT
+fi
+
 # litellm aussi dans le venv UI: la page Reports genere le resume IA
 # depuis le processus UI (fail-soft, comme pour le venv racine)
 if grep -q '^WASTELESS_LLM_MODEL=' .env 2>/dev/null; then

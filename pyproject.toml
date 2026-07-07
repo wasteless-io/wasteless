@@ -1,3 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wasteless-backend"
+version = "0.0.0"
+requires-python = ">=3.11"
+
+# Editable-installed into ui/venv so ui/utils/remediator.py can do
+# `from remediators.ec2_remediator import EC2Remediator` instead of a
+# sys.path.insert() hack pointing at the repo root. Only the packages
+# that already have __init__.py are exposed: trackers/ and utils/ (the
+# latter would collide with ui/utils/) stay out of scope on purpose.
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["core*", "detectors*", "remediators*", "reports*", "collectors*"]
+
 [tool.black]
 line-length = 100
 target-version = ["py311"]

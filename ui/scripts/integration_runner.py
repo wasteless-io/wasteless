@@ -27,8 +27,7 @@ def test_backend_availability():
     print(f"Path exists: {os.path.exists(backend_path)}")
 
     try:
-        sys.path.insert(0, backend_path)
-        from src.remediators.ec2_remediator import EC2Remediator  # noqa: F401 -- availability check
+        from remediators.ec2_remediator import EC2Remediator  # noqa: F401 -- availability check
 
         print("✅ EC2Remediator can be imported")
         return True
