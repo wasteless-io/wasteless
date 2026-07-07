@@ -993,8 +993,27 @@ async def recommendations(
     """Recommendations management page."""
     cursor = conn.cursor()
 
-    # Build query with filters
-    query = """
+    # WHERE clause shared by the display query (capped at 500 rows) and the
+    # summary-stats query below (uncapped) — otherwise, past 500 matching
+    # rows, "Savings"/"conf." in the header would silently undercount
+    # against the true filtered total (and against Home's unfiltered
+    # pending_eur KPI), since they'd only reflect the top-500 subset shown.
+    where_clause = "WHERE r.status = 'pending'"
+    params = []
+
+    if type_filter != "All":
+        where_clause += " AND r.recommendation_type = %s"
+        params.append(type_filter)
+
+    if min_savings > 0:
+        where_clause += " AND r.estimated_monthly_savings_eur >= %s"
+        params.append(min_savings)
+
+    if min_confidence > 0:
+        where_clause += " AND w.confidence_score >= %s"
+        params.append(min_confidence)
+
+    cursor.execute(f"""
         SELECT
             r.id,
             r.recommendation_type,
@@ -1019,30 +1038,25 @@ async def recommendations(
             r.ai_insight
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
-        WHERE r.status = 'pending'
-    """
-    params = []
-
-    if type_filter != "All":
-        query += " AND r.recommendation_type = %s"
-        params.append(type_filter)
-
-    if min_savings > 0:
-        query += " AND r.estimated_monthly_savings_eur >= %s"
-        params.append(min_savings)
-
-    if min_confidence > 0:
-        query += " AND w.confidence_score >= %s"
-        params.append(min_confidence)
-
-    query += " ORDER BY r.estimated_monthly_savings_eur DESC LIMIT 500"
-
-    cursor.execute(query, params if params else None)
+        {where_clause}
+        ORDER BY r.estimated_monthly_savings_eur DESC LIMIT 500
+    """, params if params else None)
     recommendations = cursor.fetchall()
 
-    # Summary stats
-    total_savings = sum(r['estimated_monthly_savings_eur'] or 0 for r in recommendations)
-    avg_confidence = sum(r['confidence_score'] or 0 for r in recommendations) / len(recommendations) if recommendations else 0
+    # Summary stats: true totals across every matching row, not just the
+    # 500 shown in the table below.
+    cursor.execute(f"""
+        SELECT COUNT(*) as cnt,
+               COALESCE(SUM(r.estimated_monthly_savings_eur), 0) as total_savings,
+               COALESCE(AVG(w.confidence_score), 0) as avg_confidence
+        FROM recommendations r
+        JOIN waste_detected w ON r.waste_id = w.id
+        {where_clause}
+    """, params if params else None)
+    totals = cursor.fetchone()
+    total_count = totals['cnt']
+    total_savings = float(totals['total_savings'])
+    avg_confidence = float(totals['avg_confidence'])
 
     ec2_recs  = [r for r in recommendations if r['resource_type'] == 'ec2_instance']
     # The EBS tab renders deletion semantics ("unattached", "why delete?"),
@@ -1104,6 +1118,7 @@ async def recommendations(
         "snap_recs": snap_recs,
         "other_recs": other_recs,
         "scheduled_recs": scheduled_recs,
+        "total_count": total_count,
         "total_savings": total_savings,
         "avg_confidence": avg_confidence,
         "type_filter": type_filter,
