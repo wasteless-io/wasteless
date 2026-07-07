@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 @router.get("/recommendations", response_class=HTMLResponse)
-async def recommendations(
+def recommendations(
     request: Request,
     conn=Depends(get_db),
     type_filter: str = "All",
@@ -202,7 +202,7 @@ async def recommendations(
 
 
 @router.get("/api/recommendations")
-async def api_recommendations(
+def api_recommendations(
     conn=Depends(get_db),
     type_filter: str = "All",
     min_savings: int = 0,
@@ -311,7 +311,7 @@ def ask_about_recommendation(rec_id: int, body: AskQuestionRequest, conn=Depends
 
 
 @router.post("/api/actions")
-async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db)):
+def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db)):
     """Execute actions on recommendations."""
     cursor = conn.cursor()
     results = []
