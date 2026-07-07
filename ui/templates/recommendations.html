@@ -99,6 +99,44 @@
 </div>
 {% endif %}
 
+{% if approved_manual_recs %}
+<!-- Manual-review recommendations the human confirmed but hasn't deleted
+     yet — wasteless never touches AWS for these, so this is the only
+     place they're still visible as "still on you" instead of just
+     vanishing into History. -->
+<div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid #6366f1;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+        <strong style="font-size: 0.9rem;">Approved — awaiting manual deletion</strong>
+        <span class="badge badge-info">
+            {% if approved_manual_total_count > approved_manual_recs|length %}{{ approved_manual_recs|length }} of {{ approved_manual_total_count }}{% else %}{{ approved_manual_recs|length }}{% endif %}
+        </span>
+        <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280);">
+            You confirmed these — delete them yourself in the AWS Console. They keep counting as active waste until a sync confirms they're gone.
+        </span>
+    </div>
+    <div class="table-container">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+            <tbody>
+                {% for m in approved_manual_recs %}
+                <tr style="border-top: 1px solid var(--gray-200, #e5e7eb);">
+                    <td style="padding: 0.4rem 0.6rem; font-family: monospace;">{{ m.resource_id }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">{{ m.recommendation_type }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">EUR {{ "%.2f"|format(m.estimated_monthly_savings_eur or 0) }}/mo</td>
+                    <td style="padding: 0.4rem 0.6rem;">
+                        approved {{ m.applied_at.strftime('%Y-%m-%d %H:%M') if m.applied_at else '-' }}
+                    </td>
+                    <td style="padding: 0.4rem 0.6rem; text-align: right;">
+                        <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;"
+                                onclick="dismissApprovedManual({{ m.id }})">Dismiss</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- Tabs -->
 <div class="card" style="padding: 0.75rem;">
     <!-- Tab nav -->
@@ -150,8 +188,11 @@
                 <span><strong>Manual action required</strong> — delete these resources directly from the <a id="awsConsoleLink" href="https://console.aws.amazon.com/ec2/v2/home" target="_blank" style="color: var(--primary);">AWS Console</a>.</span>
             </div>
             <span id="manualSelectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
-            <button type="button" id="markReviewedBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" disabled>
-                Mark as Reviewed
+            <button type="button" id="approveManualBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-success" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" title="Confirm the recommendation — you still have to delete the resource yourself" disabled>
+                Approve
+            </button>
+            <button type="button" id="rejectManualBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" disabled>
+                Reject
             </button>
             <button type="button" id="dismissManualBtn" onclick="executeAction('dismiss')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" title="Stop counting this item as active waste for good" disabled>
                 Dismiss
@@ -556,10 +597,11 @@
         } else {
             const manualCount = document.getElementById('manualSelectedCount');
             if (manualCount) manualCount.textContent = count + ' selected';
-            const btn = document.getElementById('markReviewedBtn');
+            const approveBtn = document.getElementById('approveManualBtn');
+            const rejectBtn = document.getElementById('rejectManualBtn');
             const dismissBtn = document.getElementById('dismissManualBtn');
-            [btn, dismissBtn].forEach(b => {
-                if (b) { b.disabled = count === 0; b.style.opacity = count === 0 ? '0.4' : '1'; b.style.cursor = count === 0 ? 'pointer' : 'pointer'; }
+            [approveBtn, rejectBtn, dismissBtn].forEach(b => {
+                if (b) { b.disabled = count === 0; b.style.opacity = count === 0 ? '0.4' : '1'; b.style.cursor = count === 0 ? 'not-allowed' : 'pointer'; }
             });
         }
     }
@@ -640,6 +682,28 @@
                 // Reload so the "Scheduled executions" panel reflects reality
                 setTimeout(() => window.location.reload(), 1500);
             }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function dismissApprovedManual(recId) {
+        if (!confirm('Stop counting this as active waste? Use this if you changed your mind and are not going to delete it.')) {
+            return;
+        }
+        try {
+            const response = await api('/api/actions', {
+                method: 'POST',
+                body: JSON.stringify({
+                    recommendation_ids: [recId],
+                    action: 'dismiss'
+                })
+            });
+            const ok = response.results[0] && response.results[0].success;
+            showToast(ok ? 'Dismissed — no longer counted as active waste.'
+                         : 'Dismiss failed: ' + (response.results[0].error || 'unknown'),
+                      ok ? 'success' : 'error');
+            if (ok) setTimeout(() => window.location.reload(), 1000);
         } catch (error) {
             showToast('Error: ' + error.message, 'error');
         }
