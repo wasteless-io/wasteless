@@ -347,3 +347,63 @@ def test_pr_open_and_scheduled_are_candidates_for_aws_sync(conn):
     assert 'test-sync-scheduled' in _syncable_resource_ids(cur, 'ec2_instance')
     # dismissed is a deliberate terminal decision: sync must never overwrite it
     assert 'test-sync-dismissed' not in _syncable_resource_ids(cur, 'ebs_volume')
+
+
+# --- Exercice 13 : le résumé de Recommendations ne doit pas se tronquer à 500 lignes ---
+
+def test_recommendations_summary_totals_survive_past_500_rows(conn):
+    """Verrouille le fix : /recommendations calculait 'Savings'/'conf.' en
+    sommant en Python la liste affichée (ORDER BY ... LIMIT 500). Au-delà de
+    500 recommandations pending, ce total ne reflétait plus que les 500
+    lignes les plus chères — un chiffre tronqué qui divergeait du pending_eur
+    (SUM SQL sans limite) affiché sur Home pour le même statut.
+    """
+    cur = conn.cursor()
+
+    # 505 recommandations pending, valeur croissante : la requête d'affichage
+    # (ORDER BY savings DESC LIMIT 500) exclut donc les 5 moins chères.
+    cur.execute("""
+        INSERT INTO waste_detected (
+            detection_date, provider, account_id, resource_id,
+            resource_type, waste_type, monthly_waste_eur,
+            confidence_score, metadata, created_at
+        )
+        SELECT CURRENT_DATE, 'aws', 'test-coherence',
+               'test-bulk-' || g, 'ec2_instance', 'test_waste',
+               g::numeric, 0.90, '{}'::jsonb, NOW()
+        FROM generate_series(1, 505) AS g
+        RETURNING id
+    """)
+    waste_ids = [row[0] for row in cur.fetchall()]
+    cur.execute("""
+        INSERT INTO recommendations (waste_id, recommendation_type, status,
+                                      estimated_monthly_savings_eur)
+        SELECT id, 'test_action', 'pending', monthly_waste_eur
+        FROM waste_detected WHERE id = ANY(%s)
+    """, (waste_ids,))
+
+    where_clause = ("WHERE r.status = 'pending' AND w.resource_type = 'ec2_instance' "
+                    "AND w.account_id = 'test-coherence'")
+
+    # Requête d'affichage (mirrors ui/main.py's capped SELECT)
+    cur.execute(f"""
+        SELECT r.estimated_monthly_savings_eur
+        FROM recommendations r JOIN waste_detected w ON r.waste_id = w.id
+        {where_clause}
+        ORDER BY r.estimated_monthly_savings_eur DESC LIMIT 500
+    """)
+    displayed_sum = sum(row[0] for row in cur.fetchall())
+
+    # Requête de totaux (mirrors the fix: uncapped aggregate)
+    cur.execute(f"""
+        SELECT COUNT(*), COALESCE(SUM(r.estimated_monthly_savings_eur), 0)
+        FROM recommendations r JOIN waste_detected w ON r.waste_id = w.id
+        {where_clause}
+    """)
+    total_count, total_sum = cur.fetchone()
+
+    assert total_count == 505
+    # The 5 cheapest rows (values 1..5) are excluded from the top-500 display
+    assert float(displayed_sum) == float(total_sum) - 15
+    # The fixed header must show the uncapped total, not the truncated one
+    assert float(total_sum) != float(displayed_sum)

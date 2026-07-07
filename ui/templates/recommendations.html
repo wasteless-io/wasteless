@@ -24,7 +24,7 @@
             </div>
             <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
             <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
-                <span><strong>{{ recommendations|length }}</strong> recommendations</span>
+                <span><strong>{{ total_count }}</strong> recommendations</span>
                 <span class="text-success">Savings: <strong>{{ "%.2f"|format(total_savings) }}</strong> €/mo</span>
                 <span><strong>{{ "%.0f"|format(avg_confidence * 100) }}%</strong> conf.</span>
             </div>
