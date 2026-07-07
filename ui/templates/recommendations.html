@@ -37,7 +37,9 @@
 <div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid var(--primary);">
     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
         <strong style="font-size: 0.9rem;">Open Terraform PRs</strong>
-        <span class="badge badge-info">{{ pr_open_recs|length }}</span>
+        <span class="badge badge-info">
+            {% if pr_open_total_count > pr_open_recs|length %}{{ pr_open_recs|length }} of {{ pr_open_total_count }}{% else %}{{ pr_open_recs|length }}{% endif %}
+        </span>
         <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280);">
             Merging applies the change through your Terraform pipeline; closing rejects it.
         </span>
@@ -66,7 +68,9 @@
 <div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid #d29922;">
     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
         <strong style="font-size: 0.9rem;">Scheduled executions</strong>
-        <span class="badge badge-warning">{{ scheduled_recs|length }}</span>
+        <span class="badge badge-warning">
+            {% if scheduled_total_count > scheduled_recs|length %}{{ scheduled_recs|length }} of {{ scheduled_total_count }}{% else %}{{ scheduled_recs|length }}{% endif %}
+        </span>
         <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280);">
             Approved actions execute automatically after the grace period unless cancelled.
         </span>

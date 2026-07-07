@@ -33,7 +33,7 @@
             </div>
             <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
             <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem;">
-                <span><strong>{{ actions|length }}</strong> actions</span>
+                <span><strong>{% if total_count > actions|length %}{{ actions|length }} of {{ total_count }}{% else %}{{ actions|length }}{% endif %}</strong> actions</span>
                 <span class="text-success"><strong>{{ success_count }}</strong> success</span>
                 <span class="text-danger"><strong>{{ failed_count }}</strong> failed</span>
                 {% if other_count > 0 %}
