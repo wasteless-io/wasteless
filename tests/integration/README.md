@@ -9,6 +9,7 @@ that infrastructure provisioned.
 | `test_ui_coherence.py` | Real Postgres (`wasteless-postgres` container) | Cross-page KPI consistency — the same number (e.g. total detected waste) must match wherever it's shown across Home/Dashboard/Recommendations. Locks in the Home/Dashboard equality fix (see `dcc1d60` in git log). |
 | `test_llm_report_generation.py` | LLM provider configured (`WASTELESS_LLM_MODEL`) | Golden-snapshot tests for the AI narrative layer of the audit report — compares generated output against `tests/snapshots/golden_aws_audit_report.md`. |
 | `test_real_aws_account_audit.py` | Real AWS credentials, read-only | Audit layer 5: runs the read-only audit against an actual AWS account rather than fixtures, to catch anything the mocked unit tests can't (real API shapes, real pagination, real throttling). |
+| `test_db_backup_restore.py` | Docker + `wasteless-postgres` container | Reproduces `docs/DEPLOYMENT.md`'s backup/restore procedure (`docker exec pg_dump` / `psql`) end to end against a throwaway database created and dropped inside the same Postgres instance — proves the dump is actually restorable with matching row counts, not just that the commands exit 0. Never touches the real `wasteless` database. |
 
 Run explicitly (not part of a quick `pytest tests/unit/`):
 ```bash
