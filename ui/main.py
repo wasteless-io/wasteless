@@ -1732,18 +1732,23 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
     for rec_id in action_request.recommendation_ids:
         try:
             if action_request.action == "reject":
-                # Reject recommendation
+                # Reject recommendation. Restricted to 'pending' — the only
+                # state the UI ever exposes these buttons for — so a stray
+                # or future call can't silently overwrite a resolved status
+                # (approved/applied/obsolete/pr_open) with 'rejected' and
+                # make an already-remediated resource reappear as active waste.
                 cursor.execute("""
                     UPDATE recommendations
                     SET status = 'rejected', applied_at = NOW()
-                    WHERE id = %s
+                    WHERE id = %s AND status = 'pending'
                     RETURNING id
                 """, (rec_id,))
                 result = cursor.fetchone()
                 reject_result = {
                     "recommendation_id": rec_id,
                     "success": result is not None,
-                    "action": "rejected"
+                    "action": "rejected",
+                    **({} if result else {"error": "not in pending state"})
                 }
                 results.append(reject_result)
                 log_remediation_action("reject", [rec_id], reject_result, dry_run=False)
@@ -1751,17 +1756,19 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
             elif action_request.action == "dismiss":
                 # Permanently stop counting this item as active waste
                 # (unlike reject, it drops out of active_waste for good).
+                # Same 'pending'-only guard as reject, for the same reason.
                 cursor.execute("""
                     UPDATE recommendations
                     SET status = 'dismissed', applied_at = NOW()
-                    WHERE id = %s
+                    WHERE id = %s AND status = 'pending'
                     RETURNING id
                 """, (rec_id,))
                 result = cursor.fetchone()
                 dismiss_result = {
                     "recommendation_id": rec_id,
                     "success": result is not None,
-                    "action": "dismissed"
+                    "action": "dismissed",
+                    **({} if result else {"error": "not in pending state"})
                 }
                 results.append(dismiss_result)
                 log_remediation_action("dismiss", [rec_id], dismiss_result, dry_run=False)
