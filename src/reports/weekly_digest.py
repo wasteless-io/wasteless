@@ -49,8 +49,10 @@ Write 3-5 short sentences, plain language, no markdown:
 1. the headline of the period (the most significant number or change);
 2. what deserves attention first (e.g. oldest pending recommendation,
    failed actions), if anything;
-3. one concrete next step for the reader.
-Never invent numbers that are not in the data above."""
+3. one concrete next step, phrased as advice, never as an instruction.
+Use "you may want to review", "consider", "it could be worth checking" —
+never an imperative like "delete", "stop", "do X". The reader decides;
+you suggest. Never invent numbers that are not in the data above."""
 
 
 def _values(row: Any) -> Tuple:

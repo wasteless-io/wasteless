@@ -86,20 +86,33 @@ read from the environment or `~/.aws/credentials`.
 
 ## Routes
 
+See [routes/README.md](routes/README.md) for which module owns each endpoint.
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Home dashboard |
-| `/dashboard` | GET | Detailed metrics |
-| `/recommendations` | GET | Pending recommendations |
-| `/history` | GET | Action history |
-| `/settings` | GET | Configuration |
-| `/cloud-resources` | GET | EC2 inventory |
+| `/` | GET | Home overview |
 | `/landing` | GET | Public landing page |
-| `/api/metrics` | GET | JSON metrics |
+| `/dashboard` | GET | KPIs + waste trend/by-resource charts |
+| `/api/dashboard/trend` | GET | JSON waste trend series |
+| `/api/dashboard/waste-by-resource` | GET | JSON waste breakdown by resource type |
+| `/recommendations` | GET | Pending recommendations |
 | `/api/recommendations` | GET | JSON recommendations |
-| `/api/actions` | POST | Approve / reject |
+| `/api/recommendations/{id}/ask` | POST | Ask the AI about a recommendation |
+| `/history` | GET | Action history |
+| `/reports` | GET | Activity report |
+| `/api/reports/download` | GET | Download report as Markdown |
+| `/api/reports/narrative` | POST | AI summary of a report |
+| `/api/briefing/today` | GET | Daily AI briefing |
+| `/logs` | GET | Live log viewer (debug) |
+| `/api/logs` | GET | Incremental log poll |
+| `/settings` | GET | Configuration |
+| `/cloud-resources` | GET | EC2/EBS/EIP/VPC/snapshot/S3 inventory |
+| `/api/metrics` | GET | JSON metrics |
+| `/api/actions` | POST | Approve / reject / dismiss / cancel |
 | `/api/config` | POST | Update config (dry_run…) |
-| `/api/whitelist` | POST | Add to whitelist |
+| `/api/policies/export` | GET | Download policy as YAML |
+| `/api/policies/import` | POST | Validate and apply a policy YAML |
+| `/api/whitelist` | POST | Add/remove from whitelist |
 | `/api/sync-aws` | POST | Trigger manual sync |
 
 ---
@@ -120,11 +133,16 @@ python run_tests.py
 
 ```
 ui/
-├── main.py              # FastAPI app + all routes
-├── templates/           # Jinja2 HTML templates
-├── static/              # CSS / JS assets
-├── utils/               # database, config_manager, remediator, pagination, sidebar
-├── tests/               # UI tests (python run_tests.py)
+├── main.py              # Assembles the app: create FastAPI, mount static, include routers
+├── state.py             # Shared app state: DB config, templates, scheduler, config manager
+├── jobs.py              # APScheduler background jobs (sync/grace/terraform-pr, every 5 min)
+├── schemas.py           # Pydantic request models
+├── routes/              # One APIRouter per page/domain — see routes/README.md
+├── templates/           # Jinja2 HTML templates — see templates/README.md
+├── static/              # CSS / JS assets — see static/README.md
+├── utils/               # config_manager, remediator, aws_clients, aws_sync, action_registry, policies, terraform_pr, reports, log_buffer, logger
+├── tests/               # UI tests (python run_tests.py) — see tests/README.md
+├── scripts/             # Benchmark/cleanup/integration scripts — see scripts/README.md
 ├── install.sh           # Setup script (creates ui/venv)
 ├── start.sh             # Start script
 └── requirements.txt     # UI-specific dependencies

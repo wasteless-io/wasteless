@@ -1,15 +1,31 @@
 #!/bin/bash
+#
+# finops.sh — standalone multi-cloud (AWS/Scaleway/GCP) resource cleanup.
+#
+# WARNING: this is NOT the wasteless product. It does not go through
+# src/core/safeguards.py's 7 checks (confidence score, whitelist, min age,
+# min idle days, schedule window, per-run cap) — it deletes resources
+# directly as soon as it runs. --dry-run is the only preview mechanism;
+# destructive commands additionally require typed confirmation below
+# unless --yes/-y is passed (for cron/non-interactive use).
 
 set -euo pipefail
 
-# Parse --dry-run flag
+# Commands that delete real resources when run without --dry-run.
+DESTRUCTIVE_COMMANDS="volume ami lb ghost all"
+
+# Parse --dry-run / --yes flags
 DRY_RUN=false
+FORCE_YES=false
 ARGS=()
 
 for arg in "$@"; do
     case $arg in
         --dry-run)
             DRY_RUN=true
+            ;;
+        --yes|-y)
+            FORCE_YES=true
             ;;
         *)
             ARGS+=("$arg")
@@ -18,6 +34,29 @@ for arg in "$@"; do
 done
 
 set -- "${ARGS[@]}"
+
+# Confirmation gate for destructive commands run for real (not --dry-run).
+COMMAND="${1:-}"
+if [ "$DRY_RUN" = false ] && [[ " $DESTRUCTIVE_COMMANDS " == *" $COMMAND "* ]]; then
+    if [ "$FORCE_YES" = true ]; then
+        echo "[finops.sh] --yes passed: skipping confirmation for '$COMMAND'."
+    elif [ -t 0 ]; then
+        echo ""
+        echo "!! finops.sh deletes real cloud resources directly — it is NOT gated"
+        echo "!! by wasteless's safeguards (no confidence score, no whitelist, no"
+        echo "!! minimum age/idle checks). This is irreversible."
+        echo ""
+        read -r -p "Type the command name ('$COMMAND') to confirm: " CONFIRM
+        if [ "$CONFIRM" != "$COMMAND" ]; then
+            echo "Confirmation did not match '$COMMAND' — aborting." >&2
+            exit 1
+        fi
+    else
+        echo "Error: '$COMMAND' is destructive and this shell is non-interactive." >&2
+        echo "Pass --dry-run to preview, or --yes to confirm explicitly (e.g. cron)." >&2
+        exit 1
+    fi
+fi
 
 # Helper function to execute or simulate commands
 run_cmd() {
@@ -390,7 +429,9 @@ EOF
             if [ "$DRY_RUN" = true ]; then
                 output=$("$SCRIPT_DIR/finops.sh" "$cmd" "$plat" --dry-run 2>&1)
             else
-                output=$("$SCRIPT_DIR/finops.sh" "$cmd" "$plat" 2>&1)
+                # Already confirmed at the "all" level above — pass --yes so
+                # each sub-command doesn't prompt again.
+                output=$("$SCRIPT_DIR/finops.sh" "$cmd" "$plat" --yes 2>&1)
             fi
             echo "$output" | grep -E "(Deleting|Deleted|FAILED|Would delete|Would execute|Orphan|Terminating|Terminated)" || true
         }
@@ -592,6 +633,7 @@ EOF
         echo ""
         echo "Options:"
         echo "  --dry-run         - Preview actions without executing them"
+        echo "  --yes, -y         - Skip the typed confirmation prompt (cron/non-interactive)"
         echo ""
         echo "Environment variables:"
         echo "  CONTROL_HOST      - SSH host for env commands (default: common-control-mlops-platform)"

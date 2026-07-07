@@ -52,7 +52,9 @@ bullet lists), 80-130 words in total:
 1. Situation — total active waste, how it moved versus yesterday and
    versus 7 days ago (waste_trend), and what dominates it.
 2. Recommendation — the single most valuable next step and the concrete
-   amount it recovers.
+   amount it recovers, phrased as advice ("you may want to review",
+   "consider", "worth checking") — never as an instruction ("delete",
+   "stop", "do X"). The reader decides; you suggest.
 
 Mention these ONLY when their condition holds, otherwise not a word
 about them (not even to say they are fine, empty, or unavailable):

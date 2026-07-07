@@ -25,3 +25,9 @@ variable "region" {
   type        = string
   default     = "eu-west-3"
 }
+
+variable "holder_ami" {
+  description = "AMI for the gp2-volume holder instance (hardcoded: the wasteless test IAM user lacks ssm:GetParameter/ec2:DescribeImages, so no dynamic lookup)"
+  type        = string
+  default     = "ami-09d87c5f7372e202a" # al2023-ami-2023.12.20260629.0-kernel-6.1-x86_64, eu-west-3
+}

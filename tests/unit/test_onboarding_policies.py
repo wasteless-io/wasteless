@@ -55,6 +55,35 @@ class TestPolicyJsons:
         assert load_json(READONLY_JSON)['Version'] == '2012-10-17'
         assert load_json(REMEDIATION_JSON)['Version'] == '2012-10-17'
 
+    def test_readonly_covers_every_detector_read_call(self):
+        """One entry per AWS read call a detector actually makes.
+
+        Found the hard way: vpc_unused's Steampipe query calls
+        ec2:DescribeNetworkInterfaces, which was missing from this policy —
+        a real onboarded client would have had this detector fail on every
+        run. No other test caught it because the existing guards only check
+        internal consistency (CFN matches JSON), never detector-to-policy
+        coverage. Extend this set whenever a detector starts using a new
+        read-only AWS call.
+        """
+        required_actions = {
+            'ec2:DescribeAddresses',    # eip_orphan
+            'ec2:DescribeImages',       # snapshot_orphan (AMI-backed exclusion)
+            'ec2:DescribeInstances',    # ec2_idle, ec2_stopped
+            'ec2:DescribeNatGateways',  # nat_gateway_unused
+            'ec2:DescribeNetworkInterfaces',  # vpc_unused
+            'ec2:DescribeSnapshots',    # snapshot_orphan
+            'ec2:DescribeVolumes',      # ebs_orphan, ebs_gp2_migration
+            'ec2:DescribeVpcs',         # vpc_unused
+            'elasticloadbalancing:DescribeLoadBalancers',  # elb_unused
+            'elasticloadbalancing:DescribeTargetGroups',   # elb_unused
+            'elasticloadbalancing:DescribeTargetHealth',   # elb_unused
+        }
+        granted = {a for s in load_json(READONLY_JSON)['Statement']
+                   for a in s['Action']}
+        missing = required_actions - granted
+        assert not missing, f"Detector(s) need actions missing from readonly.json: {missing}"
+
     def test_readonly_actions_are_read_only(self):
         readonly = load_json(READONLY_JSON)
         pattern = re.compile(

@@ -130,7 +130,7 @@ Edit `config/remediation.yaml` (created from [`config/remediation.yaml.template`
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `auto_remediation.enabled` | `false` | Enable autonomous execution |
-| `auto_remediation.dry_run_days` | `7` | Mandatory dry-run period |
+| `auto_remediation.dry_run_days` | `0` | Mandatory dry-run period |
 | `approval.grace_period_days` | `3` | Delay between approval and execution (0 = immediate, cancellable meanwhile) |
 | `protection.min_instance_age_days` | `30` | Ignore instances younger than N days |
 | `protection.min_idle_days` | `14` | Must be idle for N+ days |
@@ -185,9 +185,10 @@ the delay elapses. The whole policy is exportable/importable as YAML
 
 | Feature | Description |
 |---------|-------------|
-| **Detection** | Idle EC2 (CPU/network analysis) + orphaned EBS, EIP, ELB, NAT gateways, snapshots, gp2 volumes — with confidence scoring |
-| **Recommendations** | Stop / terminate / release / delete / downsize actions |
-| **AI Insights** | LLM-generated context per recommendation (provider-agnostic via litellm) |
+| **Detection** | Idle/stopped EC2, orphaned EBS volumes, unassociated Elastic IPs, old snapshots (boto3), plus unused ELBs, unused NAT gateways, unused VPCs and gp2→gp3 migration (Steampipe) — all wired into the scheduled pipeline. Steampipe steps require the `steampipe` CLI (`brew install turbot/tap/steampipe && steampipe plugin install aws`); `wasteless collect` skips them gracefully if it's missing |
+| **Recommendations** | Stop / terminate / release / delete / downsize actions, with an optional cancellable grace period before execution |
+| **AI Insights** | LLM-generated context per recommendation + daily AI briefing (provider-agnostic via litellm) |
+| **Terraform PR automation** | Opens a Terraform PR for approved infra changes, routed by criticality (background job, every 5 min) |
 | **Dry-Run Mode** | Test safely before any AWS action |
 | **Auto-Sync** | Background sync every 5 min with AWS |
 | **Action History** | Full audit trail with rollback snapshots |
@@ -201,15 +202,22 @@ the delay elapses. The whole policy is exportable/importable as YAML
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Home dashboard |
+| `/` | GET | Home overview |
+| `/landing` | GET | Public landing page |
+| `/dashboard` | GET | KPIs, waste trend and waste-by-resource charts |
+| `/api/dashboard/trend` | GET | JSON waste trend series (`range=7d\|30d\|90d\|1y`) |
+| `/api/dashboard/waste-by-resource` | GET | JSON waste breakdown by resource type |
 | `/recommendations` | GET | Pending recommendations |
+| `/api/recommendations` | GET | JSON list of recommendations |
+| `/api/recommendations/{id}/ask` | POST | Ask the AI a question about a recommendation |
 | `/history` | GET | Action history |
 | `/reports` | GET | Activity report over a date range |
 | `/logs` | GET | Live log viewer with search (debug) |
 | `/cloud-resources` | GET | EC2 inventory |
 | `/settings` | GET | Configuration |
 | `/api/metrics` | GET | JSON metrics |
-| `/api/actions` | POST | Approve / reject |
+| `/api/briefing/today` | GET | Daily AI briefing (cached, `?refresh=true` to regenerate) |
+| `/api/actions` | POST | Approve / reject / dismiss / cancel |
 | `/api/config` | POST | Update config |
 | `/api/whitelist` | POST | Add to whitelist |
 | `/api/sync-aws` | POST | Trigger manual sync |
@@ -299,12 +307,13 @@ and [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.
 
 ## Roadmap
 
-- [x] EC2 idle detection and remediation
-- [x] EBS / EIP / ELB / NAT gateway / snapshot detection (Steampipe)
+- [x] EC2 idle/stopped, EBS orphan, EIP orphan, snapshot detection — wired into the scheduled pipeline
+- [x] ELB / NAT gateway / VPC / gp2 migration detection (Steampipe) — wired into the scheduled pipeline
 - [x] Web dashboard (FastAPI)
 - [x] Dry-run mode and safeguards
 - [x] Savings verification
-- [x] AI insights per recommendation
+- [x] AI insights per recommendation + daily AI briefing
+- [x] Terraform PR automation for approved changes
 - [ ] RDS / S3 detection
 - [ ] Multi-account AWS support
 - [ ] Slack / Teams notifications

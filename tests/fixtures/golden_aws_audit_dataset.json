@@ -1,0 +1,130 @@
+{
+  "meta": {
+    "audit_date": "2026-07-01",
+    "account_id": "123456789012",
+    "period_start": "2026-06-01",
+    "period_end": "2026-06-30",
+    "region_scope": "eu-west-1"
+  },
+  "currency": "EUR",
+  "cloud_spend_monthly": 12000.0,
+  "forecast_end_of_month": 12400.0,
+  "budget_monthly": 15000.0,
+  "budget_used_percentage": 80.0,
+  "detected_waste_monthly": 900.0,
+  "potential_savings_monthly": 750.0,
+  "potential_savings_yearly": 9000.0,
+  "reduction_percentage": 6.25,
+  "realized_savings_monthly": 0.0,
+  "confirmed_savings_monthly": 0.0,
+  "completed_actions": 0,
+  "services": [
+    { "name": "EC2", "monthly_cost": 7000.0 },
+    { "name": "NAT Gateway", "monthly_cost": 2000.0 },
+    { "name": "EBS", "monthly_cost": 1500.0 },
+    { "name": "CloudWatch", "monthly_cost": 1000.0 },
+    { "name": "Elastic IP", "monthly_cost": 500.0 }
+  ],
+  "scope": {
+    "analyzed_services": [
+      "EC2",
+      "EBS",
+      "NAT Gateway",
+      "Elastic IP",
+      "CloudWatch",
+      "Tags",
+      "Cost Explorer"
+    ],
+    "exclusions": [
+      "Reserved Instances",
+      "Savings Plans",
+      "Support costs",
+      "Marketplace costs",
+      "Taxes",
+      "Enterprise Discount Program",
+      "RDS (no detector implemented yet)",
+      "EKS (no detector implemented yet)"
+    ]
+  },
+  "recommendations": [
+    {
+      "id": "rec-001",
+      "resource_id": "i-0a1b2c3d4e5f6a7b8",
+      "resource_type": "ec2_instance",
+      "service": "EC2",
+      "environment": "production",
+      "owner": "platform-team",
+      "monthly_cost": 400.0,
+      "potential_saving": 320.0,
+      "risk": "high",
+      "confidence": 0.85,
+      "action": "stop_instance",
+      "status": "pending",
+      "approval_required": true,
+      "finding": "Average CPU 2.3% over a 7-day observation window, below the 5% idle threshold.",
+      "evidence": {
+        "cpu_avg_7d": 2.3,
+        "cpu_max_7d": 6.1,
+        "observation_days": 7
+      },
+      "rollback_plan": "Restart via EC2 console or API; stop is reversible, instance state and EBS volumes are preserved."
+    },
+    {
+      "id": "rec-002",
+      "resource_id": "nat-0123456789abcdef0",
+      "resource_type": "nat_gateway",
+      "service": "NAT Gateway",
+      "environment": "production",
+      "owner": null,
+      "monthly_cost": 300.0,
+      "potential_saving": 300.0,
+      "risk": "critical",
+      "confidence": 0.75,
+      "action": "delete_nat_gateway",
+      "status": "pending",
+      "approval_required": true,
+      "finding": "Zero bytes processed over the last 30 days; no active route depends on this gateway.",
+      "evidence": {
+        "data_processed_gb_30d": 0,
+        "route_tables_referencing": 0
+      },
+      "rollback_plan": "Irreversible once deleted. Requires route table validation before execution; no owner tag found — assign an owner before approval."
+    },
+    {
+      "id": "rec-003",
+      "resource_id": "vol-0aabbccddeeff0011",
+      "resource_type": "ebs_volume",
+      "service": "EBS",
+      "environment": "dev",
+      "owner": "data-team",
+      "monthly_cost": 25.0,
+      "potential_saving": 25.0,
+      "risk": "medium",
+      "confidence": 0.90,
+      "action": "delete_volume",
+      "status": "pending",
+      "approval_required": true,
+      "finding": "Unattached gp3 volume, no attachment for 21 days, snapshot present.",
+      "evidence": {
+        "unattached_days": 21,
+        "has_snapshot": true
+      },
+      "rollback_plan": "Restore from snapshot (retained per config/remediation.yaml rollback policy, 7-day retention)."
+    }
+  ],
+  "tagging": {
+    "resources_analyzed": 42,
+    "owner_tag_coverage_pct": 88.1,
+    "environment_tag_coverage_pct": 95.2,
+    "untagged_spend_eur": 240.0,
+    "resources_without_owner": 5
+  },
+  "assumptions": {
+    "pricing_source": "AWS Price List API",
+    "period": "2026-06-01 to 2026-06-30",
+    "forecast_method": "Linear burn rate (month-to-date spend / days elapsed x days in month)",
+    "services_not_analyzed": ["RDS", "EKS"],
+    "discounts_not_included": ["Enterprise Discount Program", "Reserved Instances", "Savings Plans"],
+    "data_freshness": "Collectors run daily; last run 2026-07-01"
+  }
+}

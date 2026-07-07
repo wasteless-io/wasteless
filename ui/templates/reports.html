@@ -4,12 +4,8 @@
 
 {% block extra_css %}
 <style>
-    @media print {
-        .sidebar, .no-print { display: none !important; }
-        .main { padding: 0 !important; }
-        .card { box-shadow: none; border: 1px solid #ddd; }
-        body { background: white; }
-    }
+    .print-only { display: none; }
+
     .narrative-box {
         background: var(--gray-100);
         border-left: 3px solid var(--success);
@@ -24,10 +20,122 @@
         color: var(--gray-600);
         margin-top: 0.25rem;
     }
+
+    /* --- Print / PDF export: a financial audit document, not a dashboard --- */
+    @media print {
+        @page { margin: 16mm 14mm; }
+
+        .sidebar, .no-print { display: none !important; }
+        .main { padding: 0 !important; }
+        body { background: white; color: #111; }
+
+        /* revert (not "block"): .print-only is applied to <table>/<tr>/<div>
+           alike, and forcing block would break table/row layout in print. */
+        .print-only { display: revert; }
+
+        .print-letterhead {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #111;
+            padding-bottom: 0.6rem;
+            margin-bottom: 1rem;
+        }
+        .print-letterhead .brand {
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .print-letterhead .doc-title {
+            font-size: 0.8rem;
+            color: #444;
+            margin-top: 0.15rem;
+        }
+        .print-letterhead .meta {
+            text-align: right;
+            font-size: 0.75rem;
+            color: #444;
+            line-height: 1.5;
+        }
+
+        .print-summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.25rem;
+            font-size: 0.85rem;
+        }
+        .print-summary-table caption {
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #444;
+            margin-bottom: 0.4rem;
+            caption-side: top;
+        }
+        .print-summary-table td {
+            padding: 0.4rem 0.6rem;
+            border-bottom: 1px solid #ddd;
+        }
+        .print-summary-table td.label { color: #333; }
+        .print-summary-table td.value {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .print-summary-table td.note {
+            text-align: right;
+            color: #666;
+            font-size: 0.75rem;
+        }
+
+        .card { box-shadow: none !important; border: 1px solid #ccc !important; border-radius: 2px !important; }
+
+        table { font-variant-numeric: tabular-nums; }
+        table th { border-bottom: 2px solid #111 !important; color: #333 !important; font-weight: 700 !important; }
+        table td, table th { padding: 0.4rem 0.6rem !important; }
+        table td:nth-child(2), table td:nth-child(3),
+        table th:nth-child(2), table th:nth-child(3) { text-align: right; }
+        tr.print-total td { border-top: 2px solid #111 !important; font-weight: 700; }
+
+        .badge { border: 1px solid #999 !important; background: none !important; color: #333 !important; border-radius: 2px !important; }
+
+        .narrative-box { border-left: 3px solid #111; background: #f7f7f7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+        /* No AI summary was generated: drop the now-empty narrative card
+           instead of printing a blank bordered box. */
+        #narrative-card:has(#narrative-text[style*="display: none"]) { display: none !important; }
+
+        .print-footnote {
+            margin-top: 1.5rem;
+            padding-top: 0.6rem;
+            border-top: 1px solid #ccc;
+            font-size: 0.7rem;
+            color: #666;
+            line-height: 1.5;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- Print-only letterhead: the browser's own print header/footer cannot be styled,
+     so the document identifies itself in-page for a professional, finance-oriented PDF. -->
+<div class="print-only print-letterhead">
+    <div>
+        <div class="brand">Wasteless.io</div>
+        <div class="doc-title">AWS FinOps Activity Report</div>
+    </div>
+    <div class="meta">
+        Period: {{ report.period.start }} &rarr; {{ report.period.end }} ({{ report.period.days }} day{{ 's' if report.period.days > 1 }})<br>
+        Generated: {{ generated_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        Confidential
+    </div>
+</div>
+
 <div class="page-header no-print" style="margin-bottom: 1rem;">
     <h1 style="margin-bottom: 0.25rem;">Reports</h1>
     <p style="color: var(--gray-600); font-size: 0.85rem;">{{ report.period.start }} → {{ report.period.end }} &nbsp;·&nbsp; {{ report.period.days }} day{{ 's' if report.period.days > 1 }}</p>
@@ -86,7 +194,7 @@
 
 <!-- AI narrative -->
 {% if llm_enabled %}
-<div class="card mb-1" style="padding: 0.875rem;">
+<div id="narrative-card" class="card mb-1" style="padding: 0.875rem;">
     <div id="narrative-idle" class="no-print" style="display: flex; align-items: center; gap: 0.75rem;">
         <button id="narrative-btn" class="btn btn-primary" style="padding: 0.4rem 0.75rem;"
                 aria-describedby="narrative-hint" onclick="generateNarrative()">Generate AI summary</button>
@@ -104,7 +212,7 @@
     <p class="text-muted" style="font-size: 0.85rem;">Try a wider date range, or run the collectors to gather AWS metrics.</p>
 </div>
 {% else %}
-<div class="grid grid-4 mb-1">
+<div class="grid grid-4 mb-1 no-print">
     <div class="card">
         <div class="card-title">Waste detected (period)</div>
         <div class="card-value">€{{ "%.2f"|format(report.new_waste.monthly_eur) }}<span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
@@ -134,6 +242,39 @@
         <div class="card-delta">via Cost Explorer</div>
     </div>
 </div>
+
+<!-- Print-only equivalent: a financial summary table, not dashboard tiles -->
+<table class="print-only print-summary-table">
+    <caption>Financial Summary</caption>
+    <tbody>
+        <tr>
+            <td class="label">Detected waste (period)</td>
+            <td class="value">€{{ "%.2f"|format(report.new_waste.monthly_eur) }}/mo</td>
+            <td class="note">{{ report.new_waste.count }} resource(s)</td>
+        </tr>
+        <tr>
+            {% if report.pending.scope == 'snapshot' %}
+            <td class="label">Potential savings (pending recommendations, live)</td>
+            <td class="value">€{{ "%.2f"|format(report.pending.monthly_eur) }}/mo</td>
+            <td class="note">{{ report.pending.count }} pending{% if report.pending.oldest_days is not none and report.pending.count > 0 %} &middot; oldest {{ report.pending.oldest_days }}d{% endif %}</td>
+            {% else %}
+            <td class="label">Potential savings (recommendations created)</td>
+            <td class="value">€{{ "%.2f"|format(report.pending.monthly_eur) }}/mo</td>
+            <td class="note">{{ report.pending.count }} in the period</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td class="label">Actions executed</td>
+            <td class="value">{{ report.actions.succeeded }}</td>
+            <td class="note">{% if report.actions.failed > 0 %}{{ report.actions.failed }} failed &middot; {% endif %}{{ report.actions.dry_run }} dry-run</td>
+        </tr>
+        <tr>
+            <td class="label">Confirmed savings (verified via Cost Explorer)</td>
+            <td class="value">€{{ "%.2f"|format(report.verified_savings_eur) }}</td>
+            <td class="note">requires completed actions</td>
+        </tr>
+    </tbody>
+</table>
 {% endif %}
 
 <!-- Waste by resource type -->
@@ -160,9 +301,20 @@
                     <td colspan="3" style="padding: 1.5rem 1rem; text-align: center; color: var(--gray-600);">No waste detected in this period.</td>
                 </tr>
                 {% endfor %}
+                {% if report.new_waste.by_type %}
+                <tr class="print-only print-total">
+                    <td style="padding: 0.5rem 1rem;">Total</td>
+                    <td style="padding: 0.5rem 1rem;">{{ report.new_waste.count }}</td>
+                    <td style="padding: 0.5rem 1rem;">€{{ "%.2f"|format(report.new_waste.monthly_eur) }}/mo</td>
+                </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
+</div>
+
+<div class="print-only print-footnote">
+    Figures above are Wasteless-detected estimates based on current usage patterns; potential savings require technical validation and approval before execution. No production destructive action is recommended without explicit approval. Only "Confirmed savings" are verified via AWS Cost Explorer.
 </div>
 {% endblock %}
 

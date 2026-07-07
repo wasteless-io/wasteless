@@ -53,9 +53,9 @@ Two collection paths feed PostgreSQL:
    instances, fetches per-instance CPU/network metrics, writes daily rows to
    `ec2_metrics`.
 2. **Steampipe** (`src/collectors/steampipe.py` + `sql/steampipe/*.sql`) —
-   runs inventory SQL against the AWS plugin (orphaned EIPs, unused NAT
-   gateways, gp2 volumes, unused ELBs, orphaned snapshots…). Each detector
-   owns one SQL file.
+   runs inventory SQL against the AWS plugin (unused NAT gateways, gp2
+   volumes eligible for gp3 migration, unused ELBs, unused VPCs). Each
+   detector owns one SQL file.
 
 `src/aws_collector.py` additionally pulls Cost Explorer daily costs into
 `cloud_costs_raw`.
@@ -69,11 +69,13 @@ Detectors live in `src/detectors/` and follow one of two patterns:
 
 | Pattern | Base | Example |
 |---------|------|---------|
-| Metrics-based | queries collected metrics | `ec2_idle.py` (avg CPU < 5% over 7 days) |
-| Steampipe-based | `steampipe_base.py` + SQL file | `eip_orphan_steampipe.py` |
+| boto3-based | direct `describe_*` calls | `ec2_idle.py` (avg CPU < 5% over 7 days), `ebs_orphan.py`, `eip_orphan.py`, `snapshot_orphan.py` |
+| Steampipe-based | `steampipe_base.py` + SQL file | `vpc_unused.py`, `nat_gateway_unused.py`, `elb_unused.py`, `ebs_gp2_migration.py` |
 
-Current detectors: `ec2_idle`, `ec2_stopped`, `ebs_orphan`, `ebs_gp2_migration`,
-`eip_orphan`, `elb_unused`, `nat_gateway_unused`, `snapshot_orphan`.
+Current detectors: `ec2_idle`, `ec2_stopped`, `ebs_orphan`, `eip_orphan`,
+`snapshot_orphan` (boto3); `ebs_gp2_migration`, `elb_unused`,
+`nat_gateway_unused`, `vpc_unused` (Steampipe). Each resource type has
+exactly one canonical detector — no boto3/Steampipe duplicates.
 
 Each detection produces:
 - a row in `waste_detected` (confidence score 0–1, estimated monthly waste in
