@@ -17,49 +17,49 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from main import _grace_execution_status
+from jobs import _grace_execution_status
 
 
 class TestGraceExecutionStatus(unittest.TestCase):
 
     def test_real_success_is_approved(self):
         self.assertEqual(
-            _grace_execution_status(True, None, dry_run=False, mode='remediator'),
-            'approved')
+            _grace_execution_status(True, None, dry_run=False, mode="remediator"), "approved"
+        )
 
     def test_real_success_boto3_is_approved(self):
         self.assertEqual(
-            _grace_execution_status(True, None, dry_run=False, mode='boto3'),
-            'approved')
+            _grace_execution_status(True, None, dry_run=False, mode="boto3"), "approved"
+        )
 
     def test_resource_gone_via_remediator_wording_is_obsolete(self):
         error = "ebs_volume vol-x1 not found in eu-west-3"
         self.assertEqual(
-            _grace_execution_status(False, error, dry_run=False, mode='remediator'),
-            'obsolete')
+            _grace_execution_status(False, error, dry_run=False, mode="remediator"), "obsolete"
+        )
 
     def test_resource_gone_via_boto3_wording_is_obsolete(self):
         error = "Resource i-x1 not found in any region"
         self.assertEqual(
-            _grace_execution_status(False, error, dry_run=False, mode='boto3'),
-            'obsolete')
+            _grace_execution_status(False, error, dry_run=False, mode="boto3"), "obsolete"
+        )
 
     def test_generic_failure_returns_to_pending_not_obsolete(self):
         error = "Errors: eu-west-3: ClientError: throttled"
         self.assertEqual(
-            _grace_execution_status(False, error, dry_run=False, mode='remediator'),
-            'pending')
+            _grace_execution_status(False, error, dry_run=False, mode="remediator"), "pending"
+        )
 
     def test_dry_run_never_marks_approved(self):
         # Nothing was actually touched: must not look remediated.
         self.assertEqual(
-            _grace_execution_status(True, None, dry_run=True, mode='remediator'),
-            'pending')
+            _grace_execution_status(True, None, dry_run=True, mode="remediator"), "pending"
+        )
 
     def test_no_error_message_defaults_to_pending(self):
         self.assertEqual(
-            _grace_execution_status(False, None, dry_run=False, mode='remediator'),
-            'pending')
+            _grace_execution_status(False, None, dry_run=False, mode="remediator"), "pending"
+        )
 
     def test_action_disabled_since_approval_returns_to_pending(self):
         # execution_mode() is a static mapping (ui/utils/action_registry.py):
@@ -71,9 +71,9 @@ class TestGraceExecutionStatus(unittest.TestCase):
         # not 'approved', which is reserved for the immediate manual-review
         # approval path in /api/actions, a different scenario.
         self.assertEqual(
-            _grace_execution_status(True, None, dry_run=False, mode='manual'),
-            'pending')
+            _grace_execution_status(True, None, dry_run=False, mode="manual"), "pending"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
