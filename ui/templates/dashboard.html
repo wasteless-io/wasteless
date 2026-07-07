@@ -686,18 +686,23 @@ function renderTrendChart(labels, raw, granularity) {
         sw += w; swx += w * i; swy += w * raw[i]; swxy += w * i * raw[i]; swxx += w * i * i;
     }
     const slope = (sw * swxy - swx * swy) / (sw * swxx - swx * swx);
-    const intercept = (swy - slope * swx) / sw;
 
     // Forecast labels: next `horizon` steps (days or months)
     const lastDate = new Date(labels[n - 1]);
     const forecastLabels = [];
     const forecastData = [];
+    // Anchored on the last actual value, not the fitted line's absolute
+    // position: the regression line minimizes error over the whole window,
+    // it doesn't pass through the last point, so using intercept directly
+    // here could jump away from where the data actually left off (e.g. a
+    // recent drop diluted by a long flat history before it). Only the
+    // slope — the trend's direction and rate — comes from the regression.
     for (let i = 1; i <= horizon; i++) {
         const d = new Date(lastDate);
         if (granularity === 'day') d.setDate(d.getDate() + i);
         else d.setMonth(d.getMonth() + i);
         forecastLabels.push(d.toISOString().slice(0, 10));
-        forecastData.push(Math.max(0, slope * (n - 1 + i) + intercept));
+        forecastData.push(Math.max(0, raw[n - 1] + slope * i));
     }
 
     const datasets = [
