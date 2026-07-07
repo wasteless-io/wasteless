@@ -1657,6 +1657,16 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     RETURNING id
                 """, (rec_id,))
                 result = cursor.fetchone()
+                if result is not None:
+                    # Close out the log entry the scheduling created: left
+                    # at 'pending' forever otherwise, History would show a
+                    # migration that looks eternally in-flight even though
+                    # it was called off.
+                    cursor.execute("""
+                        UPDATE actions_log
+                        SET action_status = 'cancelled', updated_at = NOW()
+                        WHERE recommendation_id = %s AND action_status = 'pending'
+                    """, (rec_id,))
                 results.append({
                     "recommendation_id": rec_id,
                     "success": result is not None,

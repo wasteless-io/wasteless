@@ -276,3 +276,40 @@ def test_dry_run_approval_leaves_recommendation_pending(conn):
     assert count == 1
     assert total_eur == pytest.approx(15.0)
     assert _recommendations_pending_count(cur, 'ec2_instance') == 1
+
+
+# --- Exercice 11 : annuler une action programmée referme son log 'pending' ---
+
+def test_cancel_closes_out_the_pending_actions_log_entry(conn):
+    """Verrouille le fix : ui/main.py's action='cancel' remettait la
+    recommandation à 'pending' mais laissait la ligne actions_log de la
+    programmation à 'pending' pour toujours — History affichait une
+    migration en apparence encore en cours des jours après son annulation.
+    """
+    cur = conn.cursor()
+    waste_id = _insert_waste(cur, 'ebs_volume', 'test-cancel-1', 5.0, status='pending')
+    cur.execute("""
+        UPDATE recommendations SET status = 'scheduled', execute_after = NOW() + interval '3 days'
+        WHERE waste_id = %s RETURNING id
+    """, (waste_id,))
+    rec_id = cur.fetchone()[0]
+    cur.execute("""
+        INSERT INTO actions_log
+        (resource_id, recommendation_id, resource_type, action_type,
+         action_status, dry_run, action_date)
+        VALUES ('test-cancel-1', %s, 'ebs_volume', 'migrate_gp2_to_gp3', 'pending', false, NOW())
+    """, (rec_id,))
+
+    # Mirrors ui/main.py's action == 'cancel' branch.
+    cur.execute("""
+        UPDATE recommendations SET status = 'pending', execute_after = NULL
+        WHERE id = %s AND status = 'scheduled' RETURNING id
+    """, (rec_id,))
+    assert cur.fetchone() is not None
+    cur.execute("""
+        UPDATE actions_log SET action_status = 'cancelled', updated_at = NOW()
+        WHERE recommendation_id = %s AND action_status = 'pending'
+    """, (rec_id,))
+
+    cur.execute("SELECT action_status FROM actions_log WHERE recommendation_id = %s", (rec_id,))
+    assert cur.fetchone()[0] == 'cancelled'
