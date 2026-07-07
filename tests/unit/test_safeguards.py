@@ -5,7 +5,8 @@ Unit tests for safeguards module.
 import pytest
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Optional
 from unittest.mock import patch
 
 # Add src to path for imports
@@ -133,13 +134,8 @@ class TestSafeguardsAgeCheck:
 
     def test_old_instance_passes(self, safeguards):
         """Instance older than min age should pass."""
-        launch_time = datetime.now(tz=None) - timedelta(days=60)
-        # Make it timezone-aware by adding tzinfo
-        launch_time = launch_time.replace(tzinfo=None)
-
-        # The check_instance_age expects timezone-aware datetime
-        # Let's test with a simple assertion
-        assert True  # Simplified - actual test would need proper tz handling
+        launch_time = datetime.now(timezone.utc) - timedelta(days=60)
+        assert safeguards.check_instance_age(launch_time) is True
 
     def test_young_instance_fails(self, safeguards):
         """Instance younger than min age should fail."""
@@ -399,3 +395,189 @@ class TestSafeguardConfigValidation:
         bad_config.write_text("protection:\n  min_confidence_score: -1\n")
         with pytest.raises(InvalidSafeguardConfig):
             Safeguards(config_path=str(bad_config))
+
+
+class TestValidateAll:
+    """Regression tests for the validate_all orchestrator.
+
+    validate_all() is the only place all 7 safeguard checks run together
+    in their required order with short-circuit on first failure -- the
+    individual check_* tests above can't catch a check being dropped,
+    reordered, or no longer short-circuiting. A good instance is
+    deliberately made to fail every downstream check at once, so each
+    test also proves the earlier checks run *first* and stop the chain.
+    """
+
+    GOOD_TAGS: Dict = {"Environment": "dev"}
+    GOOD_LAUNCH_TIME = datetime.now(timezone.utc) - timedelta(days=60)
+    GOOD_CONFIDENCE = 0.90
+    GOOD_IDLE_DAYS = 20
+    GOOD_COUNT = 0
+
+    def _safeguards(self, overrides: Optional[Dict] = None):
+        config = {
+            "auto_remediation": {"enabled": True},
+            "whitelist": {"instance_ids": [], "tags": []},
+            "protection": {
+                "min_instance_age_days": 30,
+                "min_confidence_score": 0.80,
+                "min_idle_days": 14,
+                "max_instances_per_run": 3,
+            },
+            "schedule": {"allowed_days": [], "allowed_hours": []},
+        }
+        for key, value in (overrides or {}).items():
+            config[key] = value
+        with patch.object(Safeguards, "_load_config", return_value=config):
+            return Safeguards()
+
+    def test_all_checks_pass(self):
+        sg = self._safeguards()
+        result = sg.validate_all(
+            instance_id="i-good123",
+            instance_tags=self.GOOD_TAGS,
+            launch_time=self.GOOD_LAUNCH_TIME,
+            confidence=self.GOOD_CONFIDENCE,
+            idle_days=self.GOOD_IDLE_DAYS,
+            current_count=self.GOOD_COUNT,
+        )
+        assert result["safe_to_proceed"] is True
+        assert result["reason"] is None
+        assert result["checks_failed"] == []
+        assert result["checks_passed"] == [
+            "whitelist",
+            "instance_age",
+            "confidence",
+            "idle_duration",
+            "schedule",
+            "max_instances",
+        ]
+
+    def test_global_disabled_short_circuits_before_every_other_check(self):
+        """Even with an otherwise-perfect instance, the global kill switch
+        must be the very first thing evaluated."""
+        sg = self._safeguards(overrides={"auto_remediation": {"enabled": False}})
+        result = sg.validate_all(
+            instance_id="i-good123",
+            instance_tags=self.GOOD_TAGS,
+            launch_time=self.GOOD_LAUNCH_TIME,
+            confidence=self.GOOD_CONFIDENCE,
+            idle_days=self.GOOD_IDLE_DAYS,
+            current_count=self.GOOD_COUNT,
+        )
+        assert result["safe_to_proceed"] is False
+        assert result["checks_passed"] == []
+        assert result["checks_failed"] == ["global_enabled"]
+        assert result["reason"] == "Auto-remediation disabled globally"
+
+    def test_whitelisted_short_circuits_before_age_confidence_idle(self):
+        sg = self._safeguards(
+            overrides={"whitelist": {"instance_ids": ["i-protected"], "tags": []}}
+        )
+        result = sg.validate_all(
+            instance_id="i-protected",
+            instance_tags=self.GOOD_TAGS,
+            launch_time=self.GOOD_LAUNCH_TIME,
+            confidence=self.GOOD_CONFIDENCE,
+            idle_days=self.GOOD_IDLE_DAYS,
+            current_count=self.GOOD_COUNT,
+        )
+        assert result["safe_to_proceed"] is False
+        assert result["checks_passed"] == []
+        assert result["checks_failed"] == ["whitelist"]
+        assert result["reason"] == "Instance is whitelisted"
+
+    def test_young_instance_fails_before_confidence_and_idle_are_checked(self):
+        """launch_time is too young AND confidence/idle are also bad -- if
+        age stops the chain first, checks_passed must stop at 'whitelist'."""
+        sg = self._safeguards()
+        result = sg.validate_all(
+            instance_id="i-young",
+            instance_tags=self.GOOD_TAGS,
+            launch_time=datetime.now(timezone.utc) - timedelta(days=5),
+            confidence=0.10,
+            idle_days=1,
+            current_count=self.GOOD_COUNT,
+        )
+        assert result["safe_to_proceed"] is False
+        assert result["checks_passed"] == ["whitelist"]
+        assert "too young" in result["reason"]
+
+    def test_low_confidence_fails_before_idle_is_checked(self):
+        sg = self._safeguards()
+        result = sg.validate_all(
+            instance_id="i-unsure",
+            instance_tags=self.GOOD_TAGS,
+            launch_time=self.GOOD_LAUNCH_TIME,
+            confidence=0.10,
+            idle_days=1,
+            current_count=self.GOOD_COUNT,
+        )
+        assert result["safe_to_proceed"] is False
+        assert result["checks_passed"] == ["whitelist", "instance_age"]
+        assert "Confidence too low" in result["reason"]
+
+    def test_short_idle_fails_before_schedule_is_checked(self):
+        sg = self._safeguards(
+            overrides={
+                "schedule": {"enabled": True, "allowed_days": ["NoSuchDay"], "allowed_hours": []}
+            }
+        )
+        result = sg.validate_all(
+            instance_id="i-recent",
+            instance_tags=self.GOOD_TAGS,
+            launch_time=self.GOOD_LAUNCH_TIME,
+            confidence=self.GOOD_CONFIDENCE,
+            idle_days=1,
+            current_count=self.GOOD_COUNT,
+        )
+        assert result["safe_to_proceed"] is False
+        assert result["checks_passed"] == ["whitelist", "instance_age", "confidence"]
+        assert "Not idle long enough" in result["reason"]
+
+    def test_schedule_fails_before_max_instances_is_checked(self):
+        sg = self._safeguards(
+            overrides={
+                "schedule": {"enabled": True, "allowed_days": ["NoSuchDay"], "allowed_hours": []}
+            }
+        )
+        result = sg.validate_all(
+            instance_id="i-offhours",
+            instance_tags=self.GOOD_TAGS,
+            launch_time=self.GOOD_LAUNCH_TIME,
+            confidence=self.GOOD_CONFIDENCE,
+            idle_days=self.GOOD_IDLE_DAYS,
+            current_count=99,  # would also fail max_instances
+        )
+        assert result["safe_to_proceed"] is False
+        assert result["checks_passed"] == [
+            "whitelist",
+            "instance_age",
+            "confidence",
+            "idle_duration",
+        ]
+        assert "Outside allowed schedule" in result["reason"]
+
+    def test_max_instances_limit_fails_as_final_check(self):
+        sg = self._safeguards(overrides={"protection": {"max_instances_per_run": 3}})
+        result = sg.validate_all(
+            instance_id="i-toomany",
+            instance_tags=self.GOOD_TAGS,
+            launch_time=self.GOOD_LAUNCH_TIME,
+            confidence=self.GOOD_CONFIDENCE,
+            idle_days=self.GOOD_IDLE_DAYS,
+            current_count=3,
+        )
+        assert result["safe_to_proceed"] is False
+        assert (
+            result["checks_passed"]
+            == [
+                "whitelist",
+                "instance_age",
+                "confidence",
+                "idle_duration",
+                "schedule",
+                "max_instances",
+            ][:5]
+        )
+        assert "Max instances limit reached" in result["reason"]

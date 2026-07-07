@@ -90,8 +90,19 @@ jobs:
           for migration in sql/migrations/*.sql; do
             psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f "$migration"
           done
+      # Coverage is informational only, not a blocking gate yet -- it rides
+      # along on the same test run rather than a separate pytest invocation.
       - name: Run tests
-        run: pytest -q
+        run: pytest -q --cov=src --cov-report=term-missing | tee coverage-report.txt
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo '## Coverage (src/)'
+            echo '```'
+            tail -20 coverage-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   ui:
     name: UI (unittest)
