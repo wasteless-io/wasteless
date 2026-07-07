@@ -11,7 +11,7 @@ picker, free range) into a concrete [start_date, end_date] period.
 import calendar
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Tuple
 
 # Add backend src/ to sys.path to import backend modules
@@ -75,7 +75,13 @@ def resolve_period(
         period_days = days if days is not None else 7
         if period_days < 1:
             raise ValueError(f"days must be >= 1, got {period_days}")
-        end_date = date.today()
+        # UTC, not local date.today(): collect_digest_data() filters
+        # waste_detected.created_at against this, and that column is
+        # stamped with Postgres's NOW() (UTC). A local-timezone "today"
+        # silently excludes the last few hours' waste for any deployment
+        # ahead of UTC, worst during the ~1-2h window each day where the
+        # local date has rolled over but UTC hasn't yet.
+        end_date = datetime.now(timezone.utc).date()
         start_date = end_date - timedelta(days=period_days - 1)
 
     if end_date < start_date:

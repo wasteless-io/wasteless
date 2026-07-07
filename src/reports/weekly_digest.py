@@ -25,7 +25,7 @@ import json
 import logging
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -76,7 +76,11 @@ def collect_digest_data(conn, start_date: date, end_date: date) -> Dict[str, Any
         raise ValueError(f"end_date {end_date} is before start_date {start_date}")
 
     end_exclusive = end_date + timedelta(days=1)
-    period_includes_today = end_date >= date.today()
+    # UTC, not local date.today(): compared against created_at/action_date
+    # columns stamped with Postgres's NOW() (UTC) -- a local-timezone
+    # "today" can disagree with the DB's during the daily window where the
+    # local date has rolled over but UTC hasn't yet.
+    period_includes_today = end_date >= datetime.now(timezone.utc).date()
 
     cursor = conn.cursor()
     try:
@@ -281,7 +285,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    end_date = args.end or date.today()
+    end_date = args.end or datetime.now(timezone.utc).date()
     start_date = args.start or end_date - timedelta(days=args.days - 1)
 
     from core.database import get_connection

@@ -6,7 +6,7 @@ for the Reports page.
 
 import unittest
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 # Add parent directory to path
@@ -19,12 +19,15 @@ class TestResolvePeriod(unittest.TestCase):
 
     def test_default_is_last_7_days(self):
         start, end = resolve_period()
-        self.assertEqual(end, date.today())
+        # resolve_period() is UTC-based (see its docstring/comment) -- a
+        # local date.today() would flake during the daily window where
+        # the local date has rolled over but UTC hasn't yet.
+        self.assertEqual(end, datetime.now(timezone.utc).date())
         self.assertEqual((end - start).days + 1, 7)
 
     def test_days_preset(self):
         start, end = resolve_period(days=30)
-        self.assertEqual(end, date.today())
+        self.assertEqual(end, datetime.now(timezone.utc).date())
         self.assertEqual((end - start).days + 1, 30)
 
     def test_month(self):
