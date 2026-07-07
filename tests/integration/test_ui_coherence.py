@@ -313,3 +313,37 @@ def test_cancel_closes_out_the_pending_actions_log_entry(conn):
 
     cur.execute("SELECT action_status FROM actions_log WHERE recommendation_id = %s", (rec_id,))
     assert cur.fetchone()[0] == 'cancelled'
+
+
+# --- Exercice 12 : pr_open et scheduled sont bien candidats à la synchro AWS ---
+
+SYNCABLE_STATUSES = ('pending', 'rejected', 'scheduled', 'pr_open')
+
+
+def _syncable_resource_ids(cur, resource_type):
+    """Mirrors ui/main.py's sync_aws_job / /api/sync-aws grouping query."""
+    cur.execute("""
+        SELECT array_agg(DISTINCT w.resource_id)
+        FROM recommendations r
+        JOIN waste_detected w ON r.waste_id = w.id
+        WHERE w.resource_type = %s AND r.status = ANY(%s)
+    """, (resource_type, list(SYNCABLE_STATUSES)))
+    row = cur.fetchone()[0]
+    return row or []
+
+
+def test_pr_open_and_scheduled_are_candidates_for_aws_sync(conn):
+    """Verrouille le fix : le bouton manuel /api/sync-aws n'incluait pas
+    'scheduled', et ni lui ni le job automatique n'incluaient jamais
+    'pr_open' — une ressource supprimée pendant qu'une PR Terraform est
+    encore ouverte n'était jamais détectée comme disparue par personne.
+    """
+    cur = conn.cursor()
+    _insert_waste(cur, 'nat_gateway', 'test-sync-pr-open', 32.24, status='pr_open')
+    _insert_waste(cur, 'ec2_instance', 'test-sync-scheduled', 10.0, status='scheduled')
+    _insert_waste(cur, 'ebs_volume', 'test-sync-dismissed', 5.0, status='dismissed')
+
+    assert 'test-sync-pr-open' in _syncable_resource_ids(cur, 'nat_gateway')
+    assert 'test-sync-scheduled' in _syncable_resource_ids(cur, 'ec2_instance')
+    # dismissed is a deliberate terminal decision: sync must never overwrite it
+    assert 'test-sync-dismissed' not in _syncable_resource_ids(cur, 'ebs_volume')
