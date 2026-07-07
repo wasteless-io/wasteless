@@ -24,12 +24,8 @@ resource "aws_nat_gateway" "unused" {
 # The gp2 detector only flags volumes in 'in-use' state, so the volume must
 # be attached to an instance.
 
-data "aws_ssm_parameter" "al2023" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
-}
-
 resource "aws_instance" "holder" {
-  ami           = data.aws_ssm_parameter.al2023.value
+  ami           = var.holder_ami
   instance_type = "t3.nano"
   subnet_id     = aws_subnet.a.id
 
@@ -59,4 +55,25 @@ resource "aws_lb" "unused" {
   subnets            = [aws_subnet.a.id, aws_subnet.b.id]
 
   tags = { Name = "wasteless-fixture-unused-alb" }
+}
+
+# --- ebs_orphan: unattached EBS volume (~0.0005 USD/h for 4 GiB gp2) --------
+
+resource "aws_ebs_volume" "orphan" {
+  availability_zone = "${var.region}a"
+  size              = 4
+  type              = "gp2"
+
+  tags = { Name = "wasteless-fixture-orphan-volume" }
+}
+
+# --- vpc_unused: VPC with zero network interfaces (free — hygiene check) ---
+# Deliberately separate from aws_vpc.fixtures above: that VPC hosts the NAT
+# gateway/ALB/instance fixtures, which all create ENIs and would make it a
+# false negative for this detector.
+
+resource "aws_vpc" "empty" {
+  cidr_block = "10.98.0.0/24"
+
+  tags = { Name = "wasteless-fixture-empty-vpc" }
 }
