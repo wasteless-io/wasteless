@@ -9,10 +9,12 @@ conditions. One billed fixture per detector:
 | Private NAT gateway (no traffic) | `nat_gateway_unused` | ~$0.048/h |
 | t3.nano + attached 4 GiB gp2 volume | `ebs_gp2_migration` | ~$0.006/h |
 | Internal ALB with no target group | `elb_unused` | ~$0.025/h |
+| Unattached 4 GiB gp2 volume | `ebs_orphan` | ~$0.0005/h |
+| Empty VPC, zero ENIs | `vpc_unused` | free |
 
 Age-based detections (`snapshot_orphan` > 90 days, `ec2_idle` 7 days of
-CloudWatch data) cannot be fabricated instantly and are validated against
-naturally occurring resources instead.
+CloudWatch data, `ec2_stopped` N days stopped) cannot be fabricated
+instantly and are validated against naturally occurring resources instead.
 
 ## Usage
 
