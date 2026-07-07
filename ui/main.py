@@ -1084,6 +1084,8 @@ async def recommendations(
         LIMIT 100
     """)
     scheduled_recs = cursor.fetchall()
+    cursor.execute("SELECT COUNT(*) AS n FROM recommendations WHERE status = 'scheduled'")
+    scheduled_total_count = cursor.fetchone()['n']
 
     # Remediations awaiting human review as a Terraform PR
     cursor.execute("""
@@ -1097,6 +1099,8 @@ async def recommendations(
         LIMIT 100
     """)
     pr_open_recs = cursor.fetchall()
+    cursor.execute("SELECT COUNT(*) AS n FROM recommendations WHERE status = 'pr_open'")
+    pr_open_total_count = cursor.fetchone()['n']
 
     # Distinguishes "the collector never ran" from "it ran and everything got
     # resolved" — an empty pending list means very different things, and the
@@ -1111,6 +1115,8 @@ async def recommendations(
     return templates.TemplateResponse(request, "recommendations.html", context={
         "has_waste_history": has_waste_history,
         "pr_open_recs": pr_open_recs,
+        "pr_open_total_count": pr_open_total_count,
+        "scheduled_total_count": scheduled_total_count,
         "recommendations": recommendations,
         "ec2_recs": ec2_recs,
         "ebs_recs": ebs_recs,
@@ -1138,7 +1144,25 @@ async def history(
     """Action history and audit trail."""
     cursor = conn.cursor()
 
-    query = """
+    where_clause = "WHERE a.action_date >= NOW() - INTERVAL '%s days'"
+    params = [days_back]
+
+    if status_filter != "All":
+        where_clause += " AND a.action_status = %s"
+        params.append(status_filter)
+
+    if action_filter != "All":
+        where_clause += " AND a.action_type = %s"
+        params.append(action_filter)
+
+    # Total matching the same filters, uncapped — the table itself stays
+    # capped at 100 rows below, but the header must say so honestly rather
+    # than silently implying those 100 are everything.
+    cursor.execute(f"SELECT COUNT(*) AS n FROM actions_log a {where_clause}",
+                    tuple(params))
+    total_count = cursor.fetchone()['n']
+
+    cursor.execute(f"""
         SELECT
             a.id,
             a.resource_id,
@@ -1150,21 +1174,9 @@ async def history(
             a.error_message,
             a.executed_by
         FROM actions_log a
-        WHERE a.action_date >= NOW() - INTERVAL '%s days'
-    """
-    params = [days_back]
-
-    if status_filter != "All":
-        query += " AND a.action_status = %s"
-        params.append(status_filter)
-
-    if action_filter != "All":
-        query += " AND a.action_type = %s"
-        params.append(action_filter)
-
-    query += " ORDER BY a.action_date DESC LIMIT 100"
-
-    cursor.execute(query, tuple(params))
+        {where_clause}
+        ORDER BY a.action_date DESC LIMIT 100
+    """, tuple(params))
     actions = cursor.fetchall()
 
     # Summary. Anything that isn't success/failed (pending, blocked, ...)
@@ -1179,6 +1191,7 @@ async def history(
 
     return templates.TemplateResponse(request, "history.html", context={
         "actions": actions,
+        "total_count": total_count,
         "success_count": success_count,
         "failed_count": failed_count,
         "other_count": other_count,
@@ -1428,19 +1441,24 @@ async def cloud_resources(
         try:
             ec2 = get_client('ec2', region=region)
             result = []
-            for r in ec2.describe_instances().get('Reservations', []):
-                for inst in r.get('Instances', []):
-                    launch = inst.get('LaunchTime')
-                    result.append({
-                        'instance_id': inst['InstanceId'],
-                        'name': _tag_name(inst.get('Tags')),
-                        'type': inst['InstanceType'],
-                        'state': inst['State']['Name'],
-                        'region': region,
-                        'launch_time': launch,
-                        'public_ip': inst.get('PublicIpAddress', '-'),
-                        'private_ip': inst.get('PrivateIpAddress', '-'),
-                    })
+            # describe_instances truncates past ~1000 results without a
+            # paginator: an account with more instances than that in one
+            # region would silently lose the rest from this inventory.
+            paginator = ec2.get_paginator('describe_instances')
+            for page in paginator.paginate():
+                for r in page.get('Reservations', []):
+                    for inst in r.get('Instances', []):
+                        launch = inst.get('LaunchTime')
+                        result.append({
+                            'instance_id': inst['InstanceId'],
+                            'name': _tag_name(inst.get('Tags')),
+                            'type': inst['InstanceType'],
+                            'state': inst['State']['Name'],
+                            'region': region,
+                            'launch_time': launch,
+                            'public_ip': inst.get('PublicIpAddress', '-'),
+                            'private_ip': inst.get('PrivateIpAddress', '-'),
+                        })
             return result
         except Exception as e:
             print(f"EC2 error {region}: {e}")
@@ -1450,19 +1468,23 @@ async def cloud_resources(
         try:
             ec2 = get_client('ec2', region=region)
             result = []
-            for vol in ec2.describe_volumes().get('Volumes', []):
-                attachments = vol.get('Attachments', [])
-                result.append({
-                    'volume_id': vol['VolumeId'],
-                    'name': _tag_name(vol.get('Tags')),
-                    'size_gb': vol['Size'],
-                    'state': vol['State'],
-                    'type': vol['VolumeType'],
-                    'az': vol['AvailabilityZone'],
-                    'region': region,
-                    'encrypted': vol.get('Encrypted', False),
-                    'attached_to': attachments[0]['InstanceId'] if attachments else '-',
-                })
+            # Same truncation risk as describe_instances for accounts with
+            # many EBS volumes in a single region.
+            paginator = ec2.get_paginator('describe_volumes')
+            for page in paginator.paginate():
+                for vol in page.get('Volumes', []):
+                    attachments = vol.get('Attachments', [])
+                    result.append({
+                        'volume_id': vol['VolumeId'],
+                        'name': _tag_name(vol.get('Tags')),
+                        'size_gb': vol['Size'],
+                        'state': vol['State'],
+                        'type': vol['VolumeType'],
+                        'az': vol['AvailabilityZone'],
+                        'region': region,
+                        'encrypted': vol.get('Encrypted', False),
+                        'attached_to': attachments[0]['InstanceId'] if attachments else '-',
+                    })
             return result
         except Exception as e:
             print(f"Volumes error {region}: {e}")
@@ -1509,18 +1531,23 @@ async def cloud_resources(
         try:
             ec2 = get_client('ec2', region=region)
             result = []
-            for snap in ec2.describe_snapshots(OwnerIds=['self']).get('Snapshots', []):
-                start = snap.get('StartTime')
-                result.append({
-                    'snapshot_id': snap['SnapshotId'],
-                    'description': snap.get('Description') or '-',
-                    'volume_id': snap.get('VolumeId') or '-',
-                    'size_gb': snap.get('VolumeSize', 0),
-                    'state': snap['State'],
-                    'start_time': start,
-                    'encrypted': snap.get('Encrypted', False),
-                    'region': region,
-                })
+            # Snapshots are the most likely of the five to exceed 1000 in a
+            # single region (orphaned backups accumulate for years), so the
+            # truncation risk without a paginator is the most real here.
+            paginator = ec2.get_paginator('describe_snapshots')
+            for page in paginator.paginate(OwnerIds=['self']):
+                for snap in page.get('Snapshots', []):
+                    start = snap.get('StartTime')
+                    result.append({
+                        'snapshot_id': snap['SnapshotId'],
+                        'description': snap.get('Description') or '-',
+                        'volume_id': snap.get('VolumeId') or '-',
+                        'size_gb': snap.get('VolumeSize', 0),
+                        'state': snap['State'],
+                        'start_time': start,
+                        'encrypted': snap.get('Encrypted', False),
+                        'region': region,
+                    })
             return result
         except Exception as e:
             print(f"Snapshots error {region}: {e}")
