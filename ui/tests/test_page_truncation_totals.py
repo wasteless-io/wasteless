@@ -20,12 +20,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 try:
     import psycopg2
     from psycopg2.extras import RealDictCursor
+
     PSYCOPG2_AVAILABLE = True
 except ImportError:
     PSYCOPG2_AVAILABLE = False
 
 try:
     from fastapi.testclient import TestClient
+
     TESTCLIENT_AVAILABLE = True
 except ImportError:
     TESTCLIENT_AVAILABLE = False
@@ -33,24 +35,26 @@ except ImportError:
 
 def _connect():
     return psycopg2.connect(
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=os.getenv('DB_PORT', '5432'),
-        database=os.getenv('DB_NAME', 'wasteless'),
-        user=os.getenv('DB_USER', 'wasteless'),
-        password=os.getenv('DB_PASSWORD', ''),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+        database=os.getenv("DB_NAME", "wasteless"),
+        user=os.getenv("DB_USER", "wasteless"),
+        password=os.getenv("DB_PASSWORD", ""),
         connect_timeout=5,
         cursor_factory=RealDictCursor,
     )
 
 
-@unittest.skipUnless(PSYCOPG2_AVAILABLE and TESTCLIENT_AVAILABLE,
-                      "psycopg2 or fastapi.testclient not installed")
+@unittest.skipUnless(
+    PSYCOPG2_AVAILABLE and TESTCLIENT_AVAILABLE, "psycopg2 or fastapi.testclient not installed"
+)
 class TestPageTruncationTotals(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         try:
             from dotenv import load_dotenv
+
             load_dotenv()
         except ImportError:
             pass
@@ -59,7 +63,8 @@ class TestPageTruncationTotals(unittest.TestCase):
         except Exception as e:
             raise unittest.SkipTest(f"Postgres indisponible ({e})")
 
-        from main import app, get_db
+        from main import app
+        from state import get_db
 
         def _override_get_db():
             yield cls.conn
@@ -70,6 +75,7 @@ class TestPageTruncationTotals(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         from main import app
+
         app.dependency_overrides.clear()
         cls.conn.close()
 
@@ -90,9 +96,9 @@ class TestPageTruncationTotals(unittest.TestCase):
             FROM generate_series(1, 105) AS g
         """)
 
-        resp = self.client.get("/history", params={
-            "action_filter": "test_trunc_action", "days_back": 1
-        })
+        resp = self.client.get(
+            "/history", params={"action_filter": "test_trunc_action", "days_back": 1}
+        )
 
         self.assertEqual(resp.status_code, 200)
         self.assertIn("105", resp.text)
@@ -111,14 +117,17 @@ class TestPageTruncationTotals(unittest.TestCase):
             FROM generate_series(1, 105) AS g
             RETURNING id
         """)
-        waste_ids = [row['id'] for row in self.cur.fetchall()]
-        self.cur.execute("""
+        waste_ids = [row["id"] for row in self.cur.fetchall()]
+        self.cur.execute(
+            """
             INSERT INTO recommendations (waste_id, recommendation_type, status,
                                           estimated_monthly_savings_eur,
                                           execute_after)
             SELECT id, 'stop_instance', 'scheduled', 10.0, NOW() + INTERVAL '3 days'
             FROM waste_detected WHERE id = ANY(%s)
-        """, (waste_ids,))
+        """,
+            (waste_ids,),
+        )
 
         resp = self.client.get("/recommendations")
 
@@ -126,5 +135,5 @@ class TestPageTruncationTotals(unittest.TestCase):
         self.assertIn("100 of 105", resp.text)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
