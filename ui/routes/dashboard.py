@@ -283,6 +283,17 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     )
     burned_row = cursor.fetchone()
 
+    # Last collect run: flags a banner when steampipe was missing and
+    # steps 7-10 (elb/nat/vpc/gp2 detectors) got skipped -- otherwise that
+    # warning only ever reached ~/.wasteless.log, never this page.
+    cursor.execute("""
+        SELECT full_run, skipped_steps, ran_at
+        FROM collection_runs
+        ORDER BY ran_at DESC
+        LIMIT 1
+    """)
+    last_run = cursor.fetchone()
+
     cursor.close()
 
     burned_total = float(burned_row["burned"]) if burned_row else 0
@@ -338,6 +349,7 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             "ai_usage": ai_usage,
             "ai_daily_cost": ai_daily_cost,
             "ai_roi": ai_roi,
+            "last_run": last_run,
         },
     )
 
