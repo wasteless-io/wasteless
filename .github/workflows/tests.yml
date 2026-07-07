@@ -10,6 +10,32 @@ jobs:
   backend:
     name: Backend (pytest)
     runs-on: ubuntu-latest
+    # Real Postgres so tests/integration/ (test_ui_coherence.py,
+    # test_db_backup_restore.py) actually run instead of skipping —
+    # without this, "CI green" only proves the unit tests pass.
+    # AWS/LLM integration tests still skip in CI: providing real cloud
+    # credentials to CI is a deliberate decision, not a default.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wasteless
+          POSTGRES_USER: wasteless
+          POSTGRES_PASSWORD: wasteless_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wasteless"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: wasteless
+      DB_USER: wasteless
+      DB_PASSWORD: wasteless_ci
+      PGPASSWORD: wasteless_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,6 +45,18 @@ jobs:
           cache-dependency-path: requirements.txt
       - name: Install dependencies
         run: pip install -r requirements.txt
+      # Pinned to match the postgres:16-alpine service exactly: a newer
+      # psql/pg_dump client can emit settings (e.g. transaction_timeout)
+      # the older server doesn't recognize, breaking restores.
+      - name: Install postgresql-client-16 (psql, pg_dump)
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client-16
+      - name: Apply database schema
+        run: |
+          psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f sql/init.sql
+          psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f sql/ec2_metrics.sql
+          for migration in sql/migrations/*.sql; do
+            psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f "$migration"
+          done
       - name: Run tests
         run: pytest -q
 
