@@ -236,12 +236,29 @@ _collect() {
         _run_step "${CYAN}[8/10]${NC} Detecting unused NAT gateways (Steampipe)..."     "src/detectors/nat_gateway_unused.py"
         _run_step "${CYAN}[9/10]${NC} Detecting unused VPCs (Steampipe)..."             "src/detectors/vpc_unused.py"
         _run_step "${CYAN}[10/10]${NC} Detecting gp2→gp3 migration candidates (Steampipe)..." "src/detectors/ebs_gp2_migration.py"
+        _SKIPPED_STEPS=""
     else
         echo -e "${YELLOW}[WARN]${NC} steampipe CLI not found — skipping steps 7-10"
         echo "  (unused load balancers, NAT gateways, VPCs, gp2 migration)."
         echo "  Install with: brew install turbot/tap/steampipe && steampipe plugin install aws"
         echo ""
+        _SKIPPED_STEPS="elb_unused,nat_gateway_unused,vpc_unused,ebs_gp2_migration"
     fi
+
+    # Record the run so the UI can flag a partial collection instead of
+    # silently under-reporting waste — the steampipe warning above only
+    # ever reached ~/.wasteless.log, never the dashboard.
+    WASTELESS_SKIPPED_STEPS="$_SKIPPED_STEPS" python3 -c "
+import os
+import sys
+sys.path.insert(0, 'src')
+from core.database import execute_query
+skipped = [s for s in os.environ.get('WASTELESS_SKIPPED_STEPS', '').split(',') if s]
+execute_query(
+    'INSERT INTO collection_runs (full_run, skipped_steps) VALUES (%s, %s)',
+    (len(skipped) == 0, skipped),
+)
+" 2>>"$LOG_FILE" || echo -e "${YELLOW}[WARN]${NC} could not record collection_runs status"
 
     echo ""
     echo -e "${GREEN}Done!${NC} Open ${BOLD}http://localhost:8888/recommendations${NC} to review."
