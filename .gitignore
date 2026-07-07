@@ -39,3 +39,7 @@ CLAUDE.md
 .bg-shell/
 .gsd/
 *.egg-info/
+
+# Test coverage
+.coverage
+coverage-report.txt
