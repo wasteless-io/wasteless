@@ -65,11 +65,14 @@ def get_db():
 
 # Statuses whose resource might still vanish out from under us and needs
 # checking: pending/rejected (still active waste), scheduled (grace period
-# in flight), pr_open (Terraform PR still open). Not dismissed/obsolete/
-# applied/approved — those are already terminal. Both the background job
-# and the manual "Sync AWS" button use this same list so they can't drift
-# apart and cover different scopes under the same "sync" name.
-SYNCABLE_STATUSES = ('pending', 'rejected', 'scheduled', 'pr_open')
+# in flight), pr_open (Terraform PR still open), approved_manual (human
+# confirmed a manual-review recommendation but hasn't necessarily deleted
+# the resource yet — no automated action ever touches it). Not dismissed/
+# obsolete/applied/approved — those are already terminal. Both the
+# background job and the manual "Sync AWS" button use this same list so
+# they can't drift apart and cover different scopes under the same "sync"
+# name.
+SYNCABLE_STATUSES = ('pending', 'rejected', 'scheduled', 'pr_open', 'approved_manual')
 
 
 def _sync_ec2_instance_states(cursor, instance_ids):
@@ -1102,6 +1105,24 @@ async def recommendations(
     cursor.execute("SELECT COUNT(*) AS n FROM recommendations WHERE status = 'pr_open'")
     pr_open_total_count = cursor.fetchone()['n']
 
+    # Manual-review recommendations the human confirmed but hasn't
+    # necessarily deleted yet — wasteless never touches AWS for these, so
+    # they need their own visible "still on you" section, not just a
+    # History entry that reads like something already happened.
+    cursor.execute("""
+        SELECT r.id, r.recommendation_type, r.applied_at,
+               r.estimated_monthly_savings_eur,
+               w.resource_id, w.resource_type
+        FROM recommendations r
+        JOIN waste_detected w ON r.waste_id = w.id
+        WHERE r.status = 'approved_manual'
+        ORDER BY r.applied_at
+        LIMIT 100
+    """)
+    approved_manual_recs = cursor.fetchall()
+    cursor.execute("SELECT COUNT(*) AS n FROM recommendations WHERE status = 'approved_manual'")
+    approved_manual_total_count = cursor.fetchone()['n']
+
     # Distinguishes "the collector never ran" from "it ran and everything got
     # resolved" — an empty pending list means very different things, and the
     # generic placeholder used to claim the collector hadn't run even when
@@ -1117,6 +1138,8 @@ async def recommendations(
         "pr_open_recs": pr_open_recs,
         "pr_open_total_count": pr_open_total_count,
         "scheduled_total_count": scheduled_total_count,
+        "approved_manual_recs": approved_manual_recs,
+        "approved_manual_total_count": approved_manual_total_count,
         "recommendations": recommendations,
         "ec2_recs": ec2_recs,
         "ebs_recs": ebs_recs,
@@ -1798,11 +1821,13 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
             elif action_request.action == "dismiss":
                 # Permanently stop counting this item as active waste
                 # (unlike reject, it drops out of active_waste for good).
-                # Same 'pending'-only guard as reject, for the same reason.
+                # Also allowed from 'approved_manual': the human confirmed a
+                # manual-review recommendation but can still change their
+                # mind before actually deleting anything on AWS.
                 cursor.execute("""
                     UPDATE recommendations
                     SET status = 'dismissed', applied_at = NOW()
-                    WHERE id = %s AND status = 'pending'
+                    WHERE id = %s AND status IN ('pending', 'approved_manual')
                     RETURNING id
                 """, (rec_id,))
                 result = cursor.fetchone()
@@ -1976,9 +2001,14 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     # keeps it counted as active waste instead of looking
                     # remediated when nothing was actually done. Manual review
                     # is a real human decision either way, so it always
-                    # records as approved.
+                    # records the decision — but as 'approved_manual', not
+                    # 'approved': nothing has touched the resource yet (the
+                    # human still has to delete it themselves), so it must
+                    # stay counted in active_waste (see the view's comment)
+                    # until sync confirms it's actually gone, same principle
+                    # as the dry-run case just below.
                     if manual_review:
-                        new_status = 'approved'
+                        new_status = 'approved_manual'
                     elif dry_run:
                         new_status = None
                     else:

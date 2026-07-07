@@ -241,6 +241,29 @@ def test_pr_open_still_counts_as_active_waste(conn):
     assert total_eur == pytest.approx(32.24)
 
 
+# --- Exercice 7bis : approved_manual (decision humaine, rien touché sur AWS) reste actif ---
+
+def test_approved_manual_still_counts_as_active_waste(conn):
+    """Verrouille le fix : approuver une recommandation manual-review
+    (release_ip, delete_snapshot...) marquait le statut 'approved' —
+    identique aux types automatisés où 'approved' signifie qu'une action
+    AWS réelle a eu lieu. Pour le mode manual, rien ne touche jamais AWS ;
+    la ressource continue de coûter jusqu'à ce que l'humain la supprime et
+    qu'un sync le confirme. 'approved_manual' doit donc rester dans
+    active_waste et rester candidat au sync (contrairement à 'approved').
+    """
+    cur = conn.cursor()
+    _insert_waste(cur, 'elastic_ip', 'test-approved-manual-1', 3.36, status='approved_manual')
+    _insert_waste(cur, 'elastic_ip', 'test-really-approved-1', 3.36, status='approved')
+
+    total_eur, count = _active_waste_total(cur, 'elastic_ip')
+    assert count == 1
+    assert total_eur == pytest.approx(3.36)
+
+    assert 'test-approved-manual-1' in _syncable_resource_ids(cur, 'elastic_ip')
+    assert 'test-really-approved-1' not in _syncable_resource_ids(cur, 'elastic_ip')
+
+
 # --- Exercice 8 : le KPI "declined" ne compte que rejected, pas dismissed/pending ---
 
 def test_declined_kpi_counts_only_rejected(conn):
@@ -322,7 +345,7 @@ def test_cancel_closes_out_the_pending_actions_log_entry(conn):
 
 # --- Exercice 12 : pr_open et scheduled sont bien candidats à la synchro AWS ---
 
-SYNCABLE_STATUSES = ('pending', 'rejected', 'scheduled', 'pr_open')
+SYNCABLE_STATUSES = ('pending', 'rejected', 'scheduled', 'pr_open', 'approved_manual')
 
 
 def _syncable_resource_ids(cur, resource_type):
