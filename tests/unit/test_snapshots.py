@@ -8,7 +8,7 @@ import os
 from unittest.mock import MagicMock
 
 # Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from core.snapshots import snapshot_active_waste
 
@@ -38,14 +38,14 @@ class TestSnapshotActiveWaste:
 
         snapshot_active_waste(conn)
         sql = cursor.execute.call_args[0][0]
-        assert 'INSERT INTO waste_snapshots' in sql
-        assert 'FROM waste_detected' in sql
-        assert 'LEFT JOIN active_waste' in sql
-        assert 'ON CONFLICT (snapshot_date, resource_type) DO UPDATE' in sql
+        assert "INSERT INTO waste_snapshots" in sql
+        assert "FROM waste_detected" in sql
+        assert "LEFT JOIN active_waste" in sql
+        assert "ON CONFLICT (snapshot_date, resource_type) DO UPDATE" in sql
 
     def test_failure_is_non_fatal(self):
         cursor = MagicMock()
-        cursor.execute.side_effect = RuntimeError('db down')
+        cursor.execute.side_effect = RuntimeError("db down")
         conn = _conn_with_cursor(cursor)
 
         assert snapshot_active_waste(conn) == 0

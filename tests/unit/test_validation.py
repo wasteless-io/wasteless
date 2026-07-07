@@ -7,14 +7,14 @@ import sys
 import os
 
 # Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from detectors.ec2_idle import (
     validate_cpu_threshold,
     validate_days,
     ValidationError,
     EC2_PRICING,
-    DEFAULT_INSTANCE_COST_EUR
+    DEFAULT_INSTANCE_COST_EUR,
 )
 
 
@@ -118,7 +118,7 @@ class TestEC2Pricing:
 
     def test_common_instance_types_exist(self):
         """Common instance types should have pricing."""
-        common_types = ['t3.micro', 't3.small', 't3.medium', 'm5.large']
+        common_types = ["t3.micro", "t3.small", "t3.medium", "m5.large"]
         for instance_type in common_types:
             assert instance_type in EC2_PRICING, f"{instance_type} not in pricing"
 

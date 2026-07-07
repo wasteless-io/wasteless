@@ -24,9 +24,9 @@ jobs:
           pip install -r requirements.txt -r ui/requirements.txt
           pip install ruff black mypy
       - name: ruff check
-        run: ruff check src ui
+        run: ruff check src ui tests
       - name: black --check
-        run: black --check src ui
+        run: black --check src ui tests
       # Scoped to the two files that execute AWS remediation actions:
       # a type error there is the most expensive place for one to hide.
       # Broader mypy coverage is tracked separately, not a blocking gate yet.
