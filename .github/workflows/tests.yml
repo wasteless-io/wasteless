@@ -7,6 +7,32 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    name: Lint (ruff, black, mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            ui/requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt -r ui/requirements.txt
+          pip install ruff black mypy
+      - name: ruff check
+        run: ruff check src ui
+      - name: black --check
+        run: black --check src ui
+      # Scoped to the two files that execute AWS remediation actions:
+      # a type error there is the most expensive place for one to hide.
+      # Broader mypy coverage is tracked separately, not a blocking gate yet.
+      - name: mypy (safeguards + remediator proxy)
+        run: mypy src/core/safeguards.py ui/utils/remediator.py --ignore-missing-imports --follow-imports=silent
+
   backend:
     name: Backend (pytest)
     runs-on: ubuntu-latest
@@ -63,6 +89,30 @@ jobs:
   ui:
     name: UI (unittest)
     runs-on: ubuntu-latest
+    # Same reasoning as the backend job: several ui/tests/*.py need a real
+    # Postgres (test_action_status_guards.py, test_page_truncation_totals.py,
+    # test_sync_ec2_states.py) and otherwise just skip in CI.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wasteless
+          POSTGRES_USER: wasteless
+          POSTGRES_PASSWORD: wasteless_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wasteless"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: wasteless
+      DB_USER: wasteless
+      DB_PASSWORD: wasteless_ci
+      PGPASSWORD: wasteless_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -74,6 +124,17 @@ jobs:
             ui/requirements.txt
       - name: Install dependencies
         run: pip install -r requirements.txt -r ui/requirements.txt
+      # Pinned to match the postgres:16-alpine service exactly (see the
+      # backend job above for why version drift breaks restores/dumps).
+      - name: Install postgresql-client-16 (psql)
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client-16
+      - name: Apply database schema
+        run: |
+          psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f sql/init.sql
+          psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f sql/ec2_metrics.sql
+          for migration in sql/migrations/*.sql; do
+            psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f "$migration"
+          done
       - name: Run tests
         working-directory: ui
         run: python run_tests.py
