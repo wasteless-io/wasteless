@@ -960,9 +960,18 @@ async def recommendations(
     """)
     pr_open_recs = cursor.fetchall()
 
+    # Distinguishes "the collector never ran" from "it ran and everything got
+    # resolved" — an empty pending list means very different things, and the
+    # generic placeholder used to claim the collector hadn't run even when
+    # waste_detected already held resolved history (dismissed/applied/
+    # approved/obsolete).
+    cursor.execute("SELECT EXISTS (SELECT 1 FROM waste_detected) AS exists_flag")
+    has_waste_history = cursor.fetchone()['exists_flag']
+
     cursor.close()
 
     return templates.TemplateResponse(request, "recommendations.html", context={
+        "has_waste_history": has_waste_history,
         "pr_open_recs": pr_open_recs,
         "recommendations": recommendations,
         "ec2_recs": ec2_recs,

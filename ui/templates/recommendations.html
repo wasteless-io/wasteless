@@ -445,10 +445,14 @@
         <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations match your filters</p>
         <p class="text-muted" style="margin-bottom: 1.25rem; font-size: 0.9rem;">Try relaxing the filters to see more results.</p>
         <a href="/recommendations" class="btn btn-outline" style="padding: 0.4rem 1rem;">Reset filters</a>
+    {% elif has_waste_history %}
+        <div style="margin-bottom: 0.75rem;"></div>
+        <p style="font-weight: 600; margin-bottom: 0.25rem;">Nothing pending review</p>
+        <p class="text-muted" style="margin-bottom: 0; font-size: 0.9rem;">Every waste item detected so far has already been reviewed, dismissed, or resolved. Check <a href="/history">History</a> for what happened to it.</p>
     {% else %}
         <div style="margin-bottom: 0.75rem;"></div>
         <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations yet</p>
-        <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">Either everything looks healthy, or the collector hasn't run yet.</p>
+        <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">The collector hasn't run yet.</p>
         <div style="display: inline-block; text-align: left; background: var(--gray-100); border-radius: 8px; padding: 1rem 1.5rem; font-size: 0.85rem;">
             <p style="margin: 0 0 0.5rem; font-weight: 600; color: var(--gray-700);">Run the pipeline to collect data:</p>
             <code style="display: block;">wasteless collect</code>
