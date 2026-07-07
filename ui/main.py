@@ -72,12 +72,102 @@ def get_db():
 SYNCABLE_STATUSES = ('pending', 'rejected', 'scheduled', 'pr_open')
 
 
+def _sync_ec2_instance_states(cursor, instance_ids):
+    """Reconcile EC2 recommendations against live instance state.
+
+    A stop_instance/terminate_instance recommendation whose instance was
+    already stopped or terminated outside wasteless (AWS console, another
+    tool) is obsolete just like a vanished resource — retrying it forever
+    would never resolve it. Shared by sync_aws_job (every 5 min) and the
+    manual /api/sync-aws button so both resolve the same cases; this used
+    to be manual-button-only, so a stopped instance behind a 'scheduled'
+    or 'rejected' recommendation never cleared until someone clicked sync.
+
+    Returns (synced_count, obsolete_count).
+    """
+    from utils.aws_clients import get_client
+
+    aws_states = {}
+    for region in ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']:
+        try:
+            ec2 = get_client('ec2', region=region)
+            response = ec2.describe_instances(
+                Filters=[{'Name': 'instance-id', 'Values': instance_ids}]
+            )
+            for reservation in response.get('Reservations', []):
+                for instance in reservation.get('Instances', []):
+                    aws_states[instance['InstanceId']] = {
+                        'state': instance['State']['Name'],
+                        'region': region
+                    }
+        except Exception as e:
+            print(f"Error checking region {region}: {e}")
+            continue
+
+    synced_count = 0
+    obsolete_count = 0
+
+    for instance_id in instance_ids:
+        aws_info = aws_states.get(instance_id)
+
+        if aws_info is None:
+            cursor.execute("""
+                UPDATE recommendations r
+                SET status = 'obsolete', applied_at = NOW()
+                FROM waste_detected w
+                WHERE r.waste_id = w.id
+                AND w.resource_id = %s
+                AND r.status = ANY(%s)
+            """, (instance_id, list(SYNCABLE_STATUSES)))
+            obsolete_count += cursor.rowcount
+            continue
+
+        aws_state = aws_info['state']
+
+        cursor.execute("""
+            SELECT r.id, r.recommendation_type
+            FROM recommendations r
+            JOIN waste_detected w ON r.waste_id = w.id
+            WHERE w.resource_id = %s AND r.status = ANY(%s)
+        """, (instance_id, list(SYNCABLE_STATUSES)))
+
+        for rec in cursor.fetchall():
+            rec_type = rec['recommendation_type']
+            should_obsolete = (
+                (rec_type == 'stop_instance' and aws_state in ('stopped', 'terminated'))
+                or (rec_type == 'terminate_instance' and aws_state == 'terminated')
+            )
+
+            if should_obsolete:
+                cursor.execute("""
+                    UPDATE recommendations
+                    SET status = 'obsolete', applied_at = NOW()
+                    WHERE id = %s
+                """, (rec['id'],))
+                obsolete_count += 1
+            else:
+                cursor.execute("""
+                    UPDATE waste_detected
+                    SET metadata = jsonb_set(
+                        COALESCE(metadata, '{}'::jsonb),
+                        '{instance_state}',
+                        %s::jsonb
+                    )
+                    WHERE resource_id = %s
+                """, (f'"{aws_state}"', instance_id))
+                synced_count += 1
+
+    return synced_count, obsolete_count
+
+
 def sync_aws_job():
     """Background job to sync recommendations with AWS state.
 
     Covers every resource type detectors can produce (EC2 instances, EBS
     volumes, Elastic IPs, snapshots, NAT gateways, load balancers): when
     the resource no longer exists, the pending recommendation is obsolete.
+    EC2 instances also get the stopped/terminated-outside-wasteless check
+    via _sync_ec2_instance_states (see its docstring).
     """
     from utils.aws_sync import find_vanished_resources
 
@@ -100,6 +190,7 @@ def sync_aws_job():
             conn.close()
             return
 
+        instance_ids = pending.pop('ec2_instance', [])
         vanished = find_vanished_resources(pending)
 
         obsolete_count = 0
@@ -114,6 +205,10 @@ def sync_aws_job():
                 AND r.status = ANY(%s)
             """, (resource_type, ids, list(SYNCABLE_STATUSES)))
             obsolete_count += cursor.rowcount
+
+        if instance_ids:
+            _, ec2_obsolete = _sync_ec2_instance_states(cursor, instance_ids)
+            obsolete_count += ec2_obsolete
 
         conn.commit()
         conn.close()
@@ -2017,88 +2112,12 @@ async def api_sync_aws(conn=Depends(get_db)):
                 """, (resource_type, ids, list(SYNCABLE_STATUSES)))
                 obsolete_count += cursor.rowcount
 
-        # Query AWS for instance states (check multiple regions)
-        regions_to_check = (['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
-                            if pending_instances else [])
-        aws_states = {}
-
-        for region in regions_to_check:
-            try:
-                from utils.aws_clients import get_client
-                ec2 = get_client('ec2', region=region)
-                # Use filters instead of InstanceIds to avoid errors for non-existent instances
-                response = ec2.describe_instances(
-                    Filters=[{'Name': 'instance-id', 'Values': pending_instances}]
-                )
-                for reservation in response.get('Reservations', []):
-                    for instance in reservation.get('Instances', []):
-                        aws_states[instance['InstanceId']] = {
-                            'state': instance['State']['Name'],
-                            'region': region
-                        }
-            except Exception as e:
-                # Log error but continue with other regions
-                print(f"Error checking region {region}: {e}")
-                continue
-
-        # Update EC2 recommendations based on AWS state
+        # EC2 instances: same state-based reconciliation as sync_aws_job,
+        # so a manual click never resolves more (or less) than the auto job.
         synced_count = 0
-
-        for instance_id in pending_instances:
-            aws_info = aws_states.get(instance_id)
-
-            if aws_info is None:
-                # Instance doesn't exist - mark as obsolete
-                cursor.execute("""
-                    UPDATE recommendations r
-                    SET status = 'obsolete', applied_at = NOW()
-                    FROM waste_detected w
-                    WHERE r.waste_id = w.id
-                    AND w.resource_id = %s
-                    AND r.status = ANY(%s)
-                """, (instance_id, list(SYNCABLE_STATUSES)))
-                obsolete_count += cursor.rowcount
-            else:
-                aws_state = aws_info['state']
-
-                # Check if recommendation is still valid
-                cursor.execute("""
-                    SELECT r.id, r.recommendation_type
-                    FROM recommendations r
-                    JOIN waste_detected w ON r.waste_id = w.id
-                    WHERE w.resource_id = %s AND r.status = 'pending'
-                """, (instance_id,))
-
-                for rec in cursor.fetchall():
-                    rec_type = rec['recommendation_type']
-                    should_obsolete = False
-
-                    # Stop recommendation but instance already stopped/terminated
-                    if rec_type == 'stop_instance' and aws_state in ('stopped', 'terminated'):
-                        should_obsolete = True
-                    # Terminate recommendation but instance already terminated
-                    elif rec_type == 'terminate_instance' and aws_state == 'terminated':
-                        should_obsolete = True
-
-                    if should_obsolete:
-                        cursor.execute("""
-                            UPDATE recommendations
-                            SET status = 'obsolete', applied_at = NOW()
-                            WHERE id = %s
-                        """, (rec['id'],))
-                        obsolete_count += 1
-                    else:
-                        # Update the stored state in waste_detected metadata
-                        cursor.execute("""
-                            UPDATE waste_detected
-                            SET metadata = jsonb_set(
-                                COALESCE(metadata, '{}'::jsonb),
-                                '{instance_state}',
-                                %s::jsonb
-                            )
-                            WHERE resource_id = %s
-                        """, (f'"{aws_state}"', instance_id))
-                        synced_count += 1
+        if pending_instances:
+            synced_count, ec2_obsolete = _sync_ec2_instance_states(cursor, pending_instances)
+            obsolete_count += ec2_obsolete
 
         conn.commit()
 
