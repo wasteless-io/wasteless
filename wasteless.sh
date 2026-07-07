@@ -22,7 +22,13 @@ NC='\033[0m'
 PID_FILE="$HOME/.wasteless.pid"
 LOG_FILE="$HOME/.wasteless.log"
 COLLECTOR_PID_FILE="$HOME/.wasteless-collector.pid"
-COLLECT_LOCK_FILE="$HOME/.wasteless-collect.lock"
+# A directory, not a file: mkdir is atomic (POSIX), so concurrent
+# `wasteless.sh collect` invocations racing on this can't both "win" the
+# check like a plain [ -f lockfile ] + echo $$ > lockfile pattern would
+# (that had a TOCTOU window where two overlapping runs could both pass
+# the check before either wrote its PID -- confirmed by launching 5
+# concurrent collects, 2 got through instead of 1).
+COLLECT_LOCK_DIR="$HOME/.wasteless-collect.lock.d"
 
 CMD="${1:-start}"
 
@@ -130,7 +136,7 @@ _stop() {
         kill "$CPID" 2>/dev/null
         rm -f "$COLLECTOR_PID_FILE"
     fi
-    rm -f "$COLLECT_LOCK_FILE"
+    rm -rf "$COLLECT_LOCK_DIR"
 
     STOPPED=0
     if [ -f "$PID_FILE" ]; then
@@ -187,15 +193,23 @@ _status() {
 # collect
 # ---------------------------------------------------------------------------
 _collect() {
-    # Prevent concurrent runs
-    if [ -f "$COLLECT_LOCK_FILE" ]; then
-        LOCK_PID=$(cat "$COLLECT_LOCK_FILE" 2>/dev/null)
-        if kill -0 "$LOCK_PID" 2>/dev/null; then
+    # Prevent concurrent runs. mkdir is atomic: only one racing invocation
+    # can create the directory, so there's no check-then-write window.
+    if ! mkdir "$COLLECT_LOCK_DIR" 2>/dev/null; then
+        LOCK_PID=$(cat "$COLLECT_LOCK_DIR/pid" 2>/dev/null)
+        if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
+            return 0
+        fi
+        # Stale lock (holder died without cleaning up, e.g. kill -9) --
+        # reclaim it. If another process wins this second race, that's
+        # fine: we just yield to them instead of double-running.
+        rm -rf "$COLLECT_LOCK_DIR"
+        if ! mkdir "$COLLECT_LOCK_DIR" 2>/dev/null; then
             return 0
         fi
     fi
-    echo $$ > "$COLLECT_LOCK_FILE"
-    trap 'rm -f "$COLLECT_LOCK_FILE"' EXIT INT TERM
+    echo $$ > "$COLLECT_LOCK_DIR/pid"
+    trap 'rm -rf "$COLLECT_LOCK_DIR"' EXIT INT TERM
 
     cd "$SCRIPT_DIR"
 
