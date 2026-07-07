@@ -9,6 +9,7 @@ Replaces Streamlit for better performance.
 Author: Wasteless Team
 """
 
+import json
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -326,6 +327,11 @@ class ConfigUpdate(BaseModel):
     """Configuration update request."""
     key: str
     value: str | int | float | bool
+
+
+class AskQuestionRequest(BaseModel):
+    """One-shot question about a specific recommendation."""
+    question: str
 
 
 # =============================================================================
@@ -1136,6 +1142,58 @@ def briefing_today(conn=Depends(get_db), refresh: bool = False):
                         if briefing["created_at"] else None,
         "cached": briefing["cached"],
     })
+
+
+@app.post("/api/recommendations/{rec_id}/ask")
+def ask_about_recommendation(rec_id: int, body: AskQuestionRequest, conn=Depends(get_db)):
+    """One-shot AI answer to a question about a specific recommendation.
+
+    Stateless (no conversation history) and scoped to this recommendation's
+    own data — same guardrails as the ai_insight generation it sits next to.
+    Sync route on purpose: the LLM call blocks up to 20s and must run in
+    the threadpool, not on the event loop.
+    """
+    # src/ is a package importable from the repo root, not from ui/ — same
+    # sys.path trick as ui/utils/remediator.py's backend integration.
+    import sys
+    backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    from src.core.llm import answer_question
+
+    question = (body.question or '').strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question must not be empty")
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT r.action_required, r.estimated_monthly_savings_eur,
+               w.resource_type, w.confidence_score, w.metadata
+        FROM recommendations r
+        JOIN waste_detected w ON w.id = r.waste_id
+        WHERE r.id = %s
+    """, (rec_id,))
+    row = cursor.fetchone()
+    cursor.close()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="recommendation not found")
+
+    metadata = row['metadata'] or {}
+    if isinstance(metadata, str):
+        metadata = json.loads(metadata)
+
+    answer = answer_question(
+        question, row['action_required'], row['resource_type'],
+        row['estimated_monthly_savings_eur'], row['confidence_score'],
+        metadata, conn=conn,
+    )
+    if answer is None:
+        return JSONResponse(
+            {"answer": None, "error": "AI is not configured or the request failed"},
+            status_code=503,
+        )
+    return JSONResponse({"answer": answer})
 
 
 @app.get("/logs", response_class=HTMLResponse)
