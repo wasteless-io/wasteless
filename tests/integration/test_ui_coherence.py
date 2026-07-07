@@ -17,7 +17,7 @@ Nécessite une base accessible via les variables d'environnement DB_*
 
 import os
 import sys
-from datetime import date
+from datetime import datetime, timezone
 
 import pytest
 
@@ -174,7 +174,12 @@ def test_dismissed_is_excluded_from_active_waste(conn):
 
 def test_reports_period_includes_dismissed_and_applied_but_home_does_not(conn):
     cur = conn.cursor()
-    today = date.today()
+    # UTC, not local date.today(): _insert_waste's created_at defaults to
+    # Postgres's own NOW() (UTC). A local-timezone "today" flakes during
+    # the daily window where the local date has rolled over but UTC
+    # hasn't yet -- the freshly inserted row falls outside the query
+    # range and the assertion below sees 0 instead of the inserted total.
+    today = datetime.now(timezone.utc).date()
 
     _insert_waste(cur, 'nat_gateway', 'test-dismissed-2', 32.24, status='dismissed')
     _insert_waste(cur, 'load_balancer', 'test-applied-1', 16.92, status='applied')
