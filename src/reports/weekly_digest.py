@@ -80,23 +80,28 @@ def collect_digest_data(conn, start_date: date, end_date: date) -> Dict[str, Any
 
     cursor = conn.cursor()
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) AS n, COALESCE(SUM(monthly_waste_eur), 0) AS eur
             FROM waste_detected
             WHERE created_at >= %s AND created_at < %s;
-        """, (start_date, end_exclusive))
+        """,
+            (start_date, end_exclusive),
+        )
         new_count, new_eur = _values(cursor.fetchone())
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT resource_type, COUNT(*) AS n,
                    COALESCE(SUM(monthly_waste_eur), 0) AS eur
             FROM waste_detected
             WHERE created_at >= %s AND created_at < %s
             GROUP BY resource_type
             ORDER BY 3 DESC;
-        """, (start_date, end_exclusive))
-        by_type = [(t, int(c), float(e))
-                   for t, c, e in (_values(r) for r in cursor.fetchall())]
+        """,
+            (start_date, end_exclusive),
+        )
+        by_type = [(t, int(c), float(e)) for t, c, e in (_values(r) for r in cursor.fetchall())]
 
         if period_includes_today:
             # Live snapshot: what is waiting for a decision right now.
@@ -108,60 +113,69 @@ def collect_digest_data(conn, start_date: date, end_date: date) -> Dict[str, Any
                 WHERE status = 'pending';
             """)
             pending_count, pending_eur, oldest_days = _values(cursor.fetchone())
-            pending_scope = 'snapshot'
+            pending_scope = "snapshot"
         else:
             # Past period: the table only holds current statuses, so a
             # snapshot would be meaningless — report what was created then.
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) AS n,
                        COALESCE(SUM(estimated_monthly_savings_eur), 0) AS eur
                 FROM recommendations
                 WHERE created_at >= %s AND created_at < %s;
-            """, (start_date, end_exclusive))
+            """,
+                (start_date, end_exclusive),
+            )
             pending_count, pending_eur = _values(cursor.fetchone())
             oldest_days = None
-            pending_scope = 'created_in_period'
+            pending_scope = "created_in_period"
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 COUNT(*) FILTER (WHERE action_status = 'success' AND NOT dry_run) AS succeeded,
                 COUNT(*) FILTER (WHERE action_status = 'failed' AND NOT dry_run) AS failed,
                 COUNT(*) FILTER (WHERE dry_run) AS dry_run
             FROM actions_log
             WHERE action_date >= %s AND action_date < %s;
-        """, (start_date, end_exclusive))
+        """,
+            (start_date, end_exclusive),
+        )
         succeeded, failed, dry_run = _values(cursor.fetchone())
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COALESCE(SUM(actual_savings_eur), 0) AS eur
             FROM savings_realized
             WHERE verified_at >= %s AND verified_at < %s;
-        """, (start_date, end_exclusive))
-        verified_eur, = _values(cursor.fetchone())
+        """,
+            (start_date, end_exclusive),
+        )
+        (verified_eur,) = _values(cursor.fetchone())
 
         return {
-            'period': {
-                'start': start_date.isoformat(),
-                'end': end_date.isoformat(),
-                'days': (end_date - start_date).days + 1,
+            "period": {
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat(),
+                "days": (end_date - start_date).days + 1,
             },
-            'new_waste': {
-                'count': int(new_count),
-                'monthly_eur': float(new_eur),
-                'by_type': by_type,
+            "new_waste": {
+                "count": int(new_count),
+                "monthly_eur": float(new_eur),
+                "by_type": by_type,
             },
-            'pending': {
-                'count': int(pending_count),
-                'monthly_eur': float(pending_eur),
-                'oldest_days': int(oldest_days) if oldest_days is not None else None,
-                'scope': pending_scope,
+            "pending": {
+                "count": int(pending_count),
+                "monthly_eur": float(pending_eur),
+                "oldest_days": int(oldest_days) if oldest_days is not None else None,
+                "scope": pending_scope,
             },
-            'actions': {
-                'succeeded': int(succeeded),
-                'failed': int(failed),
-                'dry_run': int(dry_run),
+            "actions": {
+                "succeeded": int(succeeded),
+                "failed": int(failed),
+                "dry_run": int(dry_run),
             },
-            'verified_savings_eur': float(verified_eur),
+            "verified_savings_eur": float(verified_eur),
         }
     finally:
         cursor.close()
@@ -169,30 +183,28 @@ def collect_digest_data(conn, start_date: date, end_date: date) -> Dict[str, Any
 
 def format_digest(data: Dict[str, Any]) -> str:
     """Plain-text (markdown-friendly) report from the data. No LLM involved."""
-    period = data['period']
-    new = data['new_waste']
-    pending = data['pending']
-    actions = data['actions']
+    period = data["period"]
+    new = data["new_waste"]
+    pending = data["pending"]
+    actions = data["actions"]
 
     lines = [
         f"Wasteless — activity report ({period['start']} to {period['end']})",
         "=" * 60,
         "",
-        f"New waste detected: {new['count']} resource(s), "
-        f"{new['monthly_eur']:.2f} EUR/month",
+        f"New waste detected: {new['count']} resource(s), " f"{new['monthly_eur']:.2f} EUR/month",
     ]
-    for resource_type, count, eur in new['by_type']:
+    for resource_type, count, eur in new["by_type"]:
         lines.append(f"  - {resource_type}: {count} ({eur:.2f} EUR/month)")
 
-    if pending['scope'] == 'snapshot':
+    if pending["scope"] == "snapshot":
         lines += [
             "",
             f"Pending recommendations: {pending['count']} "
             f"({pending['monthly_eur']:.2f} EUR/month of potential savings)",
         ]
-        if pending['oldest_days'] is not None and pending['count'] > 0:
-            lines.append(
-                f"  Oldest has been waiting {pending['oldest_days']} day(s).")
+        if pending["oldest_days"] is not None and pending["count"] > 0:
+            lines.append(f"  Oldest has been waiting {pending['oldest_days']} day(s).")
     else:
         lines += [
             "",
@@ -216,15 +228,20 @@ def generate_narrative(data: Dict[str, Any], conn=None) -> Optional[str]:
 
     try:
         import litellm
+
         response = litellm.completion(
             model=os.getenv(llm.MODEL_ENV_VAR),
-            messages=[{'role': 'user', 'content': NARRATIVE_PROMPT.format(
-                data=json.dumps(data, default=str))}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": NARRATIVE_PROMPT.format(data=json.dumps(data, default=str)),
+                }
+            ],
             max_tokens=MAX_TOKENS,
             temperature=0.2,
             timeout=TIMEOUT_SECONDS,
         )
-        llm.record_usage(conn, 'narrative', response)
+        llm.record_usage(conn, "narrative", response)
         narrative = response.choices[0].message.content
         return narrative.strip() if narrative else None
     except Exception as e:
@@ -244,25 +261,34 @@ def build_digest(conn, start_date: date, end_date: date) -> str:
 
 def main() -> None:
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     parser = argparse.ArgumentParser(description="Print a Wasteless activity report")
-    parser.add_argument('--days', type=int, default=7,
-                        help="Period ending today, in days (default: 7)")
-    parser.add_argument('--start', type=date.fromisoformat, default=None,
-                        help="Period start (YYYY-MM-DD); overrides --days")
-    parser.add_argument('--end', type=date.fromisoformat, default=None,
-                        help="Period end (YYYY-MM-DD, default: today)")
+    parser.add_argument(
+        "--days", type=int, default=7, help="Period ending today, in days (default: 7)"
+    )
+    parser.add_argument(
+        "--start",
+        type=date.fromisoformat,
+        default=None,
+        help="Period start (YYYY-MM-DD); overrides --days",
+    )
+    parser.add_argument(
+        "--end",
+        type=date.fromisoformat,
+        default=None,
+        help="Period end (YYYY-MM-DD, default: today)",
+    )
     args = parser.parse_args()
 
     end_date = args.end or date.today()
     start_date = args.start or end_date - timedelta(days=args.days - 1)
 
     from core.database import get_connection
+
     with get_connection() as conn:
         print(build_digest(conn, start_date, end_date))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

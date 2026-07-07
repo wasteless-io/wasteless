@@ -32,45 +32,47 @@ from collectors.steampipe import SteampipeError, run_query_file
 load_dotenv()
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 def rows_to_records(rows: List[Dict[str, Any]]) -> List[Tuple]:
     """Map Steampipe rows to ec2_metrics insert tuples."""
-    return [(
-        row['instance_id'],
-        row.get('instance_type') or '',
-        row.get('instance_name') or '',
-        row.get('instance_state') or '',
-        row['collection_date'],
-        row.get('cpu_avg'),
-        row.get('cpu_max'),
-    ) for row in rows]
+    return [
+        (
+            row["instance_id"],
+            row.get("instance_type") or "",
+            row.get("instance_name") or "",
+            row.get("instance_state") or "",
+            row["collection_date"],
+            row.get("cpu_avg"),
+            row.get("cpu_max"),
+        )
+        for row in rows
+    ]
 
 
 class SteampipeEC2MetricsCollector:
 
     def __init__(self):
-        db_vars = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+        db_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
         missing = [v for v in db_vars if not os.getenv(v)]
         if missing:
             raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
 
         self.conn = psycopg2.connect(
-            host=os.getenv('DB_HOST'),
-            port=int(os.getenv('DB_PORT')),
-            database=os.getenv('DB_NAME'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            connect_timeout=10
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT")),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            connect_timeout=10,
         )
 
     def collect(self) -> List[Tuple]:
         logger.info("Collecting EC2 CPU metrics via Steampipe (last 7 days)...")
-        records = rows_to_records(run_query_file('ec2_cpu_daily'))
+        records = rows_to_records(run_query_file("ec2_cpu_daily"))
         logger.info(f"{len(records)} metric datapoint(s) collected")
         return records
 
@@ -82,7 +84,9 @@ class SteampipeEC2MetricsCollector:
         try:
             # Upsert CPU fields only: never touch network columns so the
             # boto3 collector's data survives
-            execute_values(cursor, """
+            execute_values(
+                cursor,
+                """
                 INSERT INTO ec2_metrics (
                     instance_id, instance_type, instance_name,
                     instance_state, collection_date, cpu_avg, cpu_max
@@ -93,7 +97,9 @@ class SteampipeEC2MetricsCollector:
                     instance_state = EXCLUDED.instance_state,
                     cpu_avg        = EXCLUDED.cpu_avg,
                     cpu_max        = EXCLUDED.cpu_max;
-            """, records)
+            """,
+                records,
+            )
             self.conn.commit()
             logger.info(f"Upserted {len(records)} rows into ec2_metrics")
             return len(records)
@@ -111,8 +117,10 @@ class SteampipeEC2MetricsCollector:
         records = self.collect()
 
         if not records:
-            print("No datapoints found (no running instances, or no "
-                  "CloudWatch data in the last 7 days).\n")
+            print(
+                "No datapoints found (no running instances, or no "
+                "CloudWatch data in the last 7 days).\n"
+            )
             return
 
         saved = self.save(records)
@@ -122,7 +130,7 @@ class SteampipeEC2MetricsCollector:
         print("\nRun the idle detector next: python3 src/detectors/ec2_idle.py\n")
 
     def close(self):
-        if hasattr(self, 'conn') and self.conn:
+        if hasattr(self, "conn") and self.conn:
             self.conn.close()
 
     def __del__(self):
@@ -145,5 +153,5 @@ def main():
             collector.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

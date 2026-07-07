@@ -10,7 +10,6 @@ Collects CloudWatch metrics for EC2 instances:
 Author: Wasteless
 """
 
-import boto3
 import os
 import sys
 
@@ -21,7 +20,6 @@ from datetime import datetime, timedelta, date
 from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import execute_values
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Optional
 
@@ -30,25 +28,22 @@ load_dotenv()
 
 # Configure logging
 import logging
+
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 class AWSCloudWatchCollector:
     """Collect CloudWatch metrics for EC2 instances."""
-    
+
     def __init__(self):
         """Initialize CloudWatch collector with AWS clients."""
         logger.info("Initializing AWS CloudWatch Collector")
-        
+
         # Verify required environment variables
-        required_vars = [
-            'AWS_REGION',
-            'AWS_ACCOUNT_ID'
-        ]
+        required_vars = ["AWS_REGION", "AWS_ACCOUNT_ID"]
 
         missing = [var for var in required_vars if not os.getenv(var)]
         if missing:
@@ -62,23 +57,23 @@ class AWSCloudWatchCollector:
         # 3. AWS credentials file (~/.aws/credentials)
         # 4. Container credentials (ECS tasks)
         try:
-            self.region = os.getenv('AWS_REGION')
-            self.account_id = os.getenv('AWS_ACCOUNT_ID')
+            self.region = os.getenv("AWS_REGION")
+            self.account_id = os.getenv("AWS_ACCOUNT_ID")
 
             # EC2 client (for listing instances)
             # No explicit credentials - uses boto3 credential provider chain
-            self.ec2_client = get_client('ec2', region=self.region)
+            self.ec2_client = get_client("ec2", region=self.region)
 
             # CloudWatch client (for metrics)
-            self.cw_client = get_client('cloudwatch', region=self.region)
+            self.cw_client = get_client("cloudwatch", region=self.region)
 
             logger.info(f"✅ AWS clients initialized for region {self.region}")
             logger.info("   Using boto3 default credential provider (IAM role / env vars)")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize AWS clients: {e}")
             sys.exit(1)
-    
+
     def get_ec2_instances(self):
         """
         Get list of all EC2 instances in the account.
@@ -91,26 +86,26 @@ class AWSCloudWatchCollector:
 
         try:
             instances = []
-            paginator = self.ec2_client.get_paginator('describe_instances')
+            paginator = self.ec2_client.get_paginator("describe_instances")
 
             # Iterate through all pages
             for page in paginator.paginate():
-                for reservation in page['Reservations']:
-                    for instance in reservation['Instances']:
+                for reservation in page["Reservations"]:
+                    for instance in reservation["Instances"]:
                         # Extract instance details
                         instance_data = {
-                            'instance_id': instance['InstanceId'],
-                            'instance_type': instance['InstanceType'],
-                            'instance_state': instance['State']['Name'],
-                            'launch_time': instance['LaunchTime'],
-                            'availability_zone': instance['Placement']['AvailabilityZone'],
-                            'tags': {}
+                            "instance_id": instance["InstanceId"],
+                            "instance_type": instance["InstanceType"],
+                            "instance_state": instance["State"]["Name"],
+                            "launch_time": instance["LaunchTime"],
+                            "availability_zone": instance["Placement"]["AvailabilityZone"],
+                            "tags": {},
                         }
 
                         # Extract tags
-                        if 'Tags' in instance:
-                            for tag in instance['Tags']:
-                                instance_data['tags'][tag['Key']] = tag['Value']
+                        if "Tags" in instance:
+                            for tag in instance["Tags"]:
+                                instance_data["tags"][tag["Key"]] = tag["Value"]
 
                         instances.append(instance_data)
 
@@ -119,7 +114,7 @@ class AWSCloudWatchCollector:
             # Display summary by state
             states = {}
             for inst in instances:
-                state = inst['instance_state']
+                state = inst["instance_state"]
                 states[state] = states.get(state, 0) + 1
 
             for state, count in states.items():
@@ -130,125 +125,119 @@ class AWSCloudWatchCollector:
         except Exception as e:
             logger.error(f"Failed to fetch EC2 instances: {e}")
             return []
-    
+
     def get_cpu_utilization(self, instance_id, days=7):
         """
         Get CPU utilization metrics for an instance.
-        
+
         Args:
             instance_id (str): EC2 instance ID
             days (int): Number of days to analyze (default: 7)
-            
+
         Returns:
             dict: CPU metrics (avg, max, min) or None if no data
         """
         logger.debug(f"Fetching CPU metrics for {instance_id} (last {days} days)")
-        
+
         try:
             end_time = datetime.utcnow()
             start_time = end_time - timedelta(days=days)
-            
+
             response = self.cw_client.get_metric_statistics(
-                Namespace='AWS/EC2',
-                MetricName='CPUUtilization',
-                Dimensions=[
-                    {'Name': 'InstanceId', 'Value': instance_id}
-                ],
+                Namespace="AWS/EC2",
+                MetricName="CPUUtilization",
+                Dimensions=[{"Name": "InstanceId", "Value": instance_id}],
                 StartTime=start_time,
                 EndTime=end_time,
                 Period=3600,  # 1 hour granularity
-                Statistics=['Average', 'Maximum', 'Minimum']
+                Statistics=["Average", "Maximum", "Minimum"],
             )
-            
-            datapoints = response.get('Datapoints', [])
-            
+
+            datapoints = response.get("Datapoints", [])
+
             if not datapoints:
                 logger.warning(f"No CPU metrics for {instance_id}")
                 return None
-            
+
             # Calculate overall statistics
-            avg_cpu = sum(dp['Average'] for dp in datapoints) / len(datapoints)
-            max_cpu = max(dp['Maximum'] for dp in datapoints)
-            min_cpu = min(dp['Minimum'] for dp in datapoints)
+            avg_cpu = sum(dp["Average"] for dp in datapoints) / len(datapoints)
+            max_cpu = max(dp["Maximum"] for dp in datapoints)
+            min_cpu = min(dp["Minimum"] for dp in datapoints)
 
             metrics = {
-                'cpu_avg': round(avg_cpu, 2),
-                'cpu_max': round(max_cpu, 2),
-                'cpu_min': round(min_cpu, 2),
-                'datapoints_count': len(datapoints)
+                "cpu_avg": round(avg_cpu, 2),
+                "cpu_max": round(max_cpu, 2),
+                "cpu_min": round(min_cpu, 2),
+                "datapoints_count": len(datapoints),
             }
-            
+
             logger.debug(f"  CPU metrics: avg={avg_cpu:.2f}%, max={max_cpu:.2f}%")
-            
+
             return metrics
-            
+
         except Exception as e:
             logger.error(f"Failed to fetch CPU metrics for {instance_id}: {e}")
             return None
-    
+
     def get_network_metrics(self, instance_id, days=7):
         """
         Get network I/O metrics for an instance.
-        
+
         Args:
             instance_id (str): EC2 instance ID
             days (int): Number of days to analyze
-            
+
         Returns:
             dict: Network metrics (in/out in MB) or None
         """
         logger.debug(f"Fetching network metrics for {instance_id}")
-        
+
         try:
             end_time = datetime.utcnow()
             start_time = end_time - timedelta(days=days)
-            
+
             # Network In
             response_in = self.cw_client.get_metric_statistics(
-                Namespace='AWS/EC2',
-                MetricName='NetworkIn',
-                Dimensions=[
-                    {'Name': 'InstanceId', 'Value': instance_id}
-                ],
+                Namespace="AWS/EC2",
+                MetricName="NetworkIn",
+                Dimensions=[{"Name": "InstanceId", "Value": instance_id}],
                 StartTime=start_time,
                 EndTime=end_time,
                 Period=3600,
-                Statistics=['Average']
+                Statistics=["Average"],
             )
-            
+
             # Network Out
             response_out = self.cw_client.get_metric_statistics(
-                Namespace='AWS/EC2',
-                MetricName='NetworkOut',
-                Dimensions=[
-                    {'Name': 'InstanceId', 'Value': instance_id}
-                ],
+                Namespace="AWS/EC2",
+                MetricName="NetworkOut",
+                Dimensions=[{"Name": "InstanceId", "Value": instance_id}],
                 StartTime=start_time,
                 EndTime=end_time,
                 Period=3600,
-                Statistics=['Average']
+                Statistics=["Average"],
             )
-            
-            datapoints_in = response_in.get('Datapoints', [])
-            datapoints_out = response_out.get('Datapoints', [])
-            
+
+            datapoints_in = response_in.get("Datapoints", [])
+            datapoints_out = response_out.get("Datapoints", [])
+
             if not datapoints_in or not datapoints_out:
-                return {'network_in_mb': 0.0, 'network_out_mb': 0.0}
-            
+                return {"network_in_mb": 0.0, "network_out_mb": 0.0}
+
             # Calculate averages (convert bytes to MB)
-            avg_in_bytes = sum(dp['Average'] for dp in datapoints_in) / len(datapoints_in)
-            avg_out_bytes = sum(dp['Average'] for dp in datapoints_out) / len(datapoints_out)
-            
+            avg_in_bytes = sum(dp["Average"] for dp in datapoints_in) / len(datapoints_in)
+            avg_out_bytes = sum(dp["Average"] for dp in datapoints_out) / len(datapoints_out)
+
             metrics = {
-                'network_in_mb': round(avg_in_bytes / 1024 / 1024, 2),
-                'network_out_mb': round(avg_out_bytes / 1024 / 1024, 2)
+                "network_in_mb": round(avg_in_bytes / 1024 / 1024, 2),
+                "network_out_mb": round(avg_out_bytes / 1024 / 1024, 2),
             }
-            
+
             return metrics
-            
+
         except Exception as e:
             logger.error(f"Failed to fetch network metrics for {instance_id}: {e}")
-            return {'network_in_mb': 0.0, 'network_out_mb': 0.0}
+            return {"network_in_mb": 0.0, "network_out_mb": 0.0}
 
     def save_to_postgres(self, metrics_data):
         """
@@ -267,7 +256,7 @@ class AWSCloudWatchCollector:
         logger.info(f"Saving {len(metrics_data)} metric records to PostgreSQL...")
 
         # Verify database credentials
-        db_vars = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+        db_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
         missing = [var for var in db_vars if not os.getenv(var)]
         if missing:
             logger.error(f"Missing database variables: {', '.join(missing)}")
@@ -276,11 +265,11 @@ class AWSCloudWatchCollector:
         try:
             # Connect to PostgreSQL
             conn = psycopg2.connect(
-                host=os.getenv('DB_HOST'),
-                port=int(os.getenv('DB_PORT')),
-                database=os.getenv('DB_NAME'),
-                user=os.getenv('DB_USER'),
-                password=os.getenv('DB_PASSWORD')
+                host=os.getenv("DB_HOST"),
+                port=int(os.getenv("DB_PORT")),
+                database=os.getenv("DB_NAME"),
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
             )
             cursor = conn.cursor()
 
@@ -288,19 +277,21 @@ class AWSCloudWatchCollector:
             values = []
             for metric in metrics_data:
                 # Get instance name from tags if available
-                instance_name = metric.get('tags', {}).get('Name', '')
+                instance_name = metric.get("tags", {}).get("Name", "")
 
-                values.append((
-                    metric['instance_id'],
-                    metric['instance_type'],
-                    instance_name,
-                    metric['instance_state'],
-                    metric['collection_date'],
-                    metric.get('cpu_avg'),
-                    metric.get('cpu_max'),
-                    metric.get('network_in_mb'),
-                    metric.get('network_out_mb')
-                ))
+                values.append(
+                    (
+                        metric["instance_id"],
+                        metric["instance_type"],
+                        instance_name,
+                        metric["instance_state"],
+                        metric["collection_date"],
+                        metric.get("cpu_avg"),
+                        metric.get("cpu_max"),
+                        metric.get("network_in_mb"),
+                        metric.get("network_out_mb"),
+                    )
+                )
 
             # Batch insert with ON CONFLICT
             query = """
@@ -345,11 +336,11 @@ class AWSCloudWatchCollector:
         Returns:
             Metric record dict or None if skipped
         """
-        instance_id = instance['instance_id']
-        instance_state = instance['instance_state']
+        instance_id = instance["instance_id"]
+        instance_state = instance["instance_state"]
 
         # Skip if not running (no metrics available)
-        if instance_state != 'running':
+        if instance_state != "running":
             logger.debug(f"  ⏭️  Skipping {instance_id} (not running)")
             return None
 
@@ -359,12 +350,12 @@ class AWSCloudWatchCollector:
 
         # Combine all data
         metric_record = {
-            'instance_id': instance['instance_id'],
-            'instance_type': instance['instance_type'],
-            'instance_state': instance['instance_state'],
-            'launch_time': instance['launch_time'],
-            'collection_date': today,
-            'tags': instance['tags']
+            "instance_id": instance["instance_id"],
+            "instance_type": instance["instance_type"],
+            "instance_state": instance["instance_state"],
+            "launch_time": instance["launch_time"],
+            "collection_date": today,
+            "tags": instance["tags"],
         }
 
         # Add CPU metrics if available
@@ -399,10 +390,7 @@ class AWSCloudWatchCollector:
             return []
 
         # Filter running instances only
-        running_instances = [
-            inst for inst in instances
-            if inst['instance_state'] == 'running'
-        ]
+        running_instances = [inst for inst in instances if inst["instance_state"] == "running"]
 
         logger.info(f"Found {len(running_instances)} running instances to process")
 
@@ -413,12 +401,8 @@ class AWSCloudWatchCollector:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
             future_to_instance = {
-                executor.submit(
-                    self._collect_instance_metrics,
-                    instance,
-                    days,
-                    today
-                ): instance for instance in running_instances
+                executor.submit(self._collect_instance_metrics, instance, days, today): instance
+                for instance in running_instances
             }
 
             # Collect results as they complete
@@ -488,5 +472,5 @@ def main():
     collector.run(days=7, save_to_db=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

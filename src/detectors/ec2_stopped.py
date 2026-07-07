@@ -22,15 +22,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 import psycopg2
-from psycopg2 import DatabaseError, OperationalError
 
 from core.pricing import stamp_pricing
 
 load_dotenv()
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -38,14 +36,17 @@ STOPPED_DAYS = 7  # minimum days stopped before flagging
 
 # EBS pricing EUR/GiB/month (eu-west-1)
 EBS_PRICING_EUR_PER_GIB: Dict[str, float] = {
-    'gp3': 0.0736, 'gp2': 0.0920,
-    'io1': 0.1150, 'io2': 0.1150,
-    'st1': 0.0460, 'sc1': 0.0230,
-    'standard': 0.0552,
+    "gp3": 0.0736,
+    "gp2": 0.0920,
+    "io1": 0.1150,
+    "io2": 0.1150,
+    "st1": 0.0460,
+    "sc1": 0.0230,
+    "standard": 0.0552,
 }
 DEFAULT_EBS_PRICE = 0.0920
 
-REGIONS = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
+REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
 
 
 def _ebs_cost(size_gb: int, vol_type: str) -> float:
@@ -57,18 +58,17 @@ def _fetch_ebs_cost_for_instance(instance_id: str, region: str) -> Dict[str, Any
     """Return total EBS cost and volume details for a stopped instance."""
     try:
         from core.aws_clients import get_client
-        ec2 = get_client('ec2', region=region)
+
+        ec2 = get_client("ec2", region=region)
 
         # Get block device mappings
-        resp = ec2.describe_instances(
-            Filters=[{'Name': 'instance-id', 'Values': [instance_id]}]
-        )
-        reservations = resp.get('Reservations', [])
+        resp = ec2.describe_instances(Filters=[{"Name": "instance-id", "Values": [instance_id]}])
+        reservations = resp.get("Reservations", [])
         if not reservations:
-            return {'found': False}
+            return {"found": False}
 
-        instance = reservations[0]['Instances'][0]
-        launch_time = instance.get('LaunchTime')
+        instance = reservations[0]["Instances"][0]
+        launch_time = instance.get("LaunchTime")
         if launch_time:
             if launch_time.tzinfo is None:
                 launch_time = launch_time.replace(tzinfo=timezone.utc)
@@ -77,58 +77,66 @@ def _fetch_ebs_cost_for_instance(instance_id: str, region: str) -> Dict[str, Any
             age_days = None
 
         volume_ids = [
-            bdm['Ebs']['VolumeId']
-            for bdm in instance.get('BlockDeviceMappings', [])
-            if 'Ebs' in bdm
+            bdm["Ebs"]["VolumeId"]
+            for bdm in instance.get("BlockDeviceMappings", [])
+            if "Ebs" in bdm
         ]
 
         if not volume_ids:
-            return {'found': True, 'region': region, 'ebs_cost': 0, 'volumes': [], 'age_days': age_days}
+            return {
+                "found": True,
+                "region": region,
+                "ebs_cost": 0,
+                "volumes": [],
+                "age_days": age_days,
+            }
 
         # Get volume details
         vol_resp = ec2.describe_volumes(VolumeIds=volume_ids)
         volumes = []
         total_cost = 0.0
-        for vol in vol_resp.get('Volumes', []):
-            size = vol['Size']
-            vol_type = vol['VolumeType']
+        for vol in vol_resp.get("Volumes", []):
+            size = vol["Size"]
+            vol_type = vol["VolumeType"]
             cost = _ebs_cost(size, vol_type)
             total_cost += cost
-            volumes.append({
-                'volume_id': vol['VolumeId'],
-                'size_gb': size,
-                'vol_type': vol_type,
-                'cost': cost,
-            })
+            volumes.append(
+                {
+                    "volume_id": vol["VolumeId"],
+                    "size_gb": size,
+                    "vol_type": vol_type,
+                    "cost": cost,
+                }
+            )
 
         return {
-            'found': True,
-            'region': region,
-            'ebs_cost': round(total_cost, 2),
-            'volumes': volumes,
-            'age_days': age_days,
+            "found": True,
+            "region": region,
+            "ebs_cost": round(total_cost, 2),
+            "volumes": volumes,
+            "age_days": age_days,
         }
 
     except Exception as e:
         logger.warning(f"  Could not fetch EBS for {instance_id} in {region}: {e}")
-        return {'found': False}
+        return {"found": False}
 
 
 class EC2StoppedDetector:
 
     def __init__(self):
-        db_vars = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+        db_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
         missing = [v for v in db_vars if not os.getenv(v)]
         if missing:
             raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
 
         self.conn = psycopg2.connect(
-            host=os.getenv('DB_HOST'),
-            port=int(os.getenv('DB_PORT')),
-            database=os.getenv('DB_NAME'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            connect_timeout=10
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT")),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            connect_timeout=10,
         )
 
     def detect(self) -> List[Dict[str, Any]]:
@@ -138,7 +146,8 @@ class EC2StoppedDetector:
         cursor = self.conn.cursor()
         try:
             # Instances where every datapoint in the window shows 'stopped'
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT instance_id, instance_type, COUNT(*) as datapoints
                 FROM ec2_metrics
                 WHERE collection_date >= CURRENT_DATE - %s::interval
@@ -146,7 +155,9 @@ class EC2StoppedDetector:
                 HAVING COUNT(*) > 0
                    AND COUNT(*) = COUNT(CASE WHEN instance_state = 'stopped' THEN 1 END)
                 ORDER BY instance_id
-            """, (f'{STOPPED_DAYS} days',))
+            """,
+                (f"{STOPPED_DAYS} days",),
+            )
             stopped = cursor.fetchall()
         finally:
             cursor.close()
@@ -159,18 +170,22 @@ class EC2StoppedDetector:
 
         # Resolve actual EBS cost from AWS (parallel per instance × region)
         def _resolve(row):
-            instance_id, instance_type, datapoints = row['instance_id'], row['instance_type'], row['datapoints']
+            instance_id, instance_type, datapoints = (
+                row["instance_id"],
+                row["instance_type"],
+                row["datapoints"],
+            )
             for region in REGIONS:
                 info = _fetch_ebs_cost_for_instance(instance_id, region)
-                if info.get('found'):
+                if info.get("found"):
                     return {
-                        'instance_id':   instance_id,
-                        'instance_type': instance_type,
-                        'datapoints':    datapoints,
-                        'region':        info['region'],
-                        'ebs_cost':      info['ebs_cost'],
-                        'volumes':       info['volumes'],
-                        'age_days':      info.get('age_days'),
+                        "instance_id": instance_id,
+                        "instance_type": instance_type,
+                        "datapoints": datapoints,
+                        "region": info["region"],
+                        "ebs_cost": info["ebs_cost"],
+                        "volumes": info["volumes"],
+                        "age_days": info.get("age_days"),
                     }
             # Instance not found in any region (may have been terminated already)
             logger.info(f"  {instance_id}: not found in any region, skipping")
@@ -182,7 +197,7 @@ class EC2StoppedDetector:
             futures = [executor.submit(_resolve, row) for row in stopped]
             for f in futures:
                 result = f.result()
-                if result and result['ebs_cost'] > 0:
+                if result and result["ebs_cost"] > 0:
                     results.append(result)
 
         logger.info(f"Stopped instances with EBS cost: {len(results)}")
@@ -193,13 +208,14 @@ class EC2StoppedDetector:
             return []
 
         cursor = self.conn.cursor()
-        account_id = os.getenv('AWS_ACCOUNT_ID', 'unknown')
+        account_id = os.getenv("AWS_ACCOUNT_ID", "unknown")
         today = date.today()
         waste_ids = []
 
         try:
             for inst in instances:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO waste_detected (
                         detection_date, provider, account_id, resource_id,
                         resource_type, waste_type, monthly_waste_eur,
@@ -212,26 +228,32 @@ class EC2StoppedDetector:
                         metadata          = EXCLUDED.metadata,
                         updated_at        = NOW()
                     RETURNING id;
-                """, (
-                    today,
-                    'aws',
-                    account_id,
-                    inst['instance_id'],
-                    'ec2_instance',
-                    'stopped_instance',
-                    inst['ebs_cost'],
-                    0.95,  # high confidence — state=stopped is explicit
-                    json.dumps(stamp_pricing({
-                        'instance_type':    inst['instance_type'],
-                        'instance_state':   'stopped',
-                        'region':           inst['region'],
-                        'ebs_cost':         inst['ebs_cost'],
-                        'monthly_cost_eur': inst['ebs_cost'],
-                        'volumes':          inst['volumes'],
-                        'days_stopped':     inst['datapoints'],
-                        'age_days':         inst.get('age_days'),
-                    }))
-                ))
+                """,
+                    (
+                        today,
+                        "aws",
+                        account_id,
+                        inst["instance_id"],
+                        "ec2_instance",
+                        "stopped_instance",
+                        inst["ebs_cost"],
+                        0.95,  # high confidence — state=stopped is explicit
+                        json.dumps(
+                            stamp_pricing(
+                                {
+                                    "instance_type": inst["instance_type"],
+                                    "instance_state": "stopped",
+                                    "region": inst["region"],
+                                    "ebs_cost": inst["ebs_cost"],
+                                    "monthly_cost_eur": inst["ebs_cost"],
+                                    "volumes": inst["volumes"],
+                                    "days_stopped": inst["datapoints"],
+                                    "age_days": inst.get("age_days"),
+                                }
+                            )
+                        ),
+                    ),
+                )
                 waste_ids.append(cursor.fetchone()[0])
 
             self.conn.commit()
@@ -252,35 +274,41 @@ class EC2StoppedDetector:
         count = 0
 
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, resource_id, monthly_waste_eur, metadata
                 FROM waste_detected WHERE id = ANY(%s)
-            """, (waste_ids,))
+            """,
+                (waste_ids,),
+            )
 
             for row in cursor.fetchall():
                 waste_id, instance_id, ebs_cost, meta = row
                 if isinstance(meta, str):
                     meta = json.loads(meta)
-                itype = meta.get('instance_type', '')
-                region = meta.get('region', '')
-                days = meta.get('days_stopped', STOPPED_DAYS)
-                vol_count = len(meta.get('volumes', []))
+                itype = meta.get("instance_type", "")
+                region = meta.get("region", "")
+                days = meta.get("days_stopped", STOPPED_DAYS)
+                vol_count = len(meta.get("volumes", []))
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO recommendations (
                         waste_id, recommendation_type, action_required,
                         estimated_monthly_savings_eur, status
                     ) VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (waste_id) DO NOTHING;
-                """, (
-                    waste_id,
-                    'terminate_instance',
-                    f"TERMINATE stopped instance {instance_id} ({itype}) in {region} — "
-                    f"stopped for >= {days} days, still billing {vol_count} EBS volume(s) "
-                    f"at {ebs_cost:.2f} EUR/mo; snapshot the volumes first",
-                    ebs_cost,
-                    'pending'
-                ))
+                """,
+                    (
+                        waste_id,
+                        "terminate_instance",
+                        f"TERMINATE stopped instance {instance_id} ({itype}) in {region} — "
+                        f"stopped for >= {days} days, still billing {vol_count} EBS volume(s) "
+                        f"at {ebs_cost:.2f} EUR/mo; snapshot the volumes first",
+                        ebs_cost,
+                        "pending",
+                    ),
+                )
                 count += 1
 
             self.conn.commit()
@@ -302,31 +330,35 @@ class EC2StoppedDetector:
 
         if not instances:
             from core.snapshots import snapshot_active_waste
+
             snapshot_active_waste(self.conn)
             print(f"No instances stopped for >= {STOPPED_DAYS} days.\n")
             return
 
-        total_waste = sum(i['ebs_cost'] for i in instances)
+        total_waste = sum(i["ebs_cost"] for i in instances)
         print(f"Stopped instances found: {len(instances)}")
         print(f"Total EBS waste:         {total_waste:.2f} EUR/mo")
         print(f"Annual waste:            {total_waste * 12:.2f} EUR/year\n")
 
         for inst in instances:
             vol_info = f"{len(inst['volumes'])} volume(s)"
-            print(f"  - {inst['instance_id']} ({inst['instance_type']}) "
-                  f"in {inst['region']} — {vol_info} → {inst['ebs_cost']:.2f} EUR/mo")
+            print(
+                f"  - {inst['instance_id']} ({inst['instance_type']}) "
+                f"in {inst['region']} — {vol_info} → {inst['ebs_cost']:.2f} EUR/mo"
+            )
 
         waste_ids = self.save(instances)
         rec_count = self.recommend(waste_ids)
 
         from core.snapshots import snapshot_active_waste
+
         snapshot_active_waste(self.conn)
 
         print(f"\nRecommendations created: {rec_count}")
         print("View at http://localhost:8888/recommendations\n")
 
     def close(self):
-        if hasattr(self, 'conn') and self.conn:
+        if hasattr(self, "conn") and self.conn:
             self.conn.close()
 
     def __del__(self):
@@ -346,5 +378,5 @@ def main():
             detector.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

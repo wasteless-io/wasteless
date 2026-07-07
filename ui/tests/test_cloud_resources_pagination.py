@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
     from fastapi.testclient import TestClient
+
     TESTCLIENT_AVAILABLE = True
 except ImportError:
     TESTCLIENT_AVAILABLE = False
@@ -34,8 +35,8 @@ def _paginator_for(op_name, pages_by_op):
 def _fake_ec2_client(pages_by_op):
     client = MagicMock()
     client.get_paginator.side_effect = lambda op: _paginator_for(op, pages_by_op)
-    client.describe_addresses.return_value = {'Addresses': []}
-    client.describe_vpcs.return_value = {'Vpcs': []}
+    client.describe_addresses.return_value = {"Addresses": []}
+    client.describe_vpcs.return_value = {"Vpcs": []}
     return client
 
 
@@ -45,89 +46,130 @@ class TestCloudResourcesPagination(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from main import app
+
         cls.client = TestClient(app)
 
     def test_ec2_instances_from_every_page_are_included(self):
         pages = {
-            'describe_instances': [
-                {'Reservations': [{'Instances': [
-                    {'InstanceId': 'i-page1', 'State': {'Name': 'running'},
-                     'InstanceType': 't3.micro'}
-                ]}]},
-                {'Reservations': [{'Instances': [
-                    {'InstanceId': 'i-page2', 'State': {'Name': 'running'},
-                     'InstanceType': 't3.micro'}
-                ]}]},
+            "describe_instances": [
+                {
+                    "Reservations": [
+                        {
+                            "Instances": [
+                                {
+                                    "InstanceId": "i-page1",
+                                    "State": {"Name": "running"},
+                                    "InstanceType": "t3.micro",
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "Reservations": [
+                        {
+                            "Instances": [
+                                {
+                                    "InstanceId": "i-page2",
+                                    "State": {"Name": "running"},
+                                    "InstanceType": "t3.micro",
+                                }
+                            ]
+                        }
+                    ]
+                },
             ],
-            'describe_volumes': [{'Volumes': []}],
-            'describe_snapshots': [{'Snapshots': []}],
+            "describe_volumes": [{"Volumes": []}],
+            "describe_snapshots": [{"Snapshots": []}],
         }
         fake_client = _fake_ec2_client(pages)
         s3_client = MagicMock()
-        s3_client.list_buckets.return_value = {'Buckets': []}
+        s3_client.list_buckets.return_value = {"Buckets": []}
 
         def _get_client(service, region=None):
-            return s3_client if service == 's3' else fake_client
+            return s3_client if service == "s3" else fake_client
 
-        with patch('utils.aws_clients.get_client', side_effect=_get_client):
+        with patch("utils.aws_clients.get_client", side_effect=_get_client):
             resp = self.client.get("/cloud-resources", params={"tab": "ec2"})
 
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('i-page1', resp.text)
-        self.assertIn('i-page2', resp.text)
+        self.assertIn("i-page1", resp.text)
+        self.assertIn("i-page2", resp.text)
 
     def test_ebs_volumes_from_every_page_are_included(self):
         pages = {
-            'describe_instances': [{'Reservations': []}],
-            'describe_volumes': [
-                {'Volumes': [{'VolumeId': 'vol-page1', 'Size': 10,
-                              'State': 'available', 'VolumeType': 'gp3',
-                              'AvailabilityZone': 'eu-west-1a'}]},
-                {'Volumes': [{'VolumeId': 'vol-page2', 'Size': 20,
-                              'State': 'available', 'VolumeType': 'gp3',
-                              'AvailabilityZone': 'eu-west-1a'}]},
+            "describe_instances": [{"Reservations": []}],
+            "describe_volumes": [
+                {
+                    "Volumes": [
+                        {
+                            "VolumeId": "vol-page1",
+                            "Size": 10,
+                            "State": "available",
+                            "VolumeType": "gp3",
+                            "AvailabilityZone": "eu-west-1a",
+                        }
+                    ]
+                },
+                {
+                    "Volumes": [
+                        {
+                            "VolumeId": "vol-page2",
+                            "Size": 20,
+                            "State": "available",
+                            "VolumeType": "gp3",
+                            "AvailabilityZone": "eu-west-1a",
+                        }
+                    ]
+                },
             ],
-            'describe_snapshots': [{'Snapshots': []}],
+            "describe_snapshots": [{"Snapshots": []}],
         }
         fake_client = _fake_ec2_client(pages)
         s3_client = MagicMock()
-        s3_client.list_buckets.return_value = {'Buckets': []}
+        s3_client.list_buckets.return_value = {"Buckets": []}
 
         def _get_client(service, region=None):
-            return s3_client if service == 's3' else fake_client
+            return s3_client if service == "s3" else fake_client
 
-        with patch('utils.aws_clients.get_client', side_effect=_get_client):
+        with patch("utils.aws_clients.get_client", side_effect=_get_client):
             resp = self.client.get("/cloud-resources", params={"tab": "ebs"})
 
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('vol-page1', resp.text)
-        self.assertIn('vol-page2', resp.text)
+        self.assertIn("vol-page1", resp.text)
+        self.assertIn("vol-page2", resp.text)
 
     def test_snapshots_from_every_page_are_included(self):
         pages = {
-            'describe_instances': [{'Reservations': []}],
-            'describe_volumes': [{'Volumes': []}],
-            'describe_snapshots': [
-                {'Snapshots': [{'SnapshotId': 'snap-page1', 'State': 'completed',
-                               'VolumeSize': 8}]},
-                {'Snapshots': [{'SnapshotId': 'snap-page2', 'State': 'completed',
-                               'VolumeSize': 8}]},
+            "describe_instances": [{"Reservations": []}],
+            "describe_volumes": [{"Volumes": []}],
+            "describe_snapshots": [
+                {
+                    "Snapshots": [
+                        {"SnapshotId": "snap-page1", "State": "completed", "VolumeSize": 8}
+                    ]
+                },
+                {
+                    "Snapshots": [
+                        {"SnapshotId": "snap-page2", "State": "completed", "VolumeSize": 8}
+                    ]
+                },
             ],
         }
         fake_client = _fake_ec2_client(pages)
         s3_client = MagicMock()
-        s3_client.list_buckets.return_value = {'Buckets': []}
+        s3_client.list_buckets.return_value = {"Buckets": []}
 
         def _get_client(service, region=None):
-            return s3_client if service == 's3' else fake_client
+            return s3_client if service == "s3" else fake_client
 
-        with patch('utils.aws_clients.get_client', side_effect=_get_client):
+        with patch("utils.aws_clients.get_client", side_effect=_get_client):
             resp = self.client.get("/cloud-resources", params={"tab": "snapshots"})
 
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('snap-page1', resp.text)
-        self.assertIn('snap-page2', resp.text)
+        self.assertIn("snap-page1", resp.text)
+        self.assertIn("snap-page2", resp.text)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

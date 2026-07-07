@@ -13,13 +13,14 @@ import psycopg2
 load_dotenv()
 
 # Import our integration module
-from utils.remediator import RemediatorProxy, check_backend_available, get_backend_path
+from utils.remediator import RemediatorProxy, get_backend_path
+
 
 def test_backend_availability():
     """Test 1: Check if backend is available"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 1: Backend Availability")
-    print("="*80)
+    print("=" * 80)
 
     backend_path = get_backend_path()
     print(f"Backend path: {backend_path}")
@@ -27,7 +28,8 @@ def test_backend_availability():
 
     try:
         sys.path.insert(0, backend_path)
-        from src.remediators.ec2_remediator import EC2Remediator
+        from src.remediators.ec2_remediator import EC2Remediator  # noqa: F401 -- availability check
+
         print("✅ EC2Remediator can be imported")
         return True
     except ImportError as e:
@@ -37,17 +39,17 @@ def test_backend_availability():
 
 def test_database_connection():
     """Test 2: Check database connection"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 2: Database Connection")
-    print("="*80)
+    print("=" * 80)
 
     try:
         conn = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5432'),
-            database=os.getenv('DB_NAME', 'wasteless'),
-            user=os.getenv('DB_USER', 'wasteless'),
-            password=os.getenv('DB_PASSWORD')
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "wasteless"),
+            user=os.getenv("DB_USER", "wasteless"),
+            password=os.getenv("DB_PASSWORD"),
         )
         print("✅ Database connection successful")
 
@@ -68,7 +70,9 @@ def test_database_connection():
 
         row = cursor.fetchone()
         if row:
-            print(f"✅ Found pending recommendation: ID={row[0]}, Type={row[1]}, Instance={row[2]}, Savings=€{row[3]:.2f}")
+            print(
+                f"✅ Found pending recommendation: ID={row[0]}, Type={row[1]}, Instance={row[2]}, Savings=€{row[3]:.2f}"
+            )
             cursor.close()
             return conn, row[0]  # Return connection and rec_id for next test
         else:
@@ -84,9 +88,9 @@ def test_database_connection():
 
 def test_remediator_proxy(conn, rec_id):
     """Test 3: Test RemediatorProxy execution (dry-run)"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 3: RemediatorProxy Execution (DRY-RUN)")
-    print("="*80)
+    print("=" * 80)
 
     if not conn or not rec_id:
         print("⚠️  Skipping - no recommendation to test")
@@ -107,13 +111,13 @@ def test_remediator_proxy(conn, rec_id):
         # Display result
         if results:
             result = results[0]
-            print(f"\nResult details:")
+            print("\nResult details:")
             print(f"  Success: {result.get('success')}")
             print(f"  Instance ID: {result.get('instance_id')}")
             print(f"  Recommendation Type: {result.get('recommendation_type')}")
             print(f"  Message: {result.get('message', result.get('error', 'N/A'))}")
 
-            if result.get('success'):
+            if result.get("success"):
                 print("\n✅ TEST PASSED - RemediatorProxy working correctly!")
                 return True
             else:
@@ -126,15 +130,16 @@ def test_remediator_proxy(conn, rec_id):
     except Exception as e:
         print(f"❌ RemediatorProxy execution failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def main():
     """Run all integration tests"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("🧪 WASTELESS UI - REMEDIATOR INTEGRATION TESTS")
-    print("="*80)
+    print("=" * 80)
 
     # Test 1: Backend availability
     backend_ok = test_backend_availability()
@@ -158,10 +163,10 @@ def main():
         conn.close()
 
     # Final result
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     if backend_ok and proxy_ok:
         print("✅ ALL TESTS PASSED - Integration is working!")
-        print("="*80)
+        print("=" * 80)
         print("\n🎉 You can now use the UI to approve/reject recommendations!")
         print("   Navigate to: http://localhost:8888")
         print("   Go to: 📋 Recommendations page")
@@ -169,7 +174,7 @@ def main():
         return True
     else:
         print("❌ SOME TESTS FAILED - Check errors above")
-        print("="*80)
+        print("=" * 80)
         return False
 
 

@@ -5,6 +5,7 @@ Basic arithmetic invariants: annualization, percentages, forecast/budget checks,
 from typing import Dict
 from ._shared import MONTHS_PER_YEAR, FinOpsInvariantError
 
+
 def annualize(monthly: float) -> float:
     """Seule conversion mensuel→annuel autorisée : jamais stocker le chiffre
     annuel indépendamment du mensuel."""
@@ -14,16 +15,15 @@ def annualize(monthly: float) -> float:
 def waste_percentage(waste_monthly: float, spend_monthly: float) -> float:
     """% de waste sur le spend, même période et même devise exigées."""
     if spend_monthly <= 0:
-        raise FinOpsInvariantError(
-            f"Cloud spend must be positive, got {spend_monthly}")
+        raise FinOpsInvariantError(f"Cloud spend must be positive, got {spend_monthly}")
     if waste_monthly < 0:
-        raise FinOpsInvariantError(
-            f"Detected waste cannot be negative, got {waste_monthly}")
+        raise FinOpsInvariantError(f"Detected waste cannot be negative, got {waste_monthly}")
     if waste_monthly > spend_monthly:
         raise FinOpsInvariantError(
             f"Detected waste ({waste_monthly}) exceeds cloud spend "
             f"({spend_monthly}): on ne peut pas gaspiller plus qu'on ne dépense "
-            f"— périodes ou devises probablement mélangées")
+            f"— périodes ou devises probablement mélangées"
+        )
     return waste_monthly / spend_monthly * 100
 
 
@@ -35,19 +35,19 @@ def budget_used_percentage(spent: float, budget: float) -> float:
     return spent / budget * 100
 
 
-def validate_forecast(forecast_end_of_month: float,
-                      current_spend_mtd: float) -> float:
+def validate_forecast(forecast_end_of_month: float, current_spend_mtd: float) -> float:
     """Le forecast fin de mois ne peut pas être sous le déjà-dépensé."""
     if forecast_end_of_month < current_spend_mtd:
         raise FinOpsInvariantError(
             f"Forecast ({forecast_end_of_month}) is below month-to-date spend "
-            f"({current_spend_mtd}): impossible, le réalisé ne diminue pas")
+            f"({current_spend_mtd}): impossible, le réalisé ne diminue pas"
+        )
     return forecast_end_of_month
 
 
-def validate_service_breakdown(service_costs: Dict[str, float],
-                               total_spend: float,
-                               tolerance: float = 0.005) -> float:
+def validate_service_breakdown(
+    service_costs: Dict[str, float], total_spend: float, tolerance: float = 0.005
+) -> float:
     """Vérifie que la ventilation par service boucle sur le total.
 
     Retourne le montant non ventilé (à afficher en ligne « Other »), lève si
@@ -59,10 +59,12 @@ def validate_service_breakdown(service_costs: Dict[str, float],
     if gap < -abs(total_spend) * tolerance:
         raise FinOpsInvariantError(
             f"Service costs sum ({breakdown_sum}) exceeds total spend "
-            f"({total_spend}): double comptage probable")
+            f"({total_spend}): double comptage probable"
+        )
     if gap > abs(total_spend) * tolerance:
         raise FinOpsInvariantError(
             f"Service breakdown leaves {gap:.2f} unaccounted "
             f"({gap / total_spend * 100:.1f}% of total): ajouter une ligne "
-            f"'Other' explicite plutôt qu'un écart silencieux")
+            f"'Other' explicite plutôt qu'un écart silencieux"
+        )
     return max(gap, 0.0)

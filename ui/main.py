@@ -26,18 +26,18 @@ from fastapi.staticfiles import StaticFiles
 from state import (
     APP_DIR,
     DB_CONFIG,
-    get_db,
+    get_db,  # noqa: F401 -- re-exported for ui/tests `from main import ...`
     scheduler,
     _aws_status,
-    _config_manager,
+    _config_manager,  # noqa: F401 -- re-exported for ui/tests `from main import ...`
     check_aws_reachable,
 )
 from jobs import (
     sync_aws_job,
     terraform_pr_sync_job,
     grace_executor_job,
-    _grace_execution_status,
-    _sync_ec2_instance_states,
+    _grace_execution_status,  # noqa: F401 -- re-exported for ui/tests `from main import ...`
+    _sync_ec2_instance_states,  # noqa: F401 -- re-exported for ui/tests `from main import ...`
 )
 from routes import (
     home,
@@ -52,7 +52,7 @@ from routes import (
 )
 
 # Configure logging for scheduler
-logging.getLogger('apscheduler').setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -72,11 +72,11 @@ async def lifespan(app: FastAPI):
     print(f"AWS connectivity: {'OK' if _aws_status['reachable'] else 'not reachable'}")
 
     # Start scheduler for auto-sync (every 5 minutes)
-    scheduler.add_job(sync_aws_job, 'interval', minutes=5, id='aws_sync')
+    scheduler.add_job(sync_aws_job, "interval", minutes=5, id="aws_sync")
     # Grace-period executor: applies scheduled approvals once due
-    scheduler.add_job(grace_executor_job, 'interval', minutes=5, id='grace_executor')
+    scheduler.add_job(grace_executor_job, "interval", minutes=5, id="grace_executor")
     # Terraform PR reconciliation: merged -> approved, closed -> rejected
-    scheduler.add_job(terraform_pr_sync_job, 'interval', minutes=5, id='terraform_pr_sync')
+    scheduler.add_job(terraform_pr_sync_job, "interval", minutes=5, id="terraform_pr_sync")
     scheduler.start()
     print("Auto-sync scheduler started (every 5 min)")
 
@@ -92,7 +92,7 @@ app = FastAPI(
     title="Wasteless.io",
     description="Cloud Cost Optimization Platform",
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Mount static files
@@ -100,6 +100,7 @@ app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
 # Live log capture for the /logs debug page (in-memory, nothing persisted)
 from utils.log_buffer import install_capture
+
 install_capture()
 
 # Routers, one per page/domain (see ui/routes/*.py)
@@ -120,5 +121,6 @@ app.include_router(sync.router)
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv('STREAMLIT_SERVER_PORT', '8888'))
+
+    port = int(os.getenv("STREAMLIT_SERVER_PORT", "8888"))
     uvicorn.run(app, host="0.0.0.0", port=port)

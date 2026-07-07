@@ -20,7 +20,8 @@ async def home(request: Request, conn=Depends(get_db)):
     cursor = conn.cursor()
 
     # Fetch metrics in single query
-    cursor.execute("""
+    cursor.execute(
+        """
         WITH pending AS (
             SELECT COUNT(*) as pending_count,
                    COALESCE(SUM(estimated_monthly_savings_eur), 0) as pending_eur
@@ -72,7 +73,9 @@ async def home(request: Request, conn=Depends(get_db)):
         CROSS JOIN declined d
         CROSS JOIN raw_costs r
         CROSS JOIN savings s;
-    """, (USD_TO_EUR,))
+    """,
+        (USD_TO_EUR,),
+    )
     result = cursor.fetchone()
 
     # Waste by type (grouped) — active waste only
@@ -126,7 +129,7 @@ async def home(request: Request, conn=Depends(get_db)):
         SELECT MAX(updated_at) as last_sync FROM waste_detected
     """)
     last_sync_row = cursor.fetchone()
-    last_sync = last_sync_row['last_sync'] if last_sync_row else None
+    last_sync = last_sync_row["last_sync"] if last_sync_row else None
 
     # Daily / Monthly costs (active detected waste)
     cursor.execute("""
@@ -134,7 +137,7 @@ async def home(request: Request, conn=Depends(get_db)):
         FROM active_waste
     """)
     cost_row = cursor.fetchone()
-    monthly_cost = float(cost_row['monthly_cost']) if cost_row else 0
+    monthly_cost = float(cost_row["monthly_cost"]) if cost_row else 0
     daily_cost = monthly_cost / DAYS_PER_MONTH
 
     # Trend: current waste vs the snapshot taken 7 days ago — same source
@@ -146,14 +149,15 @@ async def home(request: Request, conn=Depends(get_db)):
         WHERE snapshot_date = CURRENT_DATE - 7
     """)
     trend_row = cursor.fetchone()
-    week_ago_eur = trend_row['week_ago_eur'] if trend_row else None
-    current_waste = float(result['total_waste']) if result else 0
+    week_ago_eur = trend_row["week_ago_eur"] if trend_row else None
+    current_waste = float(result["total_waste"]) if result else 0
     savings_trend = (current_waste - float(week_ago_eur)) if week_ago_eur is not None else None
     # Percentage variant for the KPI banner; None when week-ago base is 0
     # (division impossible), the template then falls back to the € delta.
     savings_trend_pct = (
         savings_trend / float(week_ago_eur) * 100
-        if savings_trend is not None and float(week_ago_eur) > 0 else None
+        if savings_trend is not None and float(week_ago_eur) > 0
+        else None
     )
 
     cursor.close()
@@ -166,15 +170,19 @@ async def home(request: Request, conn=Depends(get_db)):
 
     from utils.reports import llm_narrative_available
 
-    return templates.TemplateResponse(request, "index.html", context={
-        "llm_enabled": llm_narrative_available(),
-        "metrics": result,
-        "waste_by_type": waste_by_type,
-        "recent_activity": recent_activity,
-        "system_health": system_health,
-        "last_sync": last_sync,
-        "daily_cost": daily_cost,
-        "monthly_cost": monthly_cost,
-        "savings_trend": savings_trend,
-        "savings_trend_pct": savings_trend_pct,
-    })
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        context={
+            "llm_enabled": llm_narrative_available(),
+            "metrics": result,
+            "waste_by_type": waste_by_type,
+            "recent_activity": recent_activity,
+            "system_health": system_health,
+            "last_sync": last_sync,
+            "daily_cost": daily_cost,
+            "monthly_cost": monthly_cost,
+            "savings_trend": savings_trend,
+            "savings_trend_pct": savings_trend_pct,
+        },
+    )

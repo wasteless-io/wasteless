@@ -16,8 +16,8 @@ from constants import PRICING_AS_OF, PRICING_SOURCE, USD_TO_EUR
 def stamp_pricing(metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Ajoute la provenance tarifaire ; les clés du détecteur priment."""
     return {
-        'pricing_source': PRICING_SOURCE,
-        'pricing_as_of': PRICING_AS_OF,
-        'usd_to_eur': USD_TO_EUR,
+        "pricing_source": PRICING_SOURCE,
+        "pricing_as_of": PRICING_AS_OF,
+        "usd_to_eur": USD_TO_EUR,
         **metadata,
     }

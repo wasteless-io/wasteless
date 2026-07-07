@@ -25,7 +25,7 @@ _LOCK_TIMEOUT = 10.0
 
 
 @contextmanager
-def _file_lock(filepath: str, mode: str = 'r', exclusive: bool = False):
+def _file_lock(filepath: str, mode: str = "r", exclusive: bool = False):
     """
     Context manager for file operations with file locking.
 
@@ -86,13 +86,11 @@ def _file_lock(filepath: str, mode: str = 'r', exclusive: bool = False):
         # Release thread lock
         _config_lock.release()
 
+
 # Path to backend config file
 # ui/utils/ -> go up 2 levels -> project root (wasteless/)
-BACKEND_PATH = os.path.abspath(os.path.join(
-    os.path.dirname(__file__),
-    '..', '..'
-))
-CONFIG_PATH = os.path.join(BACKEND_PATH, 'config', 'remediation.yaml')
+BACKEND_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+CONFIG_PATH = os.path.join(BACKEND_PATH, "config", "remediation.yaml")
 
 
 # =============================================================================
@@ -101,17 +99,18 @@ CONFIG_PATH = os.path.join(BACKEND_PATH, 'config', 'remediation.yaml')
 
 # Validation limits for configuration values
 CONFIG_LIMITS = {
-    'dry_run_days': {'min': 0, 'max': 30, 'type': int},
-    'grace_period_days': {'min': 0, 'max': 30, 'type': int},
-    'min_instance_age_days': {'min': 1, 'max': 365, 'type': int},
-    'min_idle_days': {'min': 1, 'max': 90, 'type': int},
-    'min_confidence_score': {'min': 0.0, 'max': 1.0, 'type': float},
-    'max_instances_per_run': {'min': 1, 'max': 100, 'type': int},
+    "dry_run_days": {"min": 0, "max": 30, "type": int},
+    "grace_period_days": {"min": 0, "max": 30, "type": int},
+    "min_instance_age_days": {"min": 1, "max": 365, "type": int},
+    "min_idle_days": {"min": 1, "max": 90, "type": int},
+    "min_confidence_score": {"min": 0.0, "max": 1.0, "type": float},
+    "max_instances_per_run": {"min": 1, "max": 100, "type": int},
 }
 
 
 class ConfigValidationError(ValueError):
     """Raised when a configuration value fails validation."""
+
     pass
 
 
@@ -133,15 +132,15 @@ def validate_config_value(key: str, value: Any) -> Any:
         return value  # No validation rules defined, accept as-is
 
     limits = CONFIG_LIMITS[key]
-    expected_type = limits['type']
-    min_val = limits['min']
-    max_val = limits['max']
+    expected_type = limits["type"]
+    min_val = limits["min"]
+    max_val = limits["max"]
 
     # Type conversion
     try:
-        if expected_type == int:
+        if expected_type is int:
             value = int(value)
-        elif expected_type == float:
+        elif expected_type is float:
             value = float(value)
     except (ValueError, TypeError) as e:
         raise ConfigValidationError(
@@ -176,7 +175,7 @@ def validate_instance_id(instance_id: str) -> str:
     instance_id = str(instance_id).strip()
 
     # Basic format check: i-xxxxxxxxxxxxxxxxx (17-19 chars total)
-    if not instance_id.startswith('i-'):
+    if not instance_id.startswith("i-"):
         raise ConfigValidationError(
             f"Invalid instance ID format: must start with 'i-', got '{instance_id}'"
         )
@@ -189,10 +188,8 @@ def validate_instance_id(instance_id: str) -> str:
         )
 
     # Check hex characters
-    if not all(c in '0123456789abcdef' for c in id_part.lower()):
-        raise ConfigValidationError(
-            f"Invalid instance ID format: must be hexadecimal after 'i-'"
-        )
+    if not all(c in "0123456789abcdef" for c in id_part.lower()):
+        raise ConfigValidationError("Invalid instance ID format: must be hexadecimal after 'i-'")
 
     return instance_id
 
@@ -225,7 +222,7 @@ class ConfigManager:
             TimeoutError: If file lock cannot be acquired
         """
         try:
-            with _file_lock(self.config_path, mode='r', exclusive=False) as f:
+            with _file_lock(self.config_path, mode="r", exclusive=False) as f:
                 self._config_cache = yaml.safe_load(f)
             logger.info(f"Configuration loaded from {self.config_path}")
             return self._config_cache
@@ -233,9 +230,7 @@ class ConfigManager:
             template_path = f"{self.config_path}.template"
             if os.path.exists(template_path):
                 shutil.copyfile(template_path, self.config_path)
-                logger.warning(
-                    f"Config file not found, seeded from {template_path}"
-                )
+                logger.warning(f"Config file not found, seeded from {template_path}")
                 return self.load_config()
             logger.error(f"Config file not found: {self.config_path}")
             raise
@@ -263,13 +258,13 @@ class ConfigManager:
 
         try:
             # Use exclusive lock for the entire read-backup-write operation
-            with _file_lock(self.config_path, mode='r+', exclusive=True) as f:
+            with _file_lock(self.config_path, mode="r+", exclusive=True) as f:
                 # Read current content for backup
                 current_content = f.read()
 
                 # Write backup (outside the main file lock)
                 try:
-                    with open(backup_path, 'w') as backup_file:
+                    with open(backup_path, "w") as backup_file:
                         backup_file.write(current_content)
                 except Exception as backup_err:
                     logger.warning(f"Could not create backup: {backup_err}")
@@ -291,8 +286,8 @@ class ConfigManager:
             # Try to restore from backup if it exists
             try:
                 if os.path.exists(backup_path):
-                    with open(backup_path, 'r') as src:
-                        with open(self.config_path, 'w') as dst:
+                    with open(backup_path, "r") as src:
+                        with open(self.config_path, "w") as dst:
                             dst.write(src.read())
                     logger.info("Config restored from backup")
             except Exception as restore_err:
@@ -302,7 +297,7 @@ class ConfigManager:
     def get_auto_remediation_enabled(self) -> bool:
         """Check if auto-remediation is enabled"""
         config = self.load_config()
-        return config.get('auto_remediation', {}).get('enabled', False)
+        return config.get("auto_remediation", {}).get("enabled", False)
 
     def set_auto_remediation_enabled(self, enabled: bool) -> bool:
         """
@@ -315,23 +310,23 @@ class ConfigManager:
             True if successful
         """
         config = self.load_config()
-        if 'auto_remediation' not in config:
-            config['auto_remediation'] = {}
-        config['auto_remediation']['enabled'] = enabled
+        if "auto_remediation" not in config:
+            config["auto_remediation"] = {}
+        config["auto_remediation"]["enabled"] = enabled
         return self.save_config(config)
 
     def get_grace_period_days(self) -> int:
         """Grace period between approval and execution (0 = immediate)."""
         config = self.load_config()
-        return config.get('approval', {}).get('grace_period_days', 0)
+        return config.get("approval", {}).get("grace_period_days", 0)
 
     def set_grace_period_days(self, days: int) -> bool:
         """Set the approval grace period in days (0 disables it)."""
-        days = validate_config_value('grace_period_days', days)
+        days = validate_config_value("grace_period_days", days)
         config = self.load_config()
-        if 'approval' not in config:
-            config['approval'] = {}
-        config['approval']['grace_period_days'] = days
+        if "approval" not in config:
+            config["approval"] = {}
+        config["approval"]["grace_period_days"] = days
         return self.save_config(config)
 
     def get_action_enabled(self, action_type: str) -> bool:
@@ -340,23 +335,23 @@ class ConfigManager:
         Missing key = enabled: the global flags stay the master gates.
         """
         config = self.load_config()
-        actions = config.get('auto_remediation', {}).get('actions', {}) or {}
+        actions = config.get("auto_remediation", {}).get("actions", {}) or {}
         return actions.get(action_type, True)
 
     def set_action_enabled(self, action_type: str, enabled: bool) -> bool:
         """Enable or disable automation for one action type."""
         config = self.load_config()
-        if 'auto_remediation' not in config:
-            config['auto_remediation'] = {}
-        if not isinstance(config['auto_remediation'].get('actions'), dict):
-            config['auto_remediation']['actions'] = {}
-        config['auto_remediation']['actions'][action_type] = bool(enabled)
+        if "auto_remediation" not in config:
+            config["auto_remediation"] = {}
+        if not isinstance(config["auto_remediation"].get("actions"), dict):
+            config["auto_remediation"]["actions"] = {}
+        config["auto_remediation"]["actions"][action_type] = bool(enabled)
         return self.save_config(config)
 
     def get_dry_run(self) -> bool:
         """Check if dry-run mode is enabled (default: True for safety)"""
         config = self.load_config()
-        return config.get('dry_run', True)
+        return config.get("dry_run", True)
 
     def set_dry_run(self, enabled: bool) -> bool:
         """
@@ -369,13 +364,13 @@ class ConfigManager:
             True if successful
         """
         config = self.load_config()
-        config['dry_run'] = bool(enabled)
+        config["dry_run"] = bool(enabled)
         return self.save_config(config)
 
     def get_dry_run_days(self) -> int:
         """Get the mandatory dry-run period in days"""
         config = self.load_config()
-        return config.get('auto_remediation', {}).get('dry_run_days', 7)
+        return config.get("auto_remediation", {}).get("dry_run_days", 7)
 
     def set_dry_run_days(self, days: int) -> bool:
         """
@@ -391,18 +386,18 @@ class ConfigManager:
             ConfigValidationError: If days is out of valid range
         """
         # Validate input
-        days = validate_config_value('dry_run_days', days)
+        days = validate_config_value("dry_run_days", days)
 
         config = self.load_config()
-        if 'auto_remediation' not in config:
-            config['auto_remediation'] = {}
-        config['auto_remediation']['dry_run_days'] = days
+        if "auto_remediation" not in config:
+            config["auto_remediation"] = {}
+        config["auto_remediation"]["dry_run_days"] = days
         return self.save_config(config)
 
     def get_protection_rules(self) -> Dict[str, Any]:
         """Get all protection rules"""
         config = self.load_config()
-        return config.get('protection', {})
+        return config.get("protection", {})
 
     def update_protection_rule(self, key: str, value: Any) -> bool:
         """
@@ -422,15 +417,15 @@ class ConfigManager:
         value = validate_config_value(key, value)
 
         config = self.load_config()
-        if 'protection' not in config:
-            config['protection'] = {}
-        config['protection'][key] = value
+        if "protection" not in config:
+            config["protection"] = {}
+        config["protection"][key] = value
         return self.save_config(config)
 
     def get_terraform_pr(self) -> Dict[str, Any]:
         """Get the Terraform PR (GitOps) remediation section"""
         config = self.load_config()
-        return config.get('terraform_pr', {}) or {}
+        return config.get("terraform_pr", {}) or {}
 
     def set_terraform_pr_field(self, key: str, value: Any) -> bool:
         """
@@ -441,30 +436,30 @@ class ConfigManager:
             ConfigValidationError: If key or value is invalid
         """
         validators = {
-            'enabled': lambda v: bool(v),
-            'repo': lambda v: str(v).strip(),
-            'base_branch': lambda v: str(v).strip() or 'main',
-            'terraform_dir': lambda v: str(v).strip() or '.',
-            'pr_threshold_eur': lambda v: float(v),
+            "enabled": lambda v: bool(v),
+            "repo": lambda v: str(v).strip(),
+            "base_branch": lambda v: str(v).strip() or "main",
+            "terraform_dir": lambda v: str(v).strip() or ".",
+            "pr_threshold_eur": lambda v: float(v),
         }
         if key not in validators:
             raise ConfigValidationError(f"Unknown terraform_pr field: {key}")
         value = validators[key](value)
-        if key == 'pr_threshold_eur' and value < 0:
+        if key == "pr_threshold_eur" and value < 0:
             raise ConfigValidationError("pr_threshold_eur must be >= 0")
-        if key == 'repo' and value and '/' not in value:
+        if key == "repo" and value and "/" not in value:
             raise ConfigValidationError("repo must be 'owner/name'")
 
         config = self.load_config()
-        if 'terraform_pr' not in config or not config['terraform_pr']:
-            config['terraform_pr'] = {}
-        config['terraform_pr'][key] = value
+        if "terraform_pr" not in config or not config["terraform_pr"]:
+            config["terraform_pr"] = {}
+        config["terraform_pr"][key] = value
         return self.save_config(config)
 
     def get_whitelist(self) -> Dict[str, Any]:
         """Get whitelist configuration"""
         config = self.load_config()
-        return config.get('whitelist', {})
+        return config.get("whitelist", {})
 
     def add_instance_to_whitelist(self, instance_id: str) -> bool:
         """
@@ -483,13 +478,13 @@ class ConfigManager:
         instance_id = validate_instance_id(instance_id)
 
         config = self.load_config()
-        if 'whitelist' not in config:
-            config['whitelist'] = {'instance_ids': []}
-        if 'instance_ids' not in config['whitelist']:
-            config['whitelist']['instance_ids'] = []
+        if "whitelist" not in config:
+            config["whitelist"] = {"instance_ids": []}
+        if "instance_ids" not in config["whitelist"]:
+            config["whitelist"]["instance_ids"] = []
 
-        if instance_id not in config['whitelist']['instance_ids']:
-            config['whitelist']['instance_ids'].append(instance_id)
+        if instance_id not in config["whitelist"]["instance_ids"]:
+            config["whitelist"]["instance_ids"].append(instance_id)
             return self.save_config(config)
         return True  # Already whitelisted
 
@@ -504,16 +499,16 @@ class ConfigManager:
             True if successful
         """
         config = self.load_config()
-        if 'whitelist' in config and 'instance_ids' in config['whitelist']:
-            if instance_id in config['whitelist']['instance_ids']:
-                config['whitelist']['instance_ids'].remove(instance_id)
+        if "whitelist" in config and "instance_ids" in config["whitelist"]:
+            if instance_id in config["whitelist"]["instance_ids"]:
+                config["whitelist"]["instance_ids"].remove(instance_id)
                 return self.save_config(config)
         return True  # Not in whitelist
 
     def get_schedule(self) -> Dict[str, Any]:
         """Get schedule configuration"""
         config = self.load_config()
-        return config.get('schedule', {})
+        return config.get("schedule", {})
 
     def get_notifications(self) -> Dict[str, Any]:
         """Get notification configuration (email/slack toggles).
@@ -523,7 +518,7 @@ class ConfigManager:
         to it yet (see ui/utils/notifications.py).
         """
         config = self.load_config()
-        return config.get('notifications', {})
+        return config.get("notifications", {})
 
     def is_schedule_enabled(self) -> bool:
         """
@@ -531,8 +526,8 @@ class ConfigManager:
         Returns False if schedule allows all days/hours (no restrictions).
         """
         schedule = self.get_schedule()
-        allowed_days = schedule.get('allowed_days', [])
-        allowed_hours = schedule.get('allowed_hours', [])
+        allowed_days = schedule.get("allowed_days", [])
+        allowed_hours = schedule.get("allowed_hours", [])
 
         # If no restrictions or empty lists, schedule is disabled (allows all)
         return bool(allowed_days) and bool(allowed_hours)
@@ -546,12 +541,12 @@ class ConfigManager:
             True if successful
         """
         config = self.load_config()
-        if 'schedule' not in config:
-            config['schedule'] = {}
+        if "schedule" not in config:
+            config["schedule"] = {}
 
         # Empty lists = no restrictions
-        config['schedule']['allowed_days'] = []
-        config['schedule']['allowed_hours'] = []
+        config["schedule"]["allowed_days"] = []
+        config["schedule"]["allowed_hours"] = []
 
         return self.save_config(config)
 
@@ -567,13 +562,13 @@ class ConfigManager:
             True if successful
         """
         config = self.load_config()
-        if 'schedule' not in config:
-            config['schedule'] = {}
+        if "schedule" not in config:
+            config["schedule"] = {}
 
         if days is not None:
-            config['schedule']['allowed_days'] = days
+            config["schedule"]["allowed_days"] = days
         if hours is not None:
-            config['schedule']['allowed_hours'] = hours
+            config["schedule"]["allowed_hours"] = hours
 
         return self.save_config(config)
 
