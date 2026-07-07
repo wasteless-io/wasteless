@@ -36,6 +36,9 @@
                 <span><strong>{{ actions|length }}</strong> actions</span>
                 <span class="text-success"><strong>{{ success_count }}</strong> success</span>
                 <span class="text-danger"><strong>{{ failed_count }}</strong> failed</span>
+                {% if other_count > 0 %}
+                <span class="text-warning"><strong>{{ other_count }}</strong> pending/other</span>
+                {% endif %}
             </div>
         </div>
     </form>
