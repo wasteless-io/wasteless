@@ -38,3 +38,4 @@ CLAUDE.md
 # Local tooling
 .bg-shell/
 .gsd/
+*.egg-info/

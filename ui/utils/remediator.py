@@ -10,14 +10,16 @@ Author: Wasteless Team
 """
 
 import os
-import sys
 from typing import List, Dict, Any, Optional
 import logging
 from datetime import datetime, date
 import threading
 from contextlib import contextmanager
 
-# Add backend path to sys.path to import backend modules
+# The backend (src/core, src/remediators, ...) is pip-installed editable
+# into this venv (see pyproject.toml) -- `from remediators.X import Y` works
+# directly, no sys.path hack needed. BACKEND_PATH is still used to locate
+# config/ and for diagnostics when the editable install is missing.
 # Path structure: <repo>/ui/utils/ -> go up 2 levels -> <repo>/ (src/ lives there)
 BACKEND_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -53,10 +55,7 @@ def _check_backend_path() -> tuple[bool, Optional[str]]:
 
 # Initialize backend path check
 _backend_exists, _backend_error = _check_backend_path()
-if _backend_exists:
-    if BACKEND_PATH not in sys.path:
-        sys.path.insert(0, BACKEND_PATH)
-else:
+if not _backend_exists:
     logging.warning(f"Backend not available: {_backend_error}")
 
 logger = logging.getLogger(__name__)
@@ -150,7 +149,7 @@ class RemediatorProxy:
                 return self._resource_remediators[recommendation_type]
 
             with _backend_context():
-                from src.remediators.resource_remediator import REMEDIATORS_BY_RECOMMENDATION
+                from remediators.resource_remediator import REMEDIATORS_BY_RECOMMENDATION
 
                 cls = REMEDIATORS_BY_RECOMMENDATION.get(recommendation_type)
                 remediator = cls(dry_run=self.dry_run) if cls else None
@@ -183,7 +182,7 @@ class RemediatorProxy:
                 with _backend_context():
                     # Import with timeout protection would require multiprocessing
                     # For now, we do a simple import with good error handling
-                    from src.remediators.ec2_remediator import EC2Remediator
+                    from remediators.ec2_remediator import EC2Remediator
 
                     self._remediator = EC2Remediator(dry_run=self.dry_run)
 
@@ -374,9 +373,7 @@ def check_backend_available() -> bool:
 
     # Try to import the module
     try:
-        if BACKEND_PATH not in sys.path:
-            sys.path.insert(0, BACKEND_PATH)
-        from src.remediators.ec2_remediator import EC2Remediator  # noqa: F401 -- availability check
+        from remediators.ec2_remediator import EC2Remediator  # noqa: F401 -- availability check
 
         _backend_available = True
         return True
