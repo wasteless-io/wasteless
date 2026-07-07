@@ -16,6 +16,7 @@ at runtime, and enforced by `src/core/safeguards.py`.
 - `protection` — the four numeric safeguard thresholds: `min_instance_age_days`, `min_idle_days`, `min_confidence_score`, `max_instances_per_run`.
 - `whitelist` — `instance_ids` and `tags` excluded from any remediation regardless of confidence.
 - `schedule` — restricts *when* auto-remediation may execute (`allowed_days`, `allowed_hours`, `timezone`); disabled (`enabled: false`) means no time restriction.
+- `notifications.email` + `notify_on_error` — emails that address when a remediation action fails (SMTP credentials in `.env`, see `.env.template` and `ui/utils/notifications.py`). Wired for V1; `notifications.slack_webhook` and `notify_before_action`/`notify_after_action` are accepted and preserved by policy export/import but not yet wired to anything. No Settings-page UI for this section yet — edit `remediation.yaml` directly or via `POST /api/policies/import`.
 - `terraform_pr` — GitOps mode: repo, base branch, and the EUR threshold above which a change must go through a PR instead of direct execution.
 - `aws` — region/role used when the policy itself needs to resolve a role (most AWS auth actually comes from `.env`, see `src/core/aws_clients.py`).
 - `dry_run` — global dry-run flag; `true` by default, independent of `auto_remediation.enabled`.
