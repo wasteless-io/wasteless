@@ -515,6 +515,16 @@ class ConfigManager:
         config = self.load_config()
         return config.get('schedule', {})
 
+    def get_notifications(self) -> Dict[str, Any]:
+        """Get notification configuration (email/slack toggles).
+
+        V1 wires email only — slack_webhook is accepted and preserved by
+        policy export/import for forward compatibility, but nothing sends
+        to it yet (see ui/utils/notifications.py).
+        """
+        config = self.load_config()
+        return config.get('notifications', {})
+
     def is_schedule_enabled(self) -> bool:
         """
         Check if schedule restrictions are active.

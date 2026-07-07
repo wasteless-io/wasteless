@@ -18,6 +18,7 @@ name alone.
 | `test_cloud_resources_pagination.py` | Regression: `GET /cloud-resources` pagination (boto3 calls paginate correctly and totals reflect the full result set, not just the displayed page). |
 | `test_page_truncation_totals.py` | Regression: `/history` and the Scheduled/PR-open sections don't silently truncate totals when a list is capped for display. |
 | `test_config_manager.py` | `ui/utils/config_manager.py` — reading/writing `config/remediation.yaml`. |
+| `test_notifications.py` | `ui/utils/notifications.py` — email alert on action failure; SMTP is always mocked. Covers: disabled/unconfigured no-ops, successful send, and that a broken mail server never raises back into the caller. |
 | `test_policies.py` | `ui/utils/policies.py` — policy-as-code export/import round-trip. |
 | `test_remediator.py` | `ui/utils/remediator.py` — the `RemediatorProxy` bridge to the backend. |
 | `test_reports.py` | `ui/utils/reports.py` — date-range resolution and report filenames. |

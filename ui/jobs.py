@@ -307,6 +307,10 @@ def grace_executor_job():
                 # dry-run, or action disabled since approval: record only
                 success, error = True, None
 
+            if not dry_run and not success:
+                from utils.notifications import notify_action_failure
+                notify_action_failure(rec_type, instance_id, error)
+
             cursor.execute("""
                 INSERT INTO actions_log
                 (resource_id, recommendation_id, resource_type, action_type,

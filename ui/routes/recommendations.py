@@ -467,6 +467,9 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                                 'error': str(e),
                                 'action': rec_type,
                             }
+                        if not dry_run and not result.get('success'):
+                            from utils.notifications import notify_action_failure
+                            notify_action_failure(rec_type, instance_id, result.get('error'))
                         results.append(result)
                         continue
 
@@ -478,6 +481,9 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     if not dry_run and not manual_review:
                         aws_success, aws_error = _execute_ec2_boto3(
                             instance_id, rec_type, metadata)
+                        if not aws_success:
+                            from utils.notifications import notify_action_failure
+                            notify_action_failure(rec_type, instance_id, aws_error)
 
                     # Log action
                     action_status = 'success' if (dry_run or aws_success) else 'failed'
