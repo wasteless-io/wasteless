@@ -156,6 +156,25 @@ class TestRemediateFlow:
         r.execute_action.assert_not_called()
         r._create_rollback_snapshot.assert_called_once()
 
+    def test_dry_run_does_not_mark_recommendation_applied(self):
+        # Nothing was actually touched on AWS: the recommendation must stay
+        # out of 'applied' so it keeps counting as active waste instead of
+        # silently looking remediated.
+        r = self._remediator_with_state({'volume_type': 'gp2', 'tags': {}})
+        r.remediate('vol-1', recommendation_id=1, region='eu-west-3')
+        cursor = r.conn.cursor.return_value
+        sql_calls = ' '.join(str(c) for c in cursor.execute.call_args_list)
+        assert "status = 'applied'" not in sql_calls
+
+    def test_real_run_marks_recommendation_applied(self):
+        r = self._remediator_with_state({'volume_type': 'gp2', 'tags': {}},
+                                         dry_run=False)
+        r.safeguards.is_auto_remediation_enabled.return_value = True
+        r.remediate('vol-1', recommendation_id=1, region='eu-west-3')
+        cursor = r.conn.cursor.return_value
+        sql_calls = ' '.join(str(c) for c in cursor.execute.call_args_list)
+        assert "status = 'applied'" in sql_calls
+
     def test_missing_resource_fails(self):
         r = self._remediator_with_state(None)
         result = r.remediate('vol-gone', recommendation_id=1, region='eu-west-3')

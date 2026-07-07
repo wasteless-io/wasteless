@@ -203,13 +203,16 @@ def grace_executor_job():
                   'success' if success else 'failed',
                   dry_run or mode == 'manual', error))
 
-            # On failure the recommendation returns to the pending queue
-            # instead of staying invisibly stuck in 'scheduled'.
+            # On failure — or if dry-run/manual meant nothing was actually
+            # touched — the recommendation returns to the pending queue
+            # instead of staying invisibly stuck in 'scheduled' or looking
+            # remediated when it isn't.
+            real_action_taken = success and not dry_run and mode != 'manual'
             cursor.execute("""
                 UPDATE recommendations
                 SET status = %s, applied_at = NOW(), execute_after = NULL
                 WHERE id = %s
-            """, ('approved' if success else 'pending', rec_id))
+            """, ('approved' if real_action_taken else 'pending', rec_id))
             conn.commit()
             print(f"Grace executor: rec #{rec_id} ({rec_type}) → "
                   f"{'OK' if success else f'FAILED: {error}'}")
@@ -1719,13 +1722,25 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                         aws_error
                     ))
 
-                    # Update recommendation status
-                    new_status = 'approved' if (dry_run or aws_success) else 'pending'
-                    cursor.execute("""
-                        UPDATE recommendations
-                        SET status = %s, applied_at = NOW()
-                        WHERE id = %s
-                    """, (new_status, rec_id))
+                    # Update recommendation status. A dry-run touches no AWS
+                    # resource: leaving the status untouched (still 'pending')
+                    # keeps it counted as active waste instead of looking
+                    # remediated when nothing was actually done. Manual review
+                    # is a real human decision either way, so it always
+                    # records as approved.
+                    if manual_review:
+                        new_status = 'approved'
+                    elif dry_run:
+                        new_status = None
+                    else:
+                        new_status = 'approved' if aws_success else 'pending'
+
+                    if new_status is not None:
+                        cursor.execute("""
+                            UPDATE recommendations
+                            SET status = %s, applied_at = NOW()
+                            WHERE id = %s
+                        """, (new_status, rec_id))
 
                     result_entry = {
                         "recommendation_id": rec_id,
