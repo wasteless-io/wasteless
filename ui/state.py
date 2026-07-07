@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 
 from dotenv import load_dotenv
-import psycopg2
+from psycopg2 import pool as pg_pool
 from psycopg2.extras import RealDictCursor
 from fastapi.templating import Jinja2Templates
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -30,6 +30,34 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD", ""),
 }
 
+# Route handlers are sync `def`s (FastAPI runs them in a threadpool so
+# blocking psycopg2 calls don't stall the event loop -- see git history
+# for the stress test that found routes were all `async def` with zero
+# `await`, serializing every request on one thread). Without pooling here,
+# concurrent requests each open a raw connection and a load test at
+# concurrency=200 hit Postgres's max_connections=100 ("sorry, too many
+# clients already").
+#
+# maxconn=40 keeps real usage (a handful of concurrent users + the 5-min
+# background jobs) comfortably pooled while leaving headroom under
+# Postgres's max_connections=100 for the backend's own pool
+# (src/core/database.py, up to 10) and jobs.py's occasional direct
+# connects. Verified with ab: concurrency 10-30 (the realistic ceiling for
+# a self-hosted single-team tool) -> 0 failures, ~50-250ms/request, down
+# from multi-second before the async/sync fix. Synthetic concurrency of
+# 200 does start hitting the pool limit (expected backpressure, not a
+# crash: the server recovers and keeps serving once the spike passes).
+#
+# A tried alternative (maxconn=20 + a threading.Semaphore to queue instead
+# of raising PoolError when exhausted) deadlocked under load instead:
+# ThreadedConnectionPool.getconn() holds its own internal lock, and
+# pairing it with a second blocking primitive across the same worker
+# threads froze all of them. Don't reintroduce that pattern without
+# testing it under concurrency again.
+_pool = pg_pool.ThreadedConnectionPool(
+    minconn=2, maxconn=40, cursor_factory=RealDictCursor, **DB_CONFIG
+)
+
 # Fixed USD→EUR rate, same convention as the detectors' AWS pricing and
 # src/constants.py — used for LLM costs and the Waste Rate denominator
 USD_TO_EUR = float(os.getenv("USD_TO_EUR", "0.92"))
@@ -41,12 +69,18 @@ DAYS_PER_MONTH = 365 / 12
 
 
 def get_db():
-    """Get database connection."""
-    conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
+    """Get a pooled database connection."""
+    conn = _pool.getconn()
     try:
         yield conn
     finally:
-        conn.close()
+        # Discard any uncommitted work (or clear an aborted-transaction
+        # state left by a route that raised mid-query) before the
+        # connection goes back to the pool -- otherwise the next request
+        # to grab it inherits an open transaction. No-op if there's
+        # nothing to roll back.
+        conn.rollback()
+        _pool.putconn(conn)
 
 
 # Statuses whose resource might still vanish out from under us and needs

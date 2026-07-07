@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.get("/settings", response_class=HTMLResponse)
-async def settings(request: Request, conn=Depends(get_db)):
+def settings(request: Request, conn=Depends(get_db)):
     """Settings and configuration page."""
     from utils.config_manager import ConfigManager
 
@@ -49,7 +49,7 @@ async def settings(request: Request, conn=Depends(get_db)):
 
 
 @router.post("/api/config")
-async def api_update_config(update: ConfigUpdate):
+def api_update_config(update: ConfigUpdate):
     """Update configuration value."""
     from utils.config_manager import ConfigManager
 
@@ -116,7 +116,7 @@ def api_policies_import(payload: PolicyImport):
 
 
 @router.post("/api/whitelist")
-async def api_whitelist(instance_id: str, action: str = "add"):
+def api_whitelist(instance_id: str, action: str = "add"):
     """Add or remove instance from whitelist."""
     from utils.config_manager import ConfigManager
 

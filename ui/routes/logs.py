@@ -9,13 +9,13 @@ router = APIRouter()
 
 
 @router.get("/logs", response_class=HTMLResponse)
-async def logs_page(request: Request):
+def logs_page(request: Request):
     """Live log viewer for debugging (in-memory, current UI process)."""
     return templates.TemplateResponse(request, "logs.html")
 
 
 @router.get("/api/logs")
-async def api_logs(
+def api_logs(
     after_id: int = 0, level: str = "DEBUG", q: str = "", limit: int = Query(500, ge=1, le=2000)
 ):
     """Incremental poll of the in-memory log buffer.

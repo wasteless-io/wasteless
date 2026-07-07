@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 @router.get("/cloud-resources", response_class=HTMLResponse)
-async def cloud_resources(
+def cloud_resources(
     request: Request,
     tab: str = Query("ec2"),
     state_filter: str = Query("all"),

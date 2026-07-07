@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.post("/api/sync-aws")
-async def api_sync_aws(conn=Depends(get_db)):
+def api_sync_aws(conn=Depends(get_db)):
     """Synchronize recommendations with current AWS instance states."""
     import traceback
 

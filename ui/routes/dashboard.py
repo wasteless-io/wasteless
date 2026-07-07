@@ -139,7 +139,7 @@ def fetch_waste_by_resource(cursor, range_key: str):
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
+def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     """Executive dashboard with KPIs and charts."""
     cursor = conn.cursor()
 
@@ -355,7 +355,7 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
 
 
 @router.get("/api/dashboard/trend")
-async def api_dashboard_trend(conn=Depends(get_db), range: str = "30d"):
+def api_dashboard_trend(conn=Depends(get_db), range: str = "30d"):
     """Waste trend points for a range key — feeds the dashboard chart via AJAX."""
     cursor = conn.cursor()
     trend, granularity, subtitle, rows = fetch_waste_trend(cursor, range)
@@ -369,7 +369,7 @@ async def api_dashboard_trend(conn=Depends(get_db), range: str = "30d"):
 
 
 @router.get("/api/dashboard/waste-by-resource")
-async def api_dashboard_waste_by_resource(conn=Depends(get_db), range: str = "30d"):
+def api_dashboard_waste_by_resource(conn=Depends(get_db), range: str = "30d"):
     """Waste by resource type for a range key — feeds the bar chart via AJAX."""
     cursor = conn.cursor()
     range_key, subtitle, rows = fetch_waste_by_resource(cursor, range)
@@ -389,7 +389,7 @@ async def api_dashboard_waste_by_resource(conn=Depends(get_db), range: str = "30
 
 
 @router.get("/api/metrics")
-async def api_metrics(conn=Depends(get_db)):
+def api_metrics(conn=Depends(get_db)):
     """Get dashboard metrics as JSON."""
     cursor = conn.cursor()
     cursor.execute("""

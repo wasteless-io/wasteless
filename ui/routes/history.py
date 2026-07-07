@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.get("/history", response_class=HTMLResponse)
-async def history(
+def history(
     request: Request,
     conn=Depends(get_db),
     status_filter: str = "All",

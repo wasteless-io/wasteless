@@ -9,13 +9,13 @@ router = APIRouter()
 
 
 @router.get("/landing", response_class=HTMLResponse)
-async def landing(request: Request):
+def landing(request: Request):
     """Public landing page."""
     return templates.TemplateResponse(request, "landing.html")
 
 
 @router.get("/", response_class=HTMLResponse)
-async def home(request: Request, conn=Depends(get_db)):
+def home(request: Request, conn=Depends(get_db)):
     """Home page with overview metrics."""
     cursor = conn.cursor()
 
