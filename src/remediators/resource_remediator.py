@@ -206,11 +206,15 @@ class ResourceRemediator:
                     SET action_status = 'success', updated_at = NOW()
                     WHERE id = %s;
                 """, (action_log_id,))
-                cursor.execute("""
-                    UPDATE recommendations
-                    SET status = 'applied', applied_at = NOW()
-                    WHERE id = %s;
-                """, (recommendation_id,))
+                # A dry-run touches no AWS resource: leaving status untouched
+                # (stays 'pending') keeps it counted as active waste instead
+                # of looking remediated when nothing was actually done.
+                if not self.dry_run:
+                    cursor.execute("""
+                        UPDATE recommendations
+                        SET status = 'applied', applied_at = NOW()
+                        WHERE id = %s;
+                    """, (recommendation_id,))
                 self.conn.commit()
             finally:
                 cursor.close()

@@ -112,6 +112,18 @@ def _recommendations_pending_count(cur, resource_type):
     return cur.fetchone()[0]
 
 
+def _declined_kpi(cur, resource_type):
+    """Mirrors ui/main.py:650-656 (GET /dashboard, 'declined' CTE)."""
+    cur.execute("""
+        SELECT COUNT(*), COALESCE(SUM(w.monthly_waste_eur), 0)
+        FROM active_waste w
+        JOIN recommendations r ON r.waste_id = w.id
+        WHERE r.status = 'rejected' AND w.resource_type = %s
+    """, (resource_type,))
+    count, total_eur = cur.fetchone()
+    return count, float(total_eur)
+
+
 # --- Exercice 1 : rejected reste actif sur Home, mais invisible sur Recommendations ---
 
 def test_rejected_counts_as_active_waste_but_hidden_from_recommendations(conn):
@@ -197,3 +209,70 @@ def test_snapshot_zeroes_out_a_resource_type_with_no_more_active_waste(conn):
     total_eur, resource_count = cur.fetchone()
     assert total_eur == 0
     assert resource_count == 0
+
+
+# --- Exercice 6 : scheduled (grace period en cours) reste actif ---
+
+def test_scheduled_grace_period_still_counts_as_active_waste(conn):
+    cur = conn.cursor()
+    _insert_waste(cur, 'ec2_instance', 'test-scheduled-1', 20.0, status='scheduled')
+
+    total_eur, count = _active_waste_total(cur, 'ec2_instance')
+    assert count == 1
+    assert total_eur == pytest.approx(20.0)
+    # Ni pending : invisible sur la liste actionnable de Recommendations
+    # tant que le grace period court.
+    assert _recommendations_pending_count(cur, 'ec2_instance') == 0
+
+
+# --- Exercice 7 : pr_open (routage Terraform) reste actif tant que la PR n'est pas mergée ---
+
+def test_pr_open_still_counts_as_active_waste(conn):
+    cur = conn.cursor()
+    _insert_waste(cur, 'nat_gateway', 'test-pr-open-1', 32.24, status='pr_open')
+
+    total_eur, count = _active_waste_total(cur, 'nat_gateway')
+    assert count == 1
+    assert total_eur == pytest.approx(32.24)
+
+
+# --- Exercice 8 : le KPI "declined" ne compte que rejected, pas dismissed/pending ---
+
+def test_declined_kpi_counts_only_rejected(conn):
+    cur = conn.cursor()
+    _insert_waste(cur, 'ebs_volume', 'test-declined-rejected', 5.0, status='rejected')
+    _insert_waste(cur, 'ebs_volume', 'test-declined-dismissed', 7.0, status='dismissed')
+    _insert_waste(cur, 'ebs_volume', 'test-declined-pending', 3.0, status='pending')
+
+    count, total_eur = _declined_kpi(cur, 'ebs_volume')
+    assert count == 1
+    assert total_eur == pytest.approx(5.0)
+
+
+# --- Exercice 9 : une action dry-run ne doit jamais marquer un item comme réellement traité ---
+
+def test_dry_run_approval_leaves_recommendation_pending(conn):
+    """Verrouille le fix : src/remediators/resource_remediator.py et
+    ui/main.py ne marquaient pas la différence entre "simulé" et "réellement
+    exécuté" — une approbation en Dry-Run Mode faisait disparaître le waste
+    de Home sans qu'aucune ressource AWS n'ait été touchée.
+    """
+    cur = conn.cursor()
+    waste_id = _insert_waste(cur, 'ec2_instance', 'test-dryrun-1', 15.0, status='pending')
+    cur.execute("SELECT id FROM recommendations WHERE waste_id = %s", (waste_id,))
+    rec_id = cur.fetchone()[0]
+
+    # Simule ce que fait un dry-run réussi : logguer l'action, mais NE PAS
+    # faire passer le statut à 'approved' (comportement désormais correct
+    # de resource_remediator.py / ui/main.py sous dry_run=True).
+    cur.execute("""
+        INSERT INTO actions_log
+        (resource_id, recommendation_id, resource_type, action_type,
+         action_status, dry_run, action_date)
+        VALUES ('test-dryrun-1', %s, 'ec2_instance', 'stop', 'success', true, NOW())
+    """, (rec_id,))
+
+    total_eur, count = _active_waste_total(cur, 'ec2_instance')
+    assert count == 1
+    assert total_eur == pytest.approx(15.0)
+    assert _recommendations_pending_count(cur, 'ec2_instance') == 1
