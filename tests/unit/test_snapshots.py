@@ -39,7 +39,8 @@ class TestSnapshotActiveWaste:
         snapshot_active_waste(conn)
         sql = cursor.execute.call_args[0][0]
         assert 'INSERT INTO waste_snapshots' in sql
-        assert 'FROM active_waste' in sql
+        assert 'FROM waste_detected' in sql
+        assert 'LEFT JOIN active_waste' in sql
         assert 'ON CONFLICT (snapshot_date, resource_type) DO UPDATE' in sql
 
     def test_failure_is_non_fatal(self):

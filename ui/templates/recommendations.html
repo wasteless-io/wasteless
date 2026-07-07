@@ -24,7 +24,7 @@
             </div>
             <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
             <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
-                <span><strong>{{ recommendations|length }}</strong> recommendations</span>
+                <span><strong>{{ total_count }}</strong> recommendations</span>
                 <span class="text-success">Savings: <strong>{{ "%.2f"|format(total_savings) }}</strong> €/mo</span>
                 <span><strong>{{ "%.0f"|format(avg_confidence * 100) }}%</strong> conf.</span>
             </div>
@@ -37,7 +37,9 @@
 <div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid var(--primary);">
     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
         <strong style="font-size: 0.9rem;">Open Terraform PRs</strong>
-        <span class="badge badge-info">{{ pr_open_recs|length }}</span>
+        <span class="badge badge-info">
+            {% if pr_open_total_count > pr_open_recs|length %}{{ pr_open_recs|length }} of {{ pr_open_total_count }}{% else %}{{ pr_open_recs|length }}{% endif %}
+        </span>
         <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280);">
             Merging applies the change through your Terraform pipeline; closing rejects it.
         </span>
@@ -66,7 +68,9 @@
 <div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid #d29922;">
     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
         <strong style="font-size: 0.9rem;">Scheduled executions</strong>
-        <span class="badge badge-warning">{{ scheduled_recs|length }}</span>
+        <span class="badge badge-warning">
+            {% if scheduled_total_count > scheduled_recs|length %}{{ scheduled_recs|length }} of {{ scheduled_total_count }}{% else %}{{ scheduled_recs|length }}{% endif %}
+        </span>
         <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280);">
             Approved actions execute automatically after the grace period unless cancelled.
         </span>
@@ -86,6 +90,44 @@
                     <td style="padding: 0.4rem 0.6rem; text-align: right;">
                         <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;"
                                 onclick="cancelScheduled({{ s.id }})">Cancel</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if approved_manual_recs %}
+<!-- Manual-review recommendations the human confirmed but hasn't deleted
+     yet — wasteless never touches AWS for these, so this is the only
+     place they're still visible as "still on you" instead of just
+     vanishing into History. -->
+<div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid #6366f1;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+        <strong style="font-size: 0.9rem;">Approved — awaiting manual deletion</strong>
+        <span class="badge badge-info">
+            {% if approved_manual_total_count > approved_manual_recs|length %}{{ approved_manual_recs|length }} of {{ approved_manual_total_count }}{% else %}{{ approved_manual_recs|length }}{% endif %}
+        </span>
+        <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280);">
+            You confirmed these — delete them yourself in the AWS Console. They keep counting as active waste until a sync confirms they're gone.
+        </span>
+    </div>
+    <div class="table-container">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+            <tbody>
+                {% for m in approved_manual_recs %}
+                <tr style="border-top: 1px solid var(--gray-200, #e5e7eb);">
+                    <td style="padding: 0.4rem 0.6rem; font-family: monospace;">{{ m.resource_id }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">{{ m.recommendation_type }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">EUR {{ "%.2f"|format(m.estimated_monthly_savings_eur or 0) }}/mo</td>
+                    <td style="padding: 0.4rem 0.6rem;">
+                        approved {{ m.applied_at.strftime('%Y-%m-%d %H:%M') if m.applied_at else '-' }}
+                    </td>
+                    <td style="padding: 0.4rem 0.6rem; text-align: right;">
+                        <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;"
+                                onclick="dismissApprovedManual({{ m.id }})">Dismiss</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -131,8 +173,11 @@
                 <button type="button" id="approveBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-success" style="padding: 0.4rem 0.75rem;">
                     &#9654; Approve Selected
                 </button>
-                <button type="button" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
+                <button type="button" id="rejectBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
                     Reject
+                </button>
+                <button type="button" id="dismissBtn" onclick="executeAction('dismiss')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" title="Stop counting this item as active waste for good">
+                    Dismiss
                 </button>
             </div>
         </div>
@@ -143,8 +188,14 @@
                 <span><strong>Manual action required</strong> — delete these resources directly from the <a id="awsConsoleLink" href="https://console.aws.amazon.com/ec2/v2/home" target="_blank" style="color: var(--primary);">AWS Console</a>.</span>
             </div>
             <span id="manualSelectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
-            <button type="button" id="markReviewedBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" disabled>
-                Mark as Reviewed
+            <button type="button" id="approveManualBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-success" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" title="Confirm the recommendation — you still have to delete the resource yourself" disabled>
+                Approve
+            </button>
+            <button type="button" id="rejectManualBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" disabled>
+                Reject
+            </button>
+            <button type="button" id="dismissManualBtn" onclick="executeAction('dismiss')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" title="Stop counting this item as active waste for good" disabled>
+                Dismiss
             </button>
         </div>
 
@@ -187,7 +238,7 @@
                                 <span class="badge badge-info">Downsize</span>
                                 {% endif %}
                             </td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">{% if rec.recommendation_type == 'stop_instance' %}CPU avg below {{ "%.1f"|format(rec.cpu_avg or 0) }}% for 7d{% elif rec.recommendation_type == 'terminate_instance' %}Stopped, still billing EBS{% else %}Underutilized — {{ "%.1f"|format(rec.cpu_avg or 0) }}% avg CPU{% endif %}</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">{% if rec.recommendation_type == 'stop_instance' %}CPU avg below {{ "%.1f"|format(rec.cpu_avg or 0) }}% for 7d{% elif rec.recommendation_type == 'terminate_instance' %}Stopped, still billing EBS{% else %}Underutilized — {{ "%.1f"|format(rec.cpu_avg or 0) }}% avg CPU{% endif %}</span>{% endif %}<button type="button" title="Ask a question about this recommendation" style="padding: 0.05rem 0.35rem; font-size: 0.75rem; margin-left: 0.35rem; border: 1px solid var(--gray-300); border-radius: 4px; background: white; cursor: pointer;" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)">&#128172;</button></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
@@ -253,7 +304,7 @@
                             <td style="padding: 0.4rem 0.5rem; white-space: nowrap;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span> <span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not attached to any instance</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not attached to any instance</span>{% endif %}<button type="button" title="Ask a question about this recommendation" style="padding: 0.05rem 0.35rem; font-size: 0.75rem; margin-left: 0.35rem; border: 1px solid var(--gray-300); border-radius: 4px; background: white; cursor: pointer;" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)">&#128172;</button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -305,7 +356,7 @@
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not associated to any instance</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not associated to any instance</span>{% endif %}<button type="button" title="Ask a question about this recommendation" style="padding: 0.05rem 0.35rem; font-size: 0.75rem; margin-left: 0.35rem; border: 1px solid var(--gray-300); border-radius: 4px; background: white; cursor: pointer;" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)">&#128172;</button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -354,7 +405,7 @@
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Old snapshot — verify before deleting</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal;">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Old snapshot — verify before deleting</span>{% endif %}<button type="button" title="Ask a question about this recommendation" style="padding: 0.05rem 0.35rem; font-size: 0.75rem; margin-left: 0.35rem; border: 1px solid var(--gray-300); border-radius: 4px; background: white; cursor: pointer;" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)">&#128172;</button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -404,7 +455,7 @@
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;">{{ rec.volume_name or rec.resource_id }}</code></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 420px; white-space: normal;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.action_required }}</span>{% if rec.ai_insight %}<div style="font-size: 0.75rem; color: var(--gray-700); margin-top: 0.2rem;" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight }}</div>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 420px; white-space: normal;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.action_required }}</span>{% if rec.ai_insight %}<div style="font-size: 0.75rem; color: var(--gray-700); margin-top: 0.2rem;" title="{{ rec.ai_insight }}">&#10024; {{ rec.ai_insight }}</div>{% endif %}<button type="button" title="Ask a question about this recommendation" style="padding: 0.05rem 0.35rem; font-size: 0.75rem; margin-left: 0.35rem; border: 1px solid var(--gray-300); border-radius: 4px; background: white; cursor: pointer;" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)">&#128172;</button></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
@@ -439,10 +490,14 @@
         <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations match your filters</p>
         <p class="text-muted" style="margin-bottom: 1.25rem; font-size: 0.9rem;">Try relaxing the filters to see more results.</p>
         <a href="/recommendations" class="btn btn-outline" style="padding: 0.4rem 1rem;">Reset filters</a>
+    {% elif has_waste_history %}
+        <div style="margin-bottom: 0.75rem;"></div>
+        <p style="font-weight: 600; margin-bottom: 0.25rem;">Nothing pending review</p>
+        <p class="text-muted" style="margin-bottom: 0; font-size: 0.9rem;">Every waste item detected so far has already been reviewed, dismissed, or resolved. Check <a href="/history">History</a> for what happened to it.</p>
     {% else %}
         <div style="margin-bottom: 0.75rem;"></div>
         <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations yet</p>
-        <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">Either everything looks healthy, or the collector hasn't run yet.</p>
+        <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">The collector hasn't run yet.</p>
         <div style="display: inline-block; text-align: left; background: var(--gray-100); border-radius: 8px; padding: 1rem 1.5rem; font-size: 0.85rem;">
             <p style="margin: 0 0 0.5rem; font-weight: 600; color: var(--gray-700);">Run the pipeline to collect data:</p>
             <code style="display: block;">wasteless collect</code>
@@ -450,6 +505,23 @@
     {% endif %}
 </div>
 {% endif %}
+
+<!-- Ask-a-question modal: one-shot Q&A about a single recommendation, no
+     conversation history — see src/core/llm.py::answer_question -->
+<div id="askModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 480px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem;">Ask about this recommendation</h3>
+            <button type="button" onclick="closeAskModal()" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
+        </div>
+        <p id="askModalLabel" style="font-size: 0.8rem; color: var(--gray-600); margin: 0 0 0.75rem;"></p>
+        <textarea id="askQuestion" rows="2" placeholder="e.g. Is this safe to delete? What happens if I approve it?" style="width: 100%; box-sizing: border-box; padding: 0.5rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.85rem; resize: vertical;"></textarea>
+        <div style="margin-top: 0.5rem; display: flex; justify-content: flex-end;">
+            <button type="button" id="askSubmitBtn" onclick="submitAskQuestion()" class="btn btn-success" style="padding: 0.4rem 0.9rem;">Ask</button>
+        </div>
+        <div id="askAnswer" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--gray-700); white-space: pre-wrap;"></div>
+    </div>
+</div>
 
 {% endblock %}
 
@@ -516,15 +588,21 @@
         const count = document.querySelectorAll('.rec-checkbox-' + currentTab + ':checked').length;
         if (currentTab === 'ec2') {
             document.getElementById('selectedCount').textContent = count + ' selected';
-            const approveBtn = document.querySelector('#actions-automated .btn-success');
-            const rejectBtn  = document.querySelector('#actions-automated .btn-outline');
-            if (approveBtn) { approveBtn.disabled = count === 0; approveBtn.style.opacity = count === 0 ? '0.4' : '1'; approveBtn.style.cursor = count === 0 ? 'not-allowed' : 'pointer'; }
-            if (rejectBtn)  { rejectBtn.disabled  = count === 0; rejectBtn.style.opacity  = count === 0 ? '0.4' : '1'; rejectBtn.style.cursor  = count === 0 ? 'not-allowed' : 'pointer'; }
+            const approveBtn = document.getElementById('approveBtn');
+            const rejectBtn  = document.getElementById('rejectBtn');
+            const dismissBtn = document.getElementById('dismissBtn');
+            [approveBtn, rejectBtn, dismissBtn].forEach(btn => {
+                if (btn) { btn.disabled = count === 0; btn.style.opacity = count === 0 ? '0.4' : '1'; btn.style.cursor = count === 0 ? 'not-allowed' : 'pointer'; }
+            });
         } else {
             const manualCount = document.getElementById('manualSelectedCount');
             if (manualCount) manualCount.textContent = count + ' selected';
-            const btn = document.getElementById('markReviewedBtn');
-            if (btn) { btn.disabled = count === 0; btn.style.opacity = count === 0 ? '0.4' : '1'; btn.style.cursor = count === 0 ? 'pointer' : 'pointer'; }
+            const approveBtn = document.getElementById('approveManualBtn');
+            const rejectBtn = document.getElementById('rejectManualBtn');
+            const dismissBtn = document.getElementById('dismissManualBtn');
+            [approveBtn, rejectBtn, dismissBtn].forEach(b => {
+                if (b) { b.disabled = count === 0; b.style.opacity = count === 0 ? '0.4' : '1'; b.style.cursor = count === 0 ? 'not-allowed' : 'pointer'; }
+            });
         }
     }
 
@@ -540,7 +618,7 @@
             return;
         }
 
-        const actionText = action === 'approve' ? 'approve' : 'reject';
+        const actionText = action === 'approve' ? 'approve' : action === 'dismiss' ? 'dismiss (stop counting as active waste)' : 'reject';
         if (!confirm('Are you sure you want to ' + actionText + ' ' + ids.length + ' recommendation(s)?')) {
             return;
         }
@@ -604,6 +682,28 @@
                 // Reload so the "Scheduled executions" panel reflects reality
                 setTimeout(() => window.location.reload(), 1500);
             }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function dismissApprovedManual(recId) {
+        if (!confirm('Stop counting this as active waste? Use this if you changed your mind and are not going to delete it.')) {
+            return;
+        }
+        try {
+            const response = await api('/api/actions', {
+                method: 'POST',
+                body: JSON.stringify({
+                    recommendation_ids: [recId],
+                    action: 'dismiss'
+                })
+            });
+            const ok = response.results[0] && response.results[0].success;
+            showToast(ok ? 'Dismissed — no longer counted as active waste.'
+                         : 'Dismiss failed: ' + (response.results[0].error || 'unknown'),
+                      ok ? 'success' : 'error');
+            if (ok) setTimeout(() => window.location.reload(), 1000);
         } catch (error) {
             showToast('Error: ' + error.message, 'error');
         }
@@ -683,6 +783,46 @@
             alert('Sync error: ' + error.message);
             btn.disabled = false;
             btn.innerHTML = '<span id="syncIcon">&#8635;</span> Sync AWS';
+        }
+    }
+
+    // Ask-a-question modal: one-shot, no conversation history — a fresh
+    // question re-sends the recommendation's full context every time.
+    let askRecId = null;
+
+    function openAskModal(recId, label) {
+        askRecId = recId;
+        document.getElementById('askModalLabel').textContent = label;
+        document.getElementById('askQuestion').value = '';
+        document.getElementById('askAnswer').textContent = '';
+        document.getElementById('askModal').style.display = 'flex';
+        document.getElementById('askQuestion').focus();
+    }
+
+    function closeAskModal() {
+        document.getElementById('askModal').style.display = 'none';
+        askRecId = null;
+    }
+
+    async function submitAskQuestion() {
+        const question = document.getElementById('askQuestion').value.trim();
+        if (!question || askRecId === null) return;
+        const answerEl = document.getElementById('askAnswer');
+        const btn = document.getElementById('askSubmitBtn');
+        btn.disabled = true;
+        answerEl.textContent = 'Thinking…';
+        try {
+            const response = await fetch(`/api/recommendations/${askRecId}/ask`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question })
+            });
+            const data = await response.json();
+            answerEl.textContent = data.answer || data.error || 'No answer available.';
+        } catch (error) {
+            answerEl.textContent = 'Error: ' + error.message;
+        } finally {
+            btn.disabled = false;
         }
     }
 </script>

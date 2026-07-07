@@ -227,23 +227,23 @@ class ConfigManager:
         try:
             with _file_lock(self.config_path, mode='r', exclusive=False) as f:
                 self._config_cache = yaml.safe_load(f)
-            logger.info(f"✅ Configuration loaded from {self.config_path}")
+            logger.info(f"Configuration loaded from {self.config_path}")
             return self._config_cache
         except FileNotFoundError:
             template_path = f"{self.config_path}.template"
             if os.path.exists(template_path):
                 shutil.copyfile(template_path, self.config_path)
                 logger.warning(
-                    f"⚠️ Config file not found, seeded from {template_path}"
+                    f"Config file not found, seeded from {template_path}"
                 )
                 return self.load_config()
-            logger.error(f"❌ Config file not found: {self.config_path}")
+            logger.error(f"Config file not found: {self.config_path}")
             raise
         except yaml.YAMLError as e:
-            logger.error(f"❌ Invalid YAML in config file: {e}")
+            logger.error(f"Invalid YAML in config file: {e}")
             raise
         except TimeoutError as e:
-            logger.error(f"❌ Could not acquire lock for reading config: {e}")
+            logger.error(f"Could not acquire lock for reading config: {e}")
             raise
 
     def save_config(self, config: Dict[str, Any]) -> bool:
@@ -272,7 +272,7 @@ class ConfigManager:
                     with open(backup_path, 'w') as backup_file:
                         backup_file.write(current_content)
                 except Exception as backup_err:
-                    logger.warning(f"⚠️ Could not create backup: {backup_err}")
+                    logger.warning(f"Could not create backup: {backup_err}")
 
                 # Truncate and write new config
                 f.seek(0)
@@ -280,23 +280,23 @@ class ConfigManager:
                 yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False)
 
             self._config_cache = config
-            logger.info(f"✅ Configuration saved to {self.config_path}")
+            logger.info(f"Configuration saved to {self.config_path}")
             return True
 
         except TimeoutError as e:
-            logger.error(f"❌ Could not acquire lock for saving config: {e}")
+            logger.error(f"Could not acquire lock for saving config: {e}")
             return False
         except Exception as e:
-            logger.error(f"❌ Failed to save config: {e}")
+            logger.error(f"Failed to save config: {e}")
             # Try to restore from backup if it exists
             try:
                 if os.path.exists(backup_path):
                     with open(backup_path, 'r') as src:
                         with open(self.config_path, 'w') as dst:
                             dst.write(src.read())
-                    logger.info("⚠️ Config restored from backup")
+                    logger.info("Config restored from backup")
             except Exception as restore_err:
-                logger.error(f"❌ Failed to restore from backup: {restore_err}")
+                logger.error(f"Failed to restore from backup: {restore_err}")
             return False
 
     def get_auto_remediation_enabled(self) -> bool:

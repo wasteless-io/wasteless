@@ -138,11 +138,13 @@ class TestApproveFlow(unittest.TestCase):
                                 f"{rec_type}: {result.get('error')}")
                 self.assertTrue(result['manual'])
                 self.assertNotIn('error', result)
-                # decision recorded
+                # decision recorded as 'approved_manual', not 'approved':
+                # nothing touched AWS, the resource still counts as active
+                # waste until the human deletes it and a sync confirms it.
                 updates = [c for c in cursor.execute.call_args_list
                            if 'UPDATE recommendations' in str(c)]
-                self.assertTrue(any("'approved'" in str(c) or 'approved'
-                                    in str(c.args[1]) for c in updates))
+                self.assertTrue(any('approved_manual' in str(c.args[1])
+                                    for c in updates))
 
     def test_manual_approval_logged_as_dry_run(self):
         result, cursor = self._approve(

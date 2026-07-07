@@ -72,6 +72,7 @@ Resources:
                   - ec2:DescribeImages
                   - ec2:DescribeInstances
                   - ec2:DescribeNatGateways
+                  - ec2:DescribeNetworkInterfaces
                   - ec2:DescribeSnapshots
                   - ec2:DescribeVolumes
                   - ec2:DescribeVpcs
@@ -121,6 +122,7 @@ Resources:
                   - ec2:DescribeImages
                   - ec2:DescribeInstances
                   - ec2:DescribeNatGateways
+                  - ec2:DescribeNetworkInterfaces
                   - ec2:DescribeSnapshots
                   - ec2:DescribeVolumes
                   - ec2:DescribeVpcs

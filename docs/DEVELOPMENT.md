@@ -149,9 +149,15 @@ compute a confidence score, insert into `waste_detected` then `recommendations`.
 **2. Steampipe-based** (preferred for new inventory-style detectors): write the
 detection SQL in `sql/steampipe/your_detector.sql` and subclass
 `SteampipeWasteDetector` (`steampipe_base.py`) — only `map_rows()` is needed.
-See `eip_orphan_steampipe.py` for a minimal example.
+See `vpc_unused.py` for a minimal example.
 
 In both cases:
+
+0. **Don't duplicate an existing detector's resource type in the other
+   pattern.** `ebs_orphan`, `eip_orphan` and `snapshot_orphan` used to have
+   both a boto3 and a Steampipe implementation; the duplicates were removed
+   because nothing enforced they'd stay in sync. Pick boto3 or Steampipe
+   once per resource type.
 
 1. **Declare the `recommendation_type` in `ui/utils/action_registry.py`** with
    an execution mode (`boto3`, `remediator` or `manual`) — the guard test in

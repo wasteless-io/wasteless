@@ -221,12 +221,27 @@ _collect() {
         echo ""
     }
 
-    _run_step "${CYAN}[1/6]${NC} Collecting CloudWatch metrics..."    "src/collectors/aws_cloudwatch.py"
-    _run_step "${CYAN}[2/6]${NC} Detecting idle EC2 instances..."     "src/detectors/ec2_idle.py"
-    _run_step "${CYAN}[3/6]${NC} Detecting stopped EC2 instances..."  "src/detectors/ec2_stopped.py"
-    _run_step "${CYAN}[4/6]${NC} Detecting orphaned EBS volumes..."   "src/detectors/ebs_orphan.py"
-    _run_step "${CYAN}[5/6]${NC} Detecting unassociated Elastic IPs..." "src/detectors/eip_orphan.py"
-    _run_step "${CYAN}[6/6]${NC} Detecting old EBS snapshots..."      "src/detectors/snapshot_orphan.py"
+    _run_step "${CYAN}[1/10]${NC} Collecting CloudWatch metrics..."    "src/collectors/aws_cloudwatch.py"
+    _run_step "${CYAN}[2/10]${NC} Detecting idle EC2 instances..."     "src/detectors/ec2_idle.py"
+    _run_step "${CYAN}[3/10]${NC} Detecting stopped EC2 instances..."  "src/detectors/ec2_stopped.py"
+    _run_step "${CYAN}[4/10]${NC} Detecting orphaned EBS volumes..."   "src/detectors/ebs_orphan.py"
+    _run_step "${CYAN}[5/10]${NC} Detecting unassociated Elastic IPs..." "src/detectors/eip_orphan.py"
+    _run_step "${CYAN}[6/10]${NC} Detecting old EBS snapshots..."      "src/detectors/snapshot_orphan.py"
+
+    # Steps 7-10 need the steampipe CLI (brew install turbot/tap/steampipe
+    # && steampipe plugin install aws). Skip them with one clear message
+    # instead of four confusing per-step failures when it's absent.
+    if command -v steampipe &> /dev/null; then
+        _run_step "${CYAN}[7/10]${NC} Detecting unused load balancers (Steampipe)..."   "src/detectors/elb_unused.py"
+        _run_step "${CYAN}[8/10]${NC} Detecting unused NAT gateways (Steampipe)..."     "src/detectors/nat_gateway_unused.py"
+        _run_step "${CYAN}[9/10]${NC} Detecting unused VPCs (Steampipe)..."             "src/detectors/vpc_unused.py"
+        _run_step "${CYAN}[10/10]${NC} Detecting gp2→gp3 migration candidates (Steampipe)..." "src/detectors/ebs_gp2_migration.py"
+    else
+        echo -e "${YELLOW}[WARN]${NC} steampipe CLI not found — skipping steps 7-10"
+        echo "  (unused load balancers, NAT gateways, VPCs, gp2 migration)."
+        echo "  Install with: brew install turbot/tap/steampipe && steampipe plugin install aws"
+        echo ""
+    fi
 
     echo ""
     echo -e "${GREEN}Done!${NC} Open ${BOLD}http://localhost:8888/recommendations${NC} to review."
