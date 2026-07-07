@@ -42,9 +42,8 @@ DATE: 2025-12-22
 import os
 import sys
 import time
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
-from decimal import Decimal
+from datetime import datetime
+from typing import Dict
 
 # Ajouter le répertoire parent au path pour importer les modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -58,9 +57,9 @@ from src.core.database import get_db_connection
 
 # Configuration de la journalisation
 import logging
+
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -86,22 +85,22 @@ class EndToEndTester:
 
         # Résultats des tests (pour le rapport final)
         self.results = {
-            'metrics_collected': 0,
-            'idle_instances_detected': 0,
-            'recommendations_created': 0,
-            'actions_executed': 0,
-            'actions_successful': 0,
-            'actions_failed': 0,
-            'total_potential_savings': 0.0,
-            'errors': []
+            "metrics_collected": 0,
+            "idle_instances_detected": 0,
+            "recommendations_created": 0,
+            "actions_executed": 0,
+            "actions_successful": 0,
+            "actions_failed": 0,
+            "total_potential_savings": 0.0,
+            "errors": [],
         }
 
-        logger.info("="*80)
+        logger.info("=" * 80)
         logger.info("🧪 WASTELESS END-TO-END TEST SUITE")
-        logger.info("="*80)
+        logger.info("=" * 80)
         logger.info(f"Mode: {'DRY-RUN (Safe)' if dry_run else 'PRODUCTION (Dangerous!)'}")
         logger.info(f"Start time: {self.test_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         # Connexion à la base de données
         try:
@@ -123,21 +122,21 @@ class EndToEndTester:
         Returns:
             True si l'environnement est valide, False sinon
         """
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("📋 STEP 0: ENVIRONMENT VALIDATION")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         # Liste des variables d'environnement requises
         required_env_vars = [
-            'AWS_REGION',
-            'AWS_ACCOUNT_ID',
-            'AWS_ACCESS_KEY_ID',
-            'AWS_SECRET_ACCESS_KEY',
-            'DB_HOST',
-            'DB_PORT',
-            'DB_NAME',
-            'DB_USER',
-            'DB_PASSWORD'
+            "AWS_REGION",
+            "AWS_ACCOUNT_ID",
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "DB_HOST",
+            "DB_PORT",
+            "DB_NAME",
+            "DB_USER",
+            "DB_PASSWORD",
         ]
 
         # Vérifier les variables d'environnement
@@ -147,7 +146,7 @@ class EndToEndTester:
             value = os.getenv(var)
             if value:
                 # Masquer les credentials sensibles dans les logs
-                if 'KEY' in var or 'PASSWORD' in var:
+                if "KEY" in var or "PASSWORD" in var:
                     display_value = value[:4] + "****" + value[-4:] if len(value) > 8 else "****"
                 else:
                     display_value = value
@@ -163,25 +162,28 @@ class EndToEndTester:
         # Vérifier les tables de la base de données
         logger.info("\n2. Checking database tables...")
         required_tables = [
-            'ec2_metrics',
-            'waste_detected',
-            'recommendations',
-            'actions_log',
-            'savings_realized',
-            'rollback_snapshots'
+            "ec2_metrics",
+            "waste_detected",
+            "recommendations",
+            "actions_log",
+            "savings_realized",
+            "rollback_snapshots",
         ]
 
         cursor = self.conn.cursor()
 
         missing_tables = []
         for table in required_tables:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables
                     WHERE table_schema = 'public'
                     AND table_name = %s
                 );
-            """, (table,))
+            """,
+                (table,),
+            )
 
             exists = cursor.fetchone()[0]
             if exists:
@@ -215,9 +217,9 @@ class EndToEndTester:
         Returns:
             True si la collecte réussit, False sinon
         """
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("📊 STEP 1: CLOUDWATCH METRICS COLLECTION")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         try:
             # Initialiser le collecteur CloudWatch
@@ -236,20 +238,20 @@ class EndToEndTester:
 
             # Afficher les détails des instances trouvées
             for instance in instances[:3]:  # Limiter à 3 pour la lisibilité
-                logger.info(f"      - {instance['instance_id']} ({instance['instance_type']}) - {instance['instance_state']}")
+                logger.info(
+                    f"      - {instance['instance_id']} ({instance['instance_type']}) - {instance['instance_state']}"
+                )
 
             # Collecter les métriques pour les 7 derniers jours
             logger.info("\n3. Collecting CloudWatch metrics (last 7 days)...")
             days_to_collect = 7
 
-            metrics_collected = collector.collect_all_metrics(
-                days=days_to_collect
-            )
+            metrics_collected = collector.collect_all_metrics(days=days_to_collect)
 
             logger.info(f"   ✅ Collected {metrics_collected} metric data points")
 
             # Mettre à jour les résultats
-            self.results['metrics_collected'] = metrics_collected
+            self.results["metrics_collected"] = metrics_collected
 
             # Vérifier dans la base de données
             logger.info("\n4. Verifying data in database...")
@@ -266,7 +268,7 @@ class EndToEndTester:
             row = cursor.fetchone()
             total_metrics, unique_instances, min_date, max_date = row
 
-            logger.info(f"   ✅ Database verification:")
+            logger.info("   ✅ Database verification:")
             logger.info(f"      - Total metrics: {total_metrics}")
             logger.info(f"      - Unique instances: {unique_instances}")
             logger.info(f"      - Date range: {min_date} to {max_date}")
@@ -278,7 +280,7 @@ class EndToEndTester:
 
         except Exception as e:
             logger.error(f"\n❌ Metrics collection test FAILED: {e}")
-            self.results['errors'].append(f"Metrics collection: {str(e)}")
+            self.results["errors"].append(f"Metrics collection: {str(e)}")
             return False
 
     def test_idle_detection(self) -> bool:
@@ -295,9 +297,9 @@ class EndToEndTester:
         Returns:
             True si la détection réussit, False sinon
         """
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("🔍 STEP 2: IDLE INSTANCE DETECTION")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         try:
             # Initialiser le détecteur
@@ -309,39 +311,38 @@ class EndToEndTester:
             cpu_threshold = 5.0  # 5% de CPU
             days = 7
 
-            logger.info(f"\n2. Detecting idle instances (CPU < {cpu_threshold}%, last {days} days)...")
+            logger.info(
+                f"\n2. Detecting idle instances (CPU < {cpu_threshold}%, last {days} days)..."
+            )
 
             # Détecter les instances inactives
-            waste_list = detector.detect_idle_instances(
-                cpu_threshold=cpu_threshold,
-                days=days
-            )
+            waste_list = detector.detect_idle_instances(cpu_threshold=cpu_threshold, days=days)
 
             logger.info(f"   ✅ Detected {len(waste_list)} idle instances")
 
             # Mettre à jour les résultats
-            self.results['idle_instances_detected'] = len(waste_list)
+            self.results["idle_instances_detected"] = len(waste_list)
 
             if len(waste_list) == 0:
                 logger.info("   ℹ️  No idle instances found - all instances are active")
                 return True
 
             # Calculer les totaux
-            total_waste = sum(w['monthly_waste_eur'] for w in waste_list)
-            avg_confidence = sum(w['confidence_score'] for w in waste_list) / len(waste_list)
+            total_waste = sum(w["monthly_waste_eur"] for w in waste_list)
+            avg_confidence = sum(w["confidence_score"] for w in waste_list) / len(waste_list)
 
-            logger.info(f"\n3. Idle instances analysis:")
+            logger.info("\n3. Idle instances analysis:")
             logger.info(f"   - Total monthly waste: €{total_waste:,.2f}")
             logger.info(f"   - Average confidence: {avg_confidence:.2f}")
             logger.info(f"   - Annual waste: €{total_waste * 12:,.2f}")
 
             # Afficher les détails des 3 premiers
-            logger.info(f"\n4. Top idle instances:")
+            logger.info("\n4. Top idle instances:")
             for i, waste in enumerate(waste_list[:3], 1):
-                cpu_avg = waste['metadata']['cpu_avg_7d']
-                instance_type = waste['metadata']['instance_type']
-                monthly_waste = waste['monthly_waste_eur']
-                confidence = waste['confidence_score']
+                cpu_avg = waste["metadata"]["cpu_avg_7d"]
+                instance_type = waste["metadata"]["instance_type"]
+                monthly_waste = waste["monthly_waste_eur"]
+                confidence = waste["confidence_score"]
 
                 logger.info(
                     f"   {i}. {waste['resource_id']} ({instance_type})\n"
@@ -350,23 +351,24 @@ class EndToEndTester:
                 )
 
             # Sauvegarder dans la base de données
-            logger.info(f"\n5. Saving waste records to database...")
+            logger.info("\n5. Saving waste records to database...")
             waste_ids = detector.save_waste_detected(waste_list)
             logger.info(f"   ✅ Saved {len(waste_ids)} waste records")
 
             # Générer les recommandations
-            logger.info(f"\n6. Generating recommendations...")
+            logger.info("\n6. Generating recommendations...")
             recommendations_count = detector.generate_recommendations(waste_ids)
             logger.info(f"   ✅ Created {recommendations_count} recommendations")
 
             # Mettre à jour les résultats
-            self.results['recommendations_created'] = recommendations_count
-            self.results['total_potential_savings'] = float(total_waste)
+            self.results["recommendations_created"] = recommendations_count
+            self.results["total_potential_savings"] = float(total_waste)
 
             # Vérifier dans la base de données
-            logger.info(f"\n7. Verifying recommendations in database...")
+            logger.info("\n7. Verifying recommendations in database...")
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT
                     recommendation_type,
                     COUNT(*),
@@ -374,7 +376,9 @@ class EndToEndTester:
                 FROM recommendations
                 WHERE created_at >= %s
                 GROUP BY recommendation_type;
-            """, (self.test_start_time,))
+            """,
+                (self.test_start_time,),
+            )
 
             for row in cursor.fetchall():
                 rec_type, count, total_savings = row
@@ -387,7 +391,7 @@ class EndToEndTester:
 
         except Exception as e:
             logger.error(f"\n❌ Idle detection test FAILED: {e}")
-            self.results['errors'].append(f"Idle detection: {str(e)}")
+            self.results["errors"].append(f"Idle detection: {str(e)}")
             return False
 
     def test_remediation(self) -> bool:
@@ -404,14 +408,16 @@ class EndToEndTester:
         Returns:
             True si la remédiation réussit, False sinon
         """
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("🚀 STEP 3: REMEDIATION EXECUTION")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         try:
             # Initialiser le remediator
             logger.info("\n1. Initializing EC2 remediator...")
-            logger.info(f"   Mode: {'DRY-RUN (no real AWS actions)' if self.dry_run else 'PRODUCTION (real actions!)'}")
+            logger.info(
+                f"   Mode: {'DRY-RUN (no real AWS actions)' if self.dry_run else 'PRODUCTION (real actions!)'}"
+            )
 
             remediator = EC2Remediator(dry_run=self.dry_run)
             logger.info("   ✅ Remediator initialized")
@@ -441,37 +447,38 @@ class EndToEndTester:
             results = remediator.process_pending_recommendations(limit=3)
 
             # Compter les succès et échecs
-            successful = [r for r in results if r['success']]
-            failed = [r for r in results if not r['success']]
+            successful = [r for r in results if r["success"]]
+            failed = [r for r in results if not r["success"]]
 
-            logger.info(f"\n4. Remediation results:")
+            logger.info("\n4. Remediation results:")
             logger.info(f"   - Total processed: {len(results)}")
             logger.info(f"   - Successful: {len(successful)}")
             logger.info(f"   - Failed: {len(failed)}")
 
             # Mettre à jour les résultats
-            self.results['actions_executed'] = len(results)
-            self.results['actions_successful'] = len(successful)
-            self.results['actions_failed'] = len(failed)
+            self.results["actions_executed"] = len(results)
+            self.results["actions_successful"] = len(successful)
+            self.results["actions_failed"] = len(failed)
 
             # Afficher les détails de chaque action
-            logger.info(f"\n5. Action details:")
+            logger.info("\n5. Action details:")
             for i, result in enumerate(results, 1):
-                status_icon = "✅" if result['success'] else "❌"
-                status_text = "SUCCESS" if result['success'] else "FAILED"
+                status_icon = "✅" if result["success"] else "❌"
+                status_text = "SUCCESS" if result["success"] else "FAILED"
 
                 logger.info(f"   {i}. {result['instance_id']}: {status_icon} {status_text}")
 
-                if result['error']:
+                if result["error"]:
                     logger.info(f"      Error: {result['error']}")
 
-                if result.get('action_log_id'):
+                if result.get("action_log_id"):
                     logger.info(f"      Action log ID: {result['action_log_id']}")
 
             # Vérifier les actions dans la base de données
-            logger.info(f"\n6. Verifying actions in database...")
+            logger.info("\n6. Verifying actions in database...")
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT
                     action_type,
                     action_status,
@@ -479,7 +486,9 @@ class EndToEndTester:
                 FROM actions_log
                 WHERE created_at >= %s
                 GROUP BY action_type, action_status;
-            """, (self.test_start_time,))
+            """,
+                (self.test_start_time,),
+            )
 
             logger.info("   Database verification:")
             for row in cursor.fetchall():
@@ -493,7 +502,7 @@ class EndToEndTester:
 
         except Exception as e:
             logger.error(f"\n❌ Remediation test FAILED: {e}")
-            self.results['errors'].append(f"Remediation: {str(e)}")
+            self.results["errors"].append(f"Remediation: {str(e)}")
             return False
 
     def test_savings_tracking(self) -> bool:
@@ -510,9 +519,9 @@ class EndToEndTester:
         Returns:
             True si le tracking réussit, False sinon
         """
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("💰 STEP 4: SAVINGS TRACKING")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         try:
             # Initialiser le tracker
@@ -548,9 +557,7 @@ class EndToEndTester:
             # Vérifier les économies pour toutes les actions éligibles
             logger.info("\n3. Verifying savings for eligible actions...")
 
-            verification_results = tracker.verify_all_unverified_actions(
-                min_days_elapsed=7
-            )
+            verification_results = tracker.verify_all_unverified_actions(min_days_elapsed=7)
 
             logger.info(f"   ✅ Verified {len(verification_results)} actions")
 
@@ -558,19 +565,21 @@ class EndToEndTester:
                 return True
 
             # Calculer les totaux
-            total_actual_savings = sum(r['actual_savings_eur'] for r in verification_results)
-            total_estimated_savings = sum(r['estimated_savings_eur'] for r in verification_results)
+            total_actual_savings = sum(r["actual_savings_eur"] for r in verification_results)
+            total_estimated_savings = sum(r["estimated_savings_eur"] for r in verification_results)
 
-            avg_accuracy = sum(r['accuracy_percent'] for r in verification_results) / len(verification_results)
+            avg_accuracy = sum(r["accuracy_percent"] for r in verification_results) / len(
+                verification_results
+            )
 
-            logger.info(f"\n4. Savings verification results:")
+            logger.info("\n4. Savings verification results:")
             logger.info(f"   - Actions verified: {len(verification_results)}")
             logger.info(f"   - Total actual savings: €{total_actual_savings:,.2f}/month")
             logger.info(f"   - Total estimated savings: €{total_estimated_savings:,.2f}/month")
             logger.info(f"   - Average accuracy: {avg_accuracy:.1f}%")
 
             # Afficher les détails des 3 premières vérifications
-            logger.info(f"\n5. Verification details:")
+            logger.info("\n5. Verification details:")
             for i, result in enumerate(verification_results[:3], 1):
                 logger.info(
                     f"   {i}. {result['instance_id']}\n"
@@ -580,10 +589,10 @@ class EndToEndTester:
                 )
 
             # Obtenir les totaux globaux
-            logger.info(f"\n6. Getting total verified savings...")
+            logger.info("\n6. Getting total verified savings...")
             totals = tracker.get_total_verified_savings()
 
-            logger.info(f"   Overall statistics:")
+            logger.info("   Overall statistics:")
             logger.info(f"   - Total actions verified: {totals['total_actions']}")
             logger.info(f"   - Total monthly savings: €{totals['total_savings_eur']:,.2f}")
             logger.info(f"   - Annual savings: €{totals['total_savings_eur'] * 12:,.2f}")
@@ -593,7 +602,7 @@ class EndToEndTester:
 
         except Exception as e:
             logger.error(f"\n❌ Savings tracking test FAILED: {e}")
-            self.results['errors'].append(f"Savings tracking: {str(e)}")
+            self.results["errors"].append(f"Savings tracking: {str(e)}")
             return False
 
     def generate_final_report(self, tests_passed: Dict[str, bool]):
@@ -603,21 +612,21 @@ class EndToEndTester:
         Args:
             tests_passed: Dictionnaire des tests et leur statut (True/False)
         """
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("📊 END-TO-END TEST REPORT")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         # Calculer le temps total
         test_duration = datetime.now() - self.test_start_time
 
         # Afficher le résumé des tests
-        logger.info(f"\nTest execution summary:")
+        logger.info("\nTest execution summary:")
         logger.info(f"  Start time: {self.test_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info(f"  Duration: {test_duration.total_seconds():.2f} seconds")
         logger.info(f"  Mode: {'DRY-RUN' if self.dry_run else 'PRODUCTION'}")
 
         # Afficher les résultats de chaque test
-        logger.info(f"\nTest results:")
+        logger.info("\nTest results:")
         all_passed = True
         for test_name, passed in tests_passed.items():
             icon = "✅" if passed else "❌"
@@ -627,7 +636,7 @@ class EndToEndTester:
                 all_passed = False
 
         # Afficher les métriques collectées
-        logger.info(f"\nMetrics collected:")
+        logger.info("\nMetrics collected:")
         logger.info(f"  - CloudWatch metrics: {self.results['metrics_collected']}")
         logger.info(f"  - Idle instances detected: {self.results['idle_instances_detected']}")
         logger.info(f"  - Recommendations created: {self.results['recommendations_created']}")
@@ -636,24 +645,24 @@ class EndToEndTester:
         logger.info(f"  - Actions failed: {self.results['actions_failed']}")
 
         # Afficher les économies potentielles
-        if self.results['total_potential_savings'] > 0:
-            logger.info(f"\nPotential savings:")
+        if self.results["total_potential_savings"] > 0:
+            logger.info("\nPotential savings:")
             logger.info(f"  - Monthly: €{self.results['total_potential_savings']:,.2f}")
             logger.info(f"  - Annual: €{self.results['total_potential_savings'] * 12:,.2f}")
 
         # Afficher les erreurs rencontrées
-        if self.results['errors']:
-            logger.info(f"\nErrors encountered:")
-            for i, error in enumerate(self.results['errors'], 1):
+        if self.results["errors"]:
+            logger.info("\nErrors encountered:")
+            for i, error in enumerate(self.results["errors"], 1):
                 logger.info(f"  {i}. {error}")
 
         # Résultat final
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         if all_passed:
             logger.info("🎉 ALL TESTS PASSED - SYSTEM IS WORKING CORRECTLY")
         else:
             logger.info("⚠️  SOME TESTS FAILED - PLEASE REVIEW ERRORS ABOVE")
-        logger.info("="*80 + "\n")
+        logger.info("=" * 80 + "\n")
 
         return all_passed
 
@@ -667,29 +676,29 @@ class EndToEndTester:
         tests_passed = {}
 
         # STEP 0: Validation de l'environnement
-        tests_passed['Environment Validation'] = self.validate_environment()
-        if not tests_passed['Environment Validation']:
+        tests_passed["Environment Validation"] = self.validate_environment()
+        if not tests_passed["Environment Validation"]:
             logger.error("\n❌ Environment validation failed - cannot proceed")
             return False
 
         # STEP 1: Collecte des métriques
-        tests_passed['Metrics Collection'] = self.test_metrics_collection()
+        tests_passed["Metrics Collection"] = self.test_metrics_collection()
 
         # STEP 2: Détection des instances inactives
-        tests_passed['Idle Detection'] = self.test_idle_detection()
+        tests_passed["Idle Detection"] = self.test_idle_detection()
 
         # STEP 3: Exécution de la remédiation
-        tests_passed['Remediation'] = self.test_remediation()
+        tests_passed["Remediation"] = self.test_remediation()
 
         # STEP 4: Suivi des économies
-        tests_passed['Savings Tracking'] = self.test_savings_tracking()
+        tests_passed["Savings Tracking"] = self.test_savings_tracking()
 
         # Générer le rapport final
         return self.generate_final_report(tests_passed)
 
     def __del__(self):
         """Ferme la connexion à la base de données lors de la destruction."""
-        if hasattr(self, 'conn'):
+        if hasattr(self, "conn"):
             self.conn.close()
 
 
@@ -706,17 +715,18 @@ def main():
     """
     # Charger les variables d'environnement
     from dotenv import load_dotenv
+
     load_dotenv()
 
     # Déterminer le mode (DRY-RUN par défaut)
-    dry_run = os.getenv('DRY_RUN', 'true').lower() != 'false'
+    dry_run = os.getenv("DRY_RUN", "true").lower() != "false"
 
     if not dry_run:
-        logger.warning("="*80)
+        logger.warning("=" * 80)
         logger.warning("⚠️  WARNING: PRODUCTION MODE ENABLED")
         logger.warning("⚠️  Real AWS actions will be executed!")
         logger.warning("⚠️  Press Ctrl+C within 5 seconds to abort...")
-        logger.warning("="*80)
+        logger.warning("=" * 80)
         time.sleep(5)
 
     # Créer et exécuter le testeur
@@ -733,9 +743,10 @@ def main():
     except Exception as e:
         logger.error(f"\n❌ Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

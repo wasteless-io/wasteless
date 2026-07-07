@@ -6,10 +6,10 @@ import pytest
 import sys
 import os
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from core.safeguards import Safeguards, SafeguardException, InvalidSafeguardConfig
 
@@ -31,23 +31,25 @@ class TestActionToggles:
     """Per-action opt-out (auto_remediation.actions)."""
 
     def _safeguards(self, config):
-        with patch.object(Safeguards, '_load_config', return_value=config):
+        with patch.object(Safeguards, "_load_config", return_value=config):
             return Safeguards()
 
     def test_missing_map_means_enabled(self):
-        sg = self._safeguards({'auto_remediation': {'enabled': True}})
-        assert sg.is_action_enabled('delete_nat_gateway') is True
+        sg = self._safeguards({"auto_remediation": {"enabled": True}})
+        assert sg.is_action_enabled("delete_nat_gateway") is True
 
     def test_missing_type_means_enabled(self):
-        sg = self._safeguards({'auto_remediation': {
-            'enabled': True, 'actions': {'stop_instance': True}}})
-        assert sg.is_action_enabled('migrate_gp2_to_gp3') is True
+        sg = self._safeguards(
+            {"auto_remediation": {"enabled": True, "actions": {"stop_instance": True}}}
+        )
+        assert sg.is_action_enabled("migrate_gp2_to_gp3") is True
 
     def test_disabled_type(self):
-        sg = self._safeguards({'auto_remediation': {
-            'enabled': True, 'actions': {'delete_nat_gateway': False}}})
-        assert sg.is_action_enabled('delete_nat_gateway') is False
-        assert sg.is_action_enabled('stop_instance') is True
+        sg = self._safeguards(
+            {"auto_remediation": {"enabled": True, "actions": {"delete_nat_gateway": False}}}
+        )
+        assert sg.is_action_enabled("delete_nat_gateway") is False
+        assert sg.is_action_enabled("stop_instance") is True
 
 
 class TestSafeguardsWhitelist:
@@ -57,55 +59,52 @@ class TestSafeguardsWhitelist:
     def mock_config(self):
         """Return a mock configuration."""
         return {
-            'auto_remediation': {'enabled': True},
-            'whitelist': {
-                'instance_ids': ['i-protected123', 'i-critical456'],
-                'tags': [
-                    {'key': 'Environment', 'value': 'Production'},
-                    {'key': 'Critical', 'value': 'true'}
-                ]
+            "auto_remediation": {"enabled": True},
+            "whitelist": {
+                "instance_ids": ["i-protected123", "i-critical456"],
+                "tags": [
+                    {"key": "Environment", "value": "Production"},
+                    {"key": "Critical", "value": "true"},
+                ],
             },
-            'protection': {
-                'min_instance_age_days': 30,
-                'min_confidence_score': 0.80,
-                'min_idle_days': 14,
-                'max_instances_per_run': 3
+            "protection": {
+                "min_instance_age_days": 30,
+                "min_confidence_score": 0.80,
+                "min_idle_days": 14,
+                "max_instances_per_run": 3,
             },
-            'schedule': {
-                'allowed_days': [],
-                'allowed_hours': []
-            }
+            "schedule": {"allowed_days": [], "allowed_hours": []},
         }
 
     @pytest.fixture
     def safeguards(self, mock_config):
         """Create Safeguards instance with mock config."""
-        with patch.object(Safeguards, '_load_config', return_value=mock_config):
+        with patch.object(Safeguards, "_load_config", return_value=mock_config):
             return Safeguards()
 
     def test_whitelisted_by_instance_id(self, safeguards):
         """Instance in whitelist should be detected."""
-        assert safeguards.is_whitelisted('i-protected123', {}) is True
-        assert safeguards.is_whitelisted('i-critical456', {}) is True
+        assert safeguards.is_whitelisted("i-protected123", {}) is True
+        assert safeguards.is_whitelisted("i-critical456", {}) is True
 
     def test_not_whitelisted_by_instance_id(self, safeguards):
         """Instance not in whitelist should not be detected."""
-        assert safeguards.is_whitelisted('i-random789', {}) is False
+        assert safeguards.is_whitelisted("i-random789", {}) is False
 
     def test_whitelisted_by_production_tag(self, safeguards):
         """Instance with Production tag should be whitelisted."""
-        tags = {'Environment': 'Production', 'Name': 'MyServer'}
-        assert safeguards.is_whitelisted('i-any123', tags) is True
+        tags = {"Environment": "Production", "Name": "MyServer"}
+        assert safeguards.is_whitelisted("i-any123", tags) is True
 
     def test_whitelisted_by_critical_tag(self, safeguards):
         """Instance with Critical=true tag should be whitelisted."""
-        tags = {'Critical': 'true', 'Name': 'ImportantServer'}
-        assert safeguards.is_whitelisted('i-any123', tags) is True
+        tags = {"Critical": "true", "Name": "ImportantServer"}
+        assert safeguards.is_whitelisted("i-any123", tags) is True
 
     def test_not_whitelisted_by_dev_environment(self, safeguards):
         """Instance with dev environment should not be whitelisted."""
-        tags = {'Environment': 'dev', 'Name': 'DevServer'}
-        assert safeguards.is_whitelisted('i-dev123', tags) is False
+        tags = {"Environment": "dev", "Name": "DevServer"}
+        assert safeguards.is_whitelisted("i-dev123", tags) is False
 
 
 class TestSafeguardsAgeCheck:
@@ -115,21 +114,21 @@ class TestSafeguardsAgeCheck:
     def mock_config(self):
         """Return a mock configuration."""
         return {
-            'auto_remediation': {'enabled': True},
-            'whitelist': {'instance_ids': [], 'tags': []},
-            'protection': {
-                'min_instance_age_days': 30,
-                'min_confidence_score': 0.80,
-                'min_idle_days': 14,
-                'max_instances_per_run': 3
+            "auto_remediation": {"enabled": True},
+            "whitelist": {"instance_ids": [], "tags": []},
+            "protection": {
+                "min_instance_age_days": 30,
+                "min_confidence_score": 0.80,
+                "min_idle_days": 14,
+                "max_instances_per_run": 3,
             },
-            'schedule': {'allowed_days': [], 'allowed_hours': []}
+            "schedule": {"allowed_days": [], "allowed_hours": []},
         }
 
     @pytest.fixture
     def safeguards(self, mock_config):
         """Create Safeguards instance with mock config."""
-        with patch.object(Safeguards, '_load_config', return_value=mock_config):
+        with patch.object(Safeguards, "_load_config", return_value=mock_config):
             return Safeguards()
 
     def test_old_instance_passes(self, safeguards):
@@ -159,21 +158,21 @@ class TestSafeguardsConfidence:
     def mock_config(self):
         """Return a mock configuration with 0.80 min confidence."""
         return {
-            'auto_remediation': {'enabled': True},
-            'whitelist': {'instance_ids': [], 'tags': []},
-            'protection': {
-                'min_instance_age_days': 30,
-                'min_confidence_score': 0.80,
-                'min_idle_days': 14,
-                'max_instances_per_run': 3
+            "auto_remediation": {"enabled": True},
+            "whitelist": {"instance_ids": [], "tags": []},
+            "protection": {
+                "min_instance_age_days": 30,
+                "min_confidence_score": 0.80,
+                "min_idle_days": 14,
+                "max_instances_per_run": 3,
             },
-            'schedule': {'allowed_days': [], 'allowed_hours': []}
+            "schedule": {"allowed_days": [], "allowed_hours": []},
         }
 
     @pytest.fixture
     def safeguards(self, mock_config):
         """Create Safeguards instance with mock config."""
-        with patch.object(Safeguards, '_load_config', return_value=mock_config):
+        with patch.object(Safeguards, "_load_config", return_value=mock_config):
             return Safeguards()
 
     def test_high_confidence_passes(self, safeguards):
@@ -202,21 +201,21 @@ class TestSafeguardsIdleDuration:
     def mock_config(self):
         """Return a mock configuration with 14 days min idle."""
         return {
-            'auto_remediation': {'enabled': True},
-            'whitelist': {'instance_ids': [], 'tags': []},
-            'protection': {
-                'min_instance_age_days': 30,
-                'min_confidence_score': 0.80,
-                'min_idle_days': 14,
-                'max_instances_per_run': 3
+            "auto_remediation": {"enabled": True},
+            "whitelist": {"instance_ids": [], "tags": []},
+            "protection": {
+                "min_instance_age_days": 30,
+                "min_confidence_score": 0.80,
+                "min_idle_days": 14,
+                "max_instances_per_run": 3,
             },
-            'schedule': {'allowed_days': [], 'allowed_hours': []}
+            "schedule": {"allowed_days": [], "allowed_hours": []},
         }
 
     @pytest.fixture
     def safeguards(self, mock_config):
         """Create Safeguards instance with mock config."""
-        with patch.object(Safeguards, '_load_config', return_value=mock_config):
+        with patch.object(Safeguards, "_load_config", return_value=mock_config):
             return Safeguards()
 
     def test_long_idle_passes(self, safeguards):
@@ -239,21 +238,21 @@ class TestSafeguardsMaxInstances:
     def mock_config(self):
         """Return a mock configuration with max 3 instances per run."""
         return {
-            'auto_remediation': {'enabled': True},
-            'whitelist': {'instance_ids': [], 'tags': []},
-            'protection': {
-                'min_instance_age_days': 30,
-                'min_confidence_score': 0.80,
-                'min_idle_days': 14,
-                'max_instances_per_run': 3
+            "auto_remediation": {"enabled": True},
+            "whitelist": {"instance_ids": [], "tags": []},
+            "protection": {
+                "min_instance_age_days": 30,
+                "min_confidence_score": 0.80,
+                "min_idle_days": 14,
+                "max_instances_per_run": 3,
             },
-            'schedule': {'allowed_days': [], 'allowed_hours': []}
+            "schedule": {"allowed_days": [], "allowed_hours": []},
         }
 
     @pytest.fixture
     def safeguards(self, mock_config):
         """Create Safeguards instance with mock config."""
-        with patch.object(Safeguards, '_load_config', return_value=mock_config):
+        with patch.object(Safeguards, "_load_config", return_value=mock_config):
             return Safeguards()
 
     def test_under_limit_passes(self, safeguards):
@@ -279,39 +278,50 @@ class TestSafeguardsSchedule:
     """Tests for schedule check, including the enabled flag."""
 
     def _safeguards(self, schedule):
-        config = {'schedule': schedule}
-        with patch.object(Safeguards, '_load_config', return_value=config):
+        config = {"schedule": schedule}
+        with patch.object(Safeguards, "_load_config", return_value=config):
             return Safeguards()
 
     def test_disabled_schedule_always_passes(self):
         """schedule.enabled=false must bypass day/hour restrictions."""
-        sg = self._safeguards({
-            'enabled': False,
-            'allowed_days': ['Saturday', 'Sunday'],
-            'allowed_hours': [2, 3, 4],
-        })
+        sg = self._safeguards(
+            {
+                "enabled": False,
+                "allowed_days": ["Saturday", "Sunday"],
+                "allowed_hours": [2, 3, 4],
+            }
+        )
         assert sg.check_schedule() is True
 
     def test_missing_enabled_key_defaults_to_disabled(self):
-        sg = self._safeguards({
-            'allowed_days': ['Saturday'], 'allowed_hours': [2],
-        })
+        sg = self._safeguards(
+            {
+                "allowed_days": ["Saturday"],
+                "allowed_hours": [2],
+            }
+        )
         assert sg.check_schedule() is True
 
     def test_enabled_schedule_blocks_wrong_day(self):
-        sg = self._safeguards({
-            'enabled': True,
-            'allowed_days': ['NoSuchDay'],
-            'allowed_hours': [],
-        })
+        sg = self._safeguards(
+            {
+                "enabled": True,
+                "allowed_days": ["NoSuchDay"],
+                "allowed_hours": [],
+            }
+        )
         with pytest.raises(SafeguardException) as exc_info:
             sg.check_schedule()
         assert "Outside allowed schedule" in str(exc_info.value)
 
     def test_enabled_schedule_without_restrictions_passes(self):
-        sg = self._safeguards({
-            'enabled': True, 'allowed_days': [], 'allowed_hours': [],
-        })
+        sg = self._safeguards(
+            {
+                "enabled": True,
+                "allowed_days": [],
+                "allowed_hours": [],
+            }
+        )
         assert sg.check_schedule() is True
 
 
@@ -320,65 +330,67 @@ class TestSafeguardConfigValidation:
     not silently loosen a check's threshold."""
 
     def test_valid_config_passes(self):
-        Safeguards._validate_config({
-            'protection': {
-                'min_instance_age_days': 30,
-                'min_idle_days': 14,
-                'min_confidence_score': 0.8,
-                'max_instances_per_run': 3,
-            },
-            'whitelist': {
-                'instance_ids': ['i-abc123'],
-                'tags': [{'key': 'Environment', 'value': 'Production'}],
-            },
-            'schedule': {
-                'allowed_days': ['Saturday', 'Sunday'],
-                'allowed_hours': [2, 3, 4],
-            },
-        })  # must not raise
+        Safeguards._validate_config(
+            {
+                "protection": {
+                    "min_instance_age_days": 30,
+                    "min_idle_days": 14,
+                    "min_confidence_score": 0.8,
+                    "max_instances_per_run": 3,
+                },
+                "whitelist": {
+                    "instance_ids": ["i-abc123"],
+                    "tags": [{"key": "Environment", "value": "Production"}],
+                },
+                "schedule": {
+                    "allowed_days": ["Saturday", "Sunday"],
+                    "allowed_hours": [2, 3, 4],
+                },
+            }
+        )  # must not raise
 
     def test_empty_config_passes(self):
         Safeguards._validate_config({})  # all sections optional, defaults apply
 
     def test_confidence_score_above_one_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'protection': {'min_confidence_score': 8.0}})
+            Safeguards._validate_config({"protection": {"min_confidence_score": 8.0}})
 
     def test_negative_confidence_score_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'protection': {'min_confidence_score': -1}})
+            Safeguards._validate_config({"protection": {"min_confidence_score": -1}})
 
     def test_confidence_score_as_string_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'protection': {'min_confidence_score': '0.8'}})
+            Safeguards._validate_config({"protection": {"min_confidence_score": "0.8"}})
 
     def test_negative_idle_days_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'protection': {'min_idle_days': -5}})
+            Safeguards._validate_config({"protection": {"min_idle_days": -5}})
 
     def test_max_instances_per_run_zero_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'protection': {'max_instances_per_run': 0}})
+            Safeguards._validate_config({"protection": {"max_instances_per_run": 0}})
 
     def test_whitelist_instance_ids_not_a_list_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'whitelist': {'instance_ids': 'i-abc123'}})
+            Safeguards._validate_config({"whitelist": {"instance_ids": "i-abc123"}})
 
     def test_whitelist_tag_missing_value_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'whitelist': {'tags': [{'key': 'Environment'}]}})
+            Safeguards._validate_config({"whitelist": {"tags": [{"key": "Environment"}]}})
 
     def test_schedule_invalid_weekday_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'schedule': {'allowed_days': ['Someday']}})
+            Safeguards._validate_config({"schedule": {"allowed_days": ["Someday"]}})
 
     def test_schedule_hour_out_of_range_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'schedule': {'allowed_hours': [24]}})
+            Safeguards._validate_config({"schedule": {"allowed_hours": [24]}})
 
     def test_schedule_hour_as_bool_rejected(self):
         with pytest.raises(InvalidSafeguardConfig):
-            Safeguards._validate_config({'schedule': {'allowed_hours': [True]}})
+            Safeguards._validate_config({"schedule": {"allowed_hours": [True]}})
 
     def test_malformed_config_blocks_init(self, tmp_path):
         """A real remediation.yaml with an out-of-range value must fail at

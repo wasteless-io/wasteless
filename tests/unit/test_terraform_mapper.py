@@ -7,14 +7,13 @@ import sys
 import os
 
 # Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from remediators.terraform_mapper import (
     TerraformMapper,
     TerraformMappingError,
     locate_block,
 )
-
 
 # Shape of `terraform show -json` for the wasteless-tf-fixtures repo.
 STATE = {
@@ -68,7 +67,7 @@ STATE = {
     },
 }
 
-WASTE_TF = '''resource "aws_eip" "orphan" {
+WASTE_TF = """resource "aws_eip" "orphan" {
   domain = "vpc"
 
   tags = {
@@ -80,7 +79,7 @@ resource "aws_nat_gateway" "unused" {
   allocation_id = aws_eip.orphan.id
   subnet_id     = "subnet-123"
 }
-'''
+"""
 
 
 @pytest.fixture

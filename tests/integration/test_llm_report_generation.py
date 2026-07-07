@@ -19,15 +19,15 @@ import tempfile
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from core.finops_invariants import FORBIDDEN_WORDS_FOR_POTENTIAL_CLAIMS  # noqa: E402
 from reports.audit_report import generate_audit_report  # noqa: E402
 
-FIXTURES_DIR = os.path.join(os.path.dirname(__file__), '..', 'fixtures')
-SNAPSHOTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'snapshots')
-GOLDEN_DATASET_PATH = os.path.join(FIXTURES_DIR, 'golden_aws_audit_dataset.json')
-GOLDEN_SNAPSHOT_PATH = os.path.join(SNAPSHOTS_DIR, 'golden_aws_audit_report.md')
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
+SNAPSHOTS_DIR = os.path.join(os.path.dirname(__file__), "..", "snapshots")
+GOLDEN_DATASET_PATH = os.path.join(FIXTURES_DIR, "golden_aws_audit_dataset.json")
+GOLDEN_SNAPSHOT_PATH = os.path.join(SNAPSHOTS_DIR, "golden_aws_audit_report.md")
 
 REQUIRED_SECTIONS = [
     "# AWS FinOps Audit Report — Wasteless",
@@ -52,7 +52,7 @@ REQUIRED_SECTIONS = [
 # would fail against our own correctly-labeled report. It is checked more
 # precisely in test_confirmed_savings_only_claimed_when_verified below.
 BANNED_UNCONDITIONALLY = tuple(
-    w for w in FORBIDDEN_WORDS_FOR_POTENTIAL_CLAIMS if w != 'confirmed savings'
+    w for w in FORBIDDEN_WORDS_FOR_POTENTIAL_CLAIMS if w != "confirmed savings"
 )
 
 
@@ -100,23 +100,21 @@ def test_confirmed_savings_only_claimed_when_verified(golden_dataset, golden_rep
             # table/list rows, which are self-contained.
             if line.strip().startswith(("-", "|")):
                 assert "cost explorer" in line, (
-                    f"'Confirmed savings' claimed without its verification "
-                    f"source: {line!r}"
+                    f"'Confirmed savings' claimed without its verification " f"source: {line!r}"
                 )
 
     if golden_dataset["confirmed_savings_monthly"] == 0:
-        assert "confirmed savings (verified via cost explorer): €0.00" in normalized \
+        assert (
+            "confirmed savings (verified via cost explorer): €0.00" in normalized
             or "confirmed savings (verified via cost explorer) | €0.00" in normalized
+        )
 
 
 def test_potential_savings_not_presented_as_realized(golden_dataset, golden_report):
     normalized = golden_report.lower()
 
     if golden_dataset["realized_savings_monthly"] == 0:
-        assert (
-            "realized savings: €0.00" in normalized
-            or "realized savings | €0.00" in normalized
-        )
+        assert "realized savings: €0.00" in normalized or "realized savings | €0.00" in normalized
         assert "saved €" not in normalized
         assert "you saved" not in normalized
         assert "we saved" not in normalized
@@ -149,8 +147,10 @@ def test_high_and_critical_risk_recommendations_are_flagged(golden_dataset, gold
     for rec in high_or_critical:
         assert rec["resource_id"] in golden_report
 
-    assert "No production destructive action should be executed without explicit approval." \
+    assert (
+        "No production destructive action should be executed without explicit approval."
         in golden_report
+    )
 
 
 def test_assumptions_and_limitations_present(golden_report):
@@ -193,7 +193,9 @@ def test_markdown_can_be_converted_to_pdf(golden_report):
 
         result = subprocess.run(
             ["pandoc", md_path, "-o", pdf_path],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         assert result.returncode == 0, result.stderr
         assert os.path.exists(pdf_path)
