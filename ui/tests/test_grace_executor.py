@@ -61,6 +61,19 @@ class TestGraceExecutionStatus(unittest.TestCase):
             _grace_execution_status(False, None, dry_run=False, mode='remediator'),
             'pending')
 
+    def test_action_disabled_since_approval_returns_to_pending(self):
+        # execution_mode() is a static mapping (ui/utils/action_registry.py):
+        # a rec_type never changes mode on its own. The only way
+        # grace_executor_job sees mode='manual' for a *scheduled* item (which
+        # required mode != 'manual' to be scheduled in the first place) is the
+        # per-action toggle being disabled during the grace window. Nothing
+        # ran, so this must land back on 'pending' for a human to decide —
+        # not 'approved', which is reserved for the immediate manual-review
+        # approval path in /api/actions, a different scenario.
+        self.assertEqual(
+            _grace_execution_status(True, None, dry_run=False, mode='manual'),
+            'pending')
+
 
 if __name__ == '__main__':
     unittest.main()
