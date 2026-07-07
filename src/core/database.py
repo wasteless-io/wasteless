@@ -6,14 +6,13 @@ with connection pooling for all Wasteless modules.
 """
 
 import os
-import sys
 import logging
 import atexit
 from typing import Optional, List, Tuple, Any, Union
 from contextlib import contextmanager
 
 import psycopg2
-from psycopg2 import pool, DatabaseError, OperationalError
+from psycopg2 import pool, OperationalError
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 
@@ -28,6 +27,7 @@ _connection_pool: Optional[pool.ThreadedConnectionPool] = None
 
 class DatabaseError(Exception):
     """Custom exception for database operations."""
+
     pass
 
 
@@ -41,23 +41,25 @@ def _get_db_config() -> dict:
     Raises:
         ValueError: If required environment variables are missing
     """
-    required_vars = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+    required_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
     missing = [var for var in required_vars if not os.getenv(var)]
 
     if missing:
         raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 
     return {
-        'host': os.getenv('DB_HOST'),
-        'port': int(os.getenv('DB_PORT')),
-        'database': os.getenv('DB_NAME'),
-        'user': os.getenv('DB_USER'),
-        'password': os.getenv('DB_PASSWORD'),
-        'connect_timeout': 10,
+        "host": os.getenv("DB_HOST"),
+        "port": int(os.getenv("DB_PORT")),
+        "database": os.getenv("DB_NAME"),
+        "user": os.getenv("DB_USER"),
+        "password": os.getenv("DB_PASSWORD"),
+        "connect_timeout": 10,
     }
 
 
-def init_connection_pool(min_connections: int = 2, max_connections: int = 10) -> pool.ThreadedConnectionPool:
+def init_connection_pool(
+    min_connections: int = 2, max_connections: int = 10
+) -> pool.ThreadedConnectionPool:
     """
     Initialize the database connection pool.
 
@@ -79,11 +81,11 @@ def init_connection_pool(min_connections: int = 2, max_connections: int = 10) ->
     try:
         config = _get_db_config()
         _connection_pool = pool.ThreadedConnectionPool(
-            minconn=min_connections,
-            maxconn=max_connections,
-            **config
+            minconn=min_connections, maxconn=max_connections, **config
         )
-        logger.info(f"Database connection pool initialized (min={min_connections}, max={max_connections})")
+        logger.info(
+            f"Database connection pool initialized (min={min_connections}, max={max_connections})"
+        )
         return _connection_pool
 
     except (OperationalError, psycopg2.Error) as e:
@@ -190,7 +192,7 @@ def get_cursor(dict_cursor: bool = False):
         cursor = conn.cursor(cursor_factory=cursor_factory)
         yield cursor
         conn.commit()
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
         raise
@@ -204,7 +206,7 @@ def execute_query(
     query: str,
     params: Optional[Union[Tuple, List]] = None,
     fetch_one: bool = False,
-    fetch_all: bool = False
+    fetch_all: bool = False,
 ) -> Optional[Any]:
     """
     Execute a SQL query with automatic connection management.
@@ -280,10 +282,7 @@ def execute_query(
         release_connection(conn)
 
 
-def execute_many(
-    query: str,
-    params_list: List[Tuple]
-) -> int:
+def execute_many(query: str, params_list: List[Tuple]) -> int:
     """
     Execute a query multiple times with different parameters.
     More efficient than calling execute_query in a loop.

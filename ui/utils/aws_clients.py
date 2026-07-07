@@ -16,10 +16,7 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-BACKEND_PATH = os.path.abspath(os.path.join(
-    os.path.dirname(__file__),
-    '..', '..'
-))
+BACKEND_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 if BACKEND_PATH not in sys.path:
     sys.path.insert(0, BACKEND_PATH)
@@ -30,7 +27,8 @@ try:
 except ImportError as exc:  # pragma: no cover - standalone UI deployment
     logger.warning(
         "Backend aws_clients not importable (%s); falling back to plain "
-        "boto3 clients on the default credential chain", exc
+        "boto3 clients on the default credential chain",
+        exc,
     )
 
     class ConfigurationError(Exception):
@@ -39,7 +37,7 @@ except ImportError as exc:  # pragma: no cover - standalone UI deployment
     def reset_cache():
         pass
 
-    def get_client(service, *, region=None, write=False,
-                   session_factory=None, **client_kwargs):
+    def get_client(service, *, region=None, write=False, session_factory=None, **client_kwargs):
         import boto3
+
         return boto3.client(service, region_name=region, **client_kwargs)

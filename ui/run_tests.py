@@ -10,6 +10,7 @@ Note: For full test coverage, run within the virtual environment:
     source venv/bin/activate
     python run_tests.py
 """
+
 import unittest
 import sys
 from pathlib import Path
@@ -23,19 +24,19 @@ def check_dependencies():
     missing = []
 
     try:
-        import yaml
+        import yaml  # noqa: F401 -- availability check
     except ImportError:
-        missing.append('pyyaml')
+        missing.append("pyyaml")
 
     try:
-        import pandas
+        import pandas  # noqa: F401 -- availability check
     except ImportError:
-        missing.append('pandas')
+        missing.append("pandas")
 
     try:
-        import psycopg2
+        import psycopg2  # noqa: F401 -- availability check
     except ImportError:
-        missing.append('psycopg2-binary')
+        missing.append("psycopg2-binary")
 
     if missing:
         print("=" * 60)
@@ -52,15 +53,15 @@ def check_dependencies():
 
 
 # Discover and run tests
-if __name__ == '__main__':
+if __name__ == "__main__":
     check_dependencies()
 
     # Create test loader
     loader = unittest.TestLoader()
 
     # Discover all tests in the tests directory
-    start_dir = 'tests'
-    suite = loader.discover(start_dir, pattern='test_*.py')
+    start_dir = "tests"
+    suite = loader.discover(start_dir, pattern="test_*.py")
 
     # Run tests with verbose output
     runner = unittest.TextTestRunner(verbosity=2)

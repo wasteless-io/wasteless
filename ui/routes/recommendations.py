@@ -23,7 +23,7 @@ async def recommendations(
     conn=Depends(get_db),
     type_filter: str = "All",
     min_savings: int = 0,
-    min_confidence: float = 0.0
+    min_confidence: float = 0.0,
 ):
     """Recommendations management page."""
     cursor = conn.cursor()
@@ -48,7 +48,8 @@ async def recommendations(
         where_clause += " AND w.confidence_score >= %s"
         params.append(min_confidence)
 
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
         SELECT
             r.id,
             r.recommendation_type,
@@ -75,31 +76,39 @@ async def recommendations(
         JOIN waste_detected w ON r.waste_id = w.id
         {where_clause}
         ORDER BY r.estimated_monthly_savings_eur DESC LIMIT 500
-    """, params if params else None)
+    """,
+        params if params else None,
+    )
     recommendations = cursor.fetchall()
 
     # Summary stats: true totals across every matching row, not just the
     # 500 shown in the table below.
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
         SELECT COUNT(*) as cnt,
                COALESCE(SUM(r.estimated_monthly_savings_eur), 0) as total_savings,
                COALESCE(AVG(w.confidence_score), 0) as avg_confidence
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         {where_clause}
-    """, params if params else None)
+    """,
+        params if params else None,
+    )
     totals = cursor.fetchone()
-    total_count = totals['cnt']
-    total_savings = float(totals['total_savings'])
-    avg_confidence = float(totals['avg_confidence'])
+    total_count = totals["cnt"]
+    total_savings = float(totals["total_savings"])
+    avg_confidence = float(totals["avg_confidence"])
 
-    ec2_recs  = [r for r in recommendations if r['resource_type'] == 'ec2_instance']
+    ec2_recs = [r for r in recommendations if r["resource_type"] == "ec2_instance"]
     # The EBS tab renders deletion semantics ("unattached", "why delete?"),
     # so it only gets delete_volume recs; gp2 migrations go to Other
-    ebs_recs  = [r for r in recommendations if r['resource_type'] == 'ebs_volume'
-                 and r['recommendation_type'] == 'delete_volume']
-    eip_recs  = [r for r in recommendations if r['resource_type'] == 'elastic_ip']
-    snap_recs = [r for r in recommendations if r['resource_type'] == 'ebs_snapshot']
+    ebs_recs = [
+        r
+        for r in recommendations
+        if r["resource_type"] == "ebs_volume" and r["recommendation_type"] == "delete_volume"
+    ]
+    eip_recs = [r for r in recommendations if r["resource_type"] == "elastic_ip"]
+    snap_recs = [r for r in recommendations if r["resource_type"] == "ebs_snapshot"]
     # Catch-all so recommendations from new detectors (NAT gateways, load
     # balancers, gp2 migrations, ...) are never silently hidden
     bucketed = {id(r) for r in ec2_recs + ebs_recs + eip_recs + snap_recs}
@@ -120,7 +129,7 @@ async def recommendations(
     """)
     scheduled_recs = cursor.fetchall()
     cursor.execute("SELECT COUNT(*) AS n FROM recommendations WHERE status = 'scheduled'")
-    scheduled_total_count = cursor.fetchone()['n']
+    scheduled_total_count = cursor.fetchone()["n"]
 
     # Remediations awaiting human review as a Terraform PR
     cursor.execute("""
@@ -135,7 +144,7 @@ async def recommendations(
     """)
     pr_open_recs = cursor.fetchall()
     cursor.execute("SELECT COUNT(*) AS n FROM recommendations WHERE status = 'pr_open'")
-    pr_open_total_count = cursor.fetchone()['n']
+    pr_open_total_count = cursor.fetchone()["n"]
 
     # Manual-review recommendations the human confirmed but hasn't
     # necessarily deleted yet — wasteless never touches AWS for these, so
@@ -153,7 +162,7 @@ async def recommendations(
     """)
     approved_manual_recs = cursor.fetchall()
     cursor.execute("SELECT COUNT(*) AS n FROM recommendations WHERE status = 'approved_manual'")
-    approved_manual_total_count = cursor.fetchone()['n']
+    approved_manual_total_count = cursor.fetchone()["n"]
 
     # Distinguishes "the collector never ran" from "it ran and everything got
     # resolved" — an empty pending list means very different things, and the
@@ -161,31 +170,35 @@ async def recommendations(
     # waste_detected already held resolved history (dismissed/applied/
     # approved/obsolete).
     cursor.execute("SELECT EXISTS (SELECT 1 FROM waste_detected) AS exists_flag")
-    has_waste_history = cursor.fetchone()['exists_flag']
+    has_waste_history = cursor.fetchone()["exists_flag"]
 
     cursor.close()
 
-    return templates.TemplateResponse(request, "recommendations.html", context={
-        "has_waste_history": has_waste_history,
-        "pr_open_recs": pr_open_recs,
-        "pr_open_total_count": pr_open_total_count,
-        "scheduled_total_count": scheduled_total_count,
-        "approved_manual_recs": approved_manual_recs,
-        "approved_manual_total_count": approved_manual_total_count,
-        "recommendations": recommendations,
-        "ec2_recs": ec2_recs,
-        "ebs_recs": ebs_recs,
-        "eip_recs": eip_recs,
-        "snap_recs": snap_recs,
-        "other_recs": other_recs,
-        "scheduled_recs": scheduled_recs,
-        "total_count": total_count,
-        "total_savings": total_savings,
-        "avg_confidence": avg_confidence,
-        "type_filter": type_filter,
-        "min_savings": min_savings,
-        "min_confidence": min_confidence
-    })
+    return templates.TemplateResponse(
+        request,
+        "recommendations.html",
+        context={
+            "has_waste_history": has_waste_history,
+            "pr_open_recs": pr_open_recs,
+            "pr_open_total_count": pr_open_total_count,
+            "scheduled_total_count": scheduled_total_count,
+            "approved_manual_recs": approved_manual_recs,
+            "approved_manual_total_count": approved_manual_total_count,
+            "recommendations": recommendations,
+            "ec2_recs": ec2_recs,
+            "ebs_recs": ebs_recs,
+            "eip_recs": eip_recs,
+            "snap_recs": snap_recs,
+            "other_recs": other_recs,
+            "scheduled_recs": scheduled_recs,
+            "total_count": total_count,
+            "total_savings": total_savings,
+            "avg_confidence": avg_confidence,
+            "type_filter": type_filter,
+            "min_savings": min_savings,
+            "min_confidence": min_confidence,
+        },
+    )
 
 
 @router.get("/api/recommendations")
@@ -194,7 +207,7 @@ async def api_recommendations(
     type_filter: str = "All",
     min_savings: int = 0,
     min_confidence: float = 0.0,
-    limit: int = 100
+    limit: int = 100,
 ):
     """Get recommendations as JSON."""
     cursor = conn.cursor()
@@ -249,37 +262,45 @@ def ask_about_recommendation(rec_id: int, body: AskQuestionRequest, conn=Depends
     # src/ is a package importable from the repo root, not from ui/ — same
     # sys.path trick as ui/utils/remediator.py's backend integration.
     import sys
-    backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+    backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     if backend_path not in sys.path:
         sys.path.insert(0, backend_path)
     from src.core.llm import answer_question
 
-    question = (body.question or '').strip()
+    question = (body.question or "").strip()
     if not question:
         raise HTTPException(status_code=400, detail="question must not be empty")
 
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT r.action_required, r.estimated_monthly_savings_eur,
                w.resource_type, w.confidence_score, w.metadata
         FROM recommendations r
         JOIN waste_detected w ON w.id = r.waste_id
         WHERE r.id = %s
-    """, (rec_id,))
+    """,
+        (rec_id,),
+    )
     row = cursor.fetchone()
     cursor.close()
 
     if row is None:
         raise HTTPException(status_code=404, detail="recommendation not found")
 
-    metadata = row['metadata'] or {}
+    metadata = row["metadata"] or {}
     if isinstance(metadata, str):
         metadata = json.loads(metadata)
 
     answer = answer_question(
-        question, row['action_required'], row['resource_type'],
-        row['estimated_monthly_savings_eur'], row['confidence_score'],
-        metadata, conn=conn,
+        question,
+        row["action_required"],
+        row["resource_type"],
+        row["estimated_monthly_savings_eur"],
+        row["confidence_score"],
+        metadata,
+        conn=conn,
     )
     if answer is None:
         return JSONResponse(
@@ -303,18 +324,21 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                 # or future call can't silently overwrite a resolved status
                 # (approved/applied/obsolete/pr_open) with 'rejected' and
                 # make an already-remediated resource reappear as active waste.
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE recommendations
                     SET status = 'rejected', applied_at = NOW()
                     WHERE id = %s AND status = 'pending'
                     RETURNING id
-                """, (rec_id,))
+                """,
+                    (rec_id,),
+                )
                 result = cursor.fetchone()
                 reject_result = {
                     "recommendation_id": rec_id,
                     "success": result is not None,
                     "action": "rejected",
-                    **({} if result else {"error": "not in pending state"})
+                    **({} if result else {"error": "not in pending state"}),
                 }
                 results.append(reject_result)
                 log_remediation_action("reject", [rec_id], reject_result, dry_run=False)
@@ -325,68 +349,86 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                 # Also allowed from 'approved_manual': the human confirmed a
                 # manual-review recommendation but can still change their
                 # mind before actually deleting anything on AWS.
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE recommendations
                     SET status = 'dismissed', applied_at = NOW()
                     WHERE id = %s AND status IN ('pending', 'approved_manual')
                     RETURNING id
-                """, (rec_id,))
+                """,
+                    (rec_id,),
+                )
                 result = cursor.fetchone()
                 dismiss_result = {
                     "recommendation_id": rec_id,
                     "success": result is not None,
                     "action": "dismissed",
-                    **({} if result else {"error": "not in pending state"})
+                    **({} if result else {"error": "not in pending state"}),
                 }
                 results.append(dismiss_result)
                 log_remediation_action("dismiss", [rec_id], dismiss_result, dry_run=False)
 
             elif action_request.action == "cancel":
                 # Cancel a scheduled execution during its grace period
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE recommendations
                     SET status = 'pending', execute_after = NULL
                     WHERE id = %s AND status = 'scheduled'
                     RETURNING id
-                """, (rec_id,))
+                """,
+                    (rec_id,),
+                )
                 result = cursor.fetchone()
                 if result is not None:
                     # Close out the log entry the scheduling created: left
                     # at 'pending' forever otherwise, History would show a
                     # migration that looks eternally in-flight even though
                     # it was called off.
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE actions_log
                         SET action_status = 'cancelled', updated_at = NOW()
                         WHERE recommendation_id = %s AND action_status = 'pending'
-                    """, (rec_id,))
-                results.append({
-                    "recommendation_id": rec_id,
-                    "success": result is not None,
-                    "action": "cancelled",
-                    **({} if result else {"error": "not in scheduled state"})
-                })
+                    """,
+                        (rec_id,),
+                    )
+                results.append(
+                    {
+                        "recommendation_id": rec_id,
+                        "success": result is not None,
+                        "action": "cancelled",
+                        **({} if result else {"error": "not in scheduled state"}),
+                    }
+                )
 
             elif action_request.action in ("approve", "execute"):
                 # Get resource info
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT w.resource_id, w.resource_type, r.recommendation_type,
                            w.metadata, w.confidence_score,
                            r.estimated_monthly_savings_eur, r.action_required
                     FROM recommendations r
                     JOIN waste_detected w ON r.waste_id = w.id
                     WHERE r.id = %s
-                """, (rec_id,))
+                """,
+                    (rec_id,),
+                )
                 row = cursor.fetchone()
 
                 if row:
-                    instance_id   = row['resource_id']
-                    resource_type = row['resource_type']
-                    rec_type      = row['recommendation_type']
-                    metadata      = row['metadata'] or {}
-                    action_type   = rec_type.replace('_instance', '').replace('_volume', '').replace('_snapshot', '')
-                    aws_success   = True
-                    aws_error     = None
+                    instance_id = row["resource_id"]
+                    resource_type = row["resource_type"]
+                    rec_type = row["recommendation_type"]
+                    metadata = row["metadata"] or {}
+                    action_type = (
+                        rec_type.replace("_instance", "")
+                        .replace("_volume", "")
+                        .replace("_snapshot", "")
+                    )
+                    aws_success = True
+                    aws_error = None
 
                     # Execute real AWS action if NOT in dry-run mode (read from config, ignore client value)
                     dry_run = _config_manager.get_dry_run()
@@ -396,6 +438,7 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     # PR instead of an AWS action. Not-Terraform-managed
                     # resources return None and take the normal path below.
                     from utils.terraform_pr import maybe_open_pr
+
                     pr_result = maybe_open_pr(conn, rec_id, row, dry_run)
                     if pr_result is not None:
                         results.append(pr_result)
@@ -409,67 +452,88 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     # Per-action opt-out (Settings > Automated actions):
                     # a disabled automated action degrades to manual review —
                     # the decision is recorded, AWS is not touched
-                    if mode != 'manual' and not _config_manager.get_action_enabled(rec_type):
-                        mode = 'manual'
+                    if mode != "manual" and not _config_manager.get_action_enabled(rec_type):
+                        mode = "manual"
 
                     # Grace period: a real approval is scheduled, not executed.
                     # The grace_executor_job applies it once execute_after is
                     # reached, unless cancelled meanwhile. Dry-run and manual
                     # decisions stay immediate (nothing to delay).
                     grace_days = _config_manager.get_grace_period_days()
-                    if grace_days > 0 and not dry_run and mode != 'manual':
-                        cursor.execute("""
+                    if grace_days > 0 and not dry_run and mode != "manual":
+                        cursor.execute(
+                            """
                             UPDATE recommendations
                             SET status = 'scheduled',
                                 execute_after = NOW() + make_interval(days => %s)
                             WHERE id = %s AND status = 'pending'
                             RETURNING execute_after
-                        """, (grace_days, rec_id))
+                        """,
+                            (grace_days, rec_id),
+                        )
                         scheduled = cursor.fetchone()
                         if scheduled is None:
-                            results.append({
-                                "recommendation_id": rec_id,
-                                "success": False,
-                                "error": "not in pending state"
-                            })
+                            results.append(
+                                {
+                                    "recommendation_id": rec_id,
+                                    "success": False,
+                                    "error": "not in pending state",
+                                }
+                            )
                             continue
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             INSERT INTO actions_log
                             (resource_id, recommendation_id, resource_type,
                              action_type, action_status, dry_run, action_date, metadata)
                             VALUES (%s, %s, %s, %s, 'pending', false, NOW(), %s)
-                        """, (instance_id, rec_id, resource_type, action_type,
-                              Json({'grace_period_days': grace_days,
-                                    'execute_after': scheduled['execute_after'].isoformat()})))
-                        results.append({
-                            "recommendation_id": rec_id,
-                            "instance_id": instance_id,
-                            "success": True,
-                            "scheduled": True,
-                            "execute_after": scheduled['execute_after'].isoformat(),
-                            "action": rec_type
-                        })
+                        """,
+                            (
+                                instance_id,
+                                rec_id,
+                                resource_type,
+                                action_type,
+                                Json(
+                                    {
+                                        "grace_period_days": grace_days,
+                                        "execute_after": scheduled["execute_after"].isoformat(),
+                                    }
+                                ),
+                            ),
+                        )
+                        results.append(
+                            {
+                                "recommendation_id": rec_id,
+                                "instance_id": instance_id,
+                                "success": True,
+                                "scheduled": True,
+                                "execute_after": scheduled["execute_after"].isoformat(),
+                                "action": rec_type,
+                            }
+                        )
                         continue
 
                     # Backend remediators (safeguards + rollback snapshot +
                     # live waste re-verification), in dry-run and real mode alike
-                    if mode == 'remediator':
+                    if mode == "remediator":
                         try:
                             from utils.remediator import RemediatorProxy
+
                             proxy = RemediatorProxy(dry_run=dry_run)
                             result = proxy.execute_recommendations(conn, [rec_id])[0]
-                            result['action'] = rec_type
+                            result["action"] = rec_type
                         except Exception as e:
                             result = {
-                                'recommendation_id': rec_id,
-                                'instance_id': instance_id,
-                                'success': False,
-                                'error': str(e),
-                                'action': rec_type,
+                                "recommendation_id": rec_id,
+                                "instance_id": instance_id,
+                                "success": False,
+                                "error": str(e),
+                                "action": rec_type,
                             }
-                        if not dry_run and not result.get('success'):
+                        if not dry_run and not result.get("success"):
                             from utils.notifications import notify_action_failure
-                            notify_action_failure(rec_type, instance_id, result.get('error'))
+
+                            notify_action_failure(rec_type, instance_id, result.get("error"))
                         results.append(result)
                         continue
 
@@ -477,31 +541,34 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     # Every other type is manual-review: approving records the
                     # human decision, execution stays manual — attempting AWS
                     # calls here would fail with a misleading "not found".
-                    manual_review = mode != 'boto3'
+                    manual_review = mode != "boto3"
                     if not dry_run and not manual_review:
-                        aws_success, aws_error = _execute_ec2_boto3(
-                            instance_id, rec_type, metadata)
+                        aws_success, aws_error = _execute_ec2_boto3(instance_id, rec_type, metadata)
                         if not aws_success:
                             from utils.notifications import notify_action_failure
+
                             notify_action_failure(rec_type, instance_id, aws_error)
 
                     # Log action
-                    action_status = 'success' if (dry_run or aws_success) else 'failed'
-                    cursor.execute("""
+                    action_status = "success" if (dry_run or aws_success) else "failed"
+                    cursor.execute(
+                        """
                         INSERT INTO actions_log
                         (resource_id, recommendation_id, resource_type, action_type, action_status, dry_run, action_date, error_message)
                         VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s)
                         RETURNING id
-                    """, (
-                        instance_id,
-                        rec_id,
-                        resource_type,
-                        action_type,
-                        action_status,
-                        # manual approvals never touch AWS: log them as dry-run
-                        dry_run or manual_review,
-                        aws_error
-                    ))
+                    """,
+                        (
+                            instance_id,
+                            rec_id,
+                            resource_type,
+                            action_type,
+                            action_status,
+                            # manual approvals never touch AWS: log them as dry-run
+                            dry_run or manual_review,
+                            aws_error,
+                        ),
+                    )
 
                     # Update recommendation status. A dry-run touches no AWS
                     # resource: leaving the status untouched (still 'pending')
@@ -515,18 +582,21 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     # until sync confirms it's actually gone, same principle
                     # as the dry-run case just below.
                     if manual_review:
-                        new_status = 'approved_manual'
+                        new_status = "approved_manual"
                     elif dry_run:
                         new_status = None
                     else:
-                        new_status = 'approved' if aws_success else 'pending'
+                        new_status = "approved" if aws_success else "pending"
 
                     if new_status is not None:
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             UPDATE recommendations
                             SET status = %s, applied_at = NOW()
                             WHERE id = %s
-                        """, (new_status, rec_id))
+                        """,
+                            (new_status, rec_id),
+                        )
 
                     result_entry = {
                         "recommendation_id": rec_id,
@@ -534,24 +604,22 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                         "success": dry_run or aws_success,
                         "dry_run": dry_run,
                         "manual": manual_review,
-                        "action": rec_type
+                        "action": rec_type,
                     }
                     if aws_error:
                         result_entry["error"] = aws_error
                     results.append(result_entry)
                 else:
-                    results.append({
-                        "recommendation_id": rec_id,
-                        "success": False,
-                        "error": "Recommendation not found"
-                    })
+                    results.append(
+                        {
+                            "recommendation_id": rec_id,
+                            "success": False,
+                            "error": "Recommendation not found",
+                        }
+                    )
 
         except Exception as e:
-            results.append({
-                "recommendation_id": rec_id,
-                "success": False,
-                "error": str(e)
-            })
+            results.append({"recommendation_id": rec_id, "success": False, "error": str(e)})
 
     conn.commit()
     cursor.close()

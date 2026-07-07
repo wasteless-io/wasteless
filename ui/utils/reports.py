@@ -16,17 +16,15 @@ from typing import Optional, Tuple
 
 # Add backend src/ to sys.path to import backend modules
 # Path structure: <repo>/ui/utils/ -> go up 2 levels -> <repo>/src
-BACKEND_SRC_PATH = os.path.abspath(os.path.join(
-    os.path.dirname(__file__),
-    '..', '..', 'src'
-))
+BACKEND_SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if BACKEND_SRC_PATH not in sys.path:
     sys.path.insert(0, BACKEND_SRC_PATH)
 
 # The LLM configuration (WASTELESS_LLM_MODEL + provider key) lives in the
 # root .env, not ui/.env — load it without overriding the UI environment.
 from dotenv import load_dotenv  # noqa: E402
-load_dotenv(os.path.join(BACKEND_SRC_PATH, '..', '.env'), override=False)
+
+load_dotenv(os.path.join(BACKEND_SRC_PATH, "..", ".env"), override=False)
 
 from core.llm import is_enabled as llm_narrative_available  # noqa: E402
 from reports.daily_briefing import get_or_create_briefing  # noqa: E402
@@ -36,17 +34,25 @@ from reports.weekly_digest import (  # noqa: E402
     generate_narrative,
 )
 
-__all__ = ['collect_digest_data', 'format_digest', 'generate_narrative',
-           'get_or_create_briefing', 'llm_narrative_available',
-           'resolve_period', 'report_filename']
+__all__ = [
+    "collect_digest_data",
+    "format_digest",
+    "generate_narrative",
+    "get_or_create_briefing",
+    "llm_narrative_available",
+    "resolve_period",
+    "report_filename",
+]
 
 MAX_PERIOD_DAYS = 366
 
 
-def resolve_period(month: Optional[str] = None,
-                   start: Optional[str] = None,
-                   end: Optional[str] = None,
-                   days: Optional[int] = None) -> Tuple[date, date]:
+def resolve_period(
+    month: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    days: Optional[int] = None,
+) -> Tuple[date, date]:
     """Resolve the page filters into an inclusive (start_date, end_date).
 
     Precedence: month > explicit start/end > days. Defaults to the last
@@ -54,7 +60,7 @@ def resolve_period(month: Optional[str] = None,
     ranges (the route maps it to a 400).
     """
     if month:
-        year_str, _, month_str = month.partition('-')
+        year_str, _, month_str = month.partition("-")
         year, month_num = int(year_str), int(month_str)
         if not 1 <= month_num <= 12:
             raise ValueError(f"invalid month: {month!r}")
@@ -79,6 +85,6 @@ def resolve_period(month: Optional[str] = None,
     return start_date, end_date
 
 
-def report_filename(start_date: date, end_date: date, extension: str = 'md') -> str:
+def report_filename(start_date: date, end_date: date, extension: str = "md") -> str:
     """Download filename for a report period."""
     return f"wasteless-report_{start_date.isoformat()}_{end_date.isoformat()}.{extension}"

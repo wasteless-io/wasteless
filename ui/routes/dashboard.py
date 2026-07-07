@@ -13,26 +13,27 @@ router = APIRouter()
 # Provider logo detection: keyword in the model name → logo slug in
 # ui/static/providers/. First match wins across the models list.
 _PROVIDER_KEYWORDS = [
-    ('deepseek', 'deepseek'),
-    ('claude', 'claude'),
-    ('anthropic', 'anthropic'),
-    ('gpt', 'openai'),
-    ('openai', 'openai'),
-    ('ollama', 'ollama'),
-    ('llama', 'ollama'),
-    ('mistral', 'mistral'),
-    ('gemini', 'gemini'),
+    ("deepseek", "deepseek"),
+    ("claude", "claude"),
+    ("anthropic", "anthropic"),
+    ("gpt", "openai"),
+    ("openai", "openai"),
+    ("ollama", "ollama"),
+    ("llama", "ollama"),
+    ("mistral", "mistral"),
+    ("gemini", "gemini"),
 ]
 
 
 def _llm_provider(models):
     """Logo slug for the first recognized provider, or None."""
     for model in models:
-        name = (model or '').lower()
+        name = (model or "").lower()
         for keyword, provider in _PROVIDER_KEYWORDS:
             if keyword in name:
-                logo = os.path.join(os.path.dirname(__file__), '..',
-                                    'static', 'providers', f'{provider}.svg')
+                logo = os.path.join(
+                    os.path.dirname(__file__), "..", "static", "providers", f"{provider}.svg"
+                )
                 if os.path.exists(logo):
                     return provider
     return None
@@ -48,7 +49,8 @@ def fetch_waste_trend(cursor, trend: str):
         trend = "30d"
     trend_days, granularity, subtitle = TREND_RANGES[trend]
     if granularity == "month":
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT date_trunc('month', snapshot_date)::date as date,
                    AVG(daily_total) as total_waste
             FROM (
@@ -59,15 +61,20 @@ def fetch_waste_trend(cursor, trend: str):
             ) d
             GROUP BY 1
             ORDER BY 1
-        """, (trend_days,))
+        """,
+            (trend_days,),
+        )
     else:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT snapshot_date as date, COALESCE(SUM(total_eur), 0) as total_waste
             FROM waste_snapshots
             WHERE snapshot_date >= CURRENT_DATE - %s * INTERVAL '1 day'
             GROUP BY snapshot_date
             ORDER BY snapshot_date
-        """, (trend_days,))
+        """,
+            (trend_days,),
+        )
     return trend, granularity, subtitle, cursor.fetchall()
 
 
@@ -82,9 +89,14 @@ def fetch_waste_by_resource(cursor, range_key: str):
     if range_key not in TREND_RANGES:
         range_key = "30d"
     days = TREND_RANGES[range_key][0]
-    label = {"7d": "last 7 days", "30d": "last 30 days",
-             "90d": "last 90 days", "1y": "last 12 months"}[range_key]
-    cursor.execute("""
+    label = {
+        "7d": "last 7 days",
+        "30d": "last 30 days",
+        "90d": "last 90 days",
+        "1y": "last 12 months",
+    }[range_key]
+    cursor.execute(
+        """
         WITH win AS (
             SELECT snapshot_date, resource_type, total_eur, resource_count
             FROM waste_snapshots
@@ -107,7 +119,9 @@ def fetch_waste_by_resource(cursor, range_key: str):
         JOIN latest l USING (resource_type)
         GROUP BY w.resource_type, l.resource_count
         ORDER BY total_eur DESC
-    """, (days,))
+    """,
+        (days,),
+    )
     rows = cursor.fetchall()
 
     # Show the dates actually covered: fresh installs have less history
@@ -196,12 +210,15 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     kpis = cursor.fetchone()
 
     # Cost of inaction: first detection date + daily burn rate (active waste)
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT
             MIN(detection_date) as first_detection,
             COALESCE(SUM(monthly_waste_eur), 0) / %s as daily_burn
         FROM active_waste
-    """, (DAYS_PER_MONTH,))
+    """,
+        (DAYS_PER_MONTH,),
+    )
     inaction_row = cursor.fetchone()
 
     # Trend: active-waste totals from waste_snapshots (stable history written
@@ -242,13 +259,14 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         WHERE called_at >= NOW() - INTERVAL '30 days' AND model IS NOT NULL
         ORDER BY model
     """)
-    llm_models = [r['model'] for r in cursor.fetchall()]
+    llm_models = [r["model"] for r in cursor.fetchall()]
 
     # Already burned: cumulative EUR actually lost, one daily-rate slice per
     # snapshot day (total_eur is a monthly rate, hence /DAYS_PER_MONTH).
     # Backfilled history is a floor: resources cleaned before tracking are
     # invisible.
-    cursor.execute("""
+    cursor.execute(
+        """
         WITH daily AS (
             SELECT snapshot_date, SUM(total_eur) / %s AS rate
             FROM waste_snapshots
@@ -260,62 +278,68 @@ async def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             (SELECT rate FROM daily ORDER BY snapshot_date DESC LIMIT 1) AS current_rate,
             (SELECT rate FROM daily WHERE snapshot_date <= CURRENT_DATE - 30
              ORDER BY snapshot_date DESC LIMIT 1) AS rate_30d_ago
-    """, (DAYS_PER_MONTH,))
+    """,
+        (DAYS_PER_MONTH,),
+    )
     burned_row = cursor.fetchone()
 
     cursor.close()
 
-    burned_total = float(burned_row['burned']) if burned_row else 0
-    burned_since = burned_row['since'] if burned_row else None
+    burned_total = float(burned_row["burned"]) if burned_row else 0
+    burned_since = burned_row["since"] if burned_row else None
     burn_delta = None
-    if burned_row and burned_row['rate_30d_ago'] is not None:
-        burn_delta = float(burned_row['current_rate']) - float(burned_row['rate_30d_ago'])
+    if burned_row and burned_row["rate_30d_ago"] is not None:
+        burn_delta = float(burned_row["current_rate"]) - float(burned_row["rate_30d_ago"])
 
     ai_usage = None
     ai_daily_cost = None
     ai_roi = None
-    if llm_row and llm_row['calls']:
-        ai_daily_cost = float(llm_row['cost_usd']) * USD_TO_EUR / llm_row['days_covered']
+    if llm_row and llm_row["calls"]:
+        ai_daily_cost = float(llm_row["cost_usd"]) * USD_TO_EUR / llm_row["days_covered"]
         ai_usage = {
-            "cost_eur": float(llm_row['cost_usd']) * USD_TO_EUR,
-            "calls": llm_row['calls'],
-            "tokens": llm_row['tokens'],
+            "cost_eur": float(llm_row["cost_usd"]) * USD_TO_EUR,
+            "calls": llm_row["calls"],
+            "tokens": llm_row["tokens"],
             "models": llm_models,
             "provider": _llm_provider(llm_models),
             "features": [
                 {
-                    "feature": f['feature'],
-                    "calls": f['calls'],
-                    "tokens": f['tokens'],
-                    "cost_eur": float(f['cost_usd']) * USD_TO_EUR,
+                    "feature": f["feature"],
+                    "calls": f["calls"],
+                    "tokens": f["tokens"],
+                    "cost_eur": float(f["cost_usd"]) * USD_TO_EUR,
                 }
                 for f in llm_features
             ],
         }
 
-    daily_burn = float(inaction_row['daily_burn']) if inaction_row else 0
+    daily_burn = float(inaction_row["daily_burn"]) if inaction_row else 0
     if ai_daily_cost:
         ai_roi = daily_burn / ai_daily_cost
-    first_detection = inaction_row['first_detection'] if inaction_row else None
+    first_detection = inaction_row["first_detection"] if inaction_row else None
 
-    return templates.TemplateResponse(request, "dashboard.html", context={
-        "kpis": kpis,
-        "waste_trend": waste_trend,
-        "trend_range": trend,
-        "trend_granularity": trend_granularity,
-        "trend_subtitle": trend_subtitle,
-        "waste_by_resource": waste_by_resource,
-        "resource_range": resource_range,
-        "resource_subtitle": resource_subtitle,
-        "daily_burn": daily_burn,
-        "first_detection": first_detection,
-        "burned_total": burned_total,
-        "burned_since": burned_since,
-        "burn_delta": burn_delta,
-        "ai_usage": ai_usage,
-        "ai_daily_cost": ai_daily_cost,
-        "ai_roi": ai_roi,
-    })
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        context={
+            "kpis": kpis,
+            "waste_trend": waste_trend,
+            "trend_range": trend,
+            "trend_granularity": trend_granularity,
+            "trend_subtitle": trend_subtitle,
+            "waste_by_resource": waste_by_resource,
+            "resource_range": resource_range,
+            "resource_subtitle": resource_subtitle,
+            "daily_burn": daily_burn,
+            "first_detection": first_detection,
+            "burned_total": burned_total,
+            "burned_since": burned_since,
+            "burn_delta": burn_delta,
+            "ai_usage": ai_usage,
+            "ai_daily_cost": ai_daily_cost,
+            "ai_roi": ai_roi,
+        },
+    )
 
 
 @router.get("/api/dashboard/trend")
@@ -328,10 +352,7 @@ async def api_dashboard_trend(conn=Depends(get_db), range: str = "30d"):
         "range": trend,
         "granularity": granularity,
         "subtitle": subtitle,
-        "points": [
-            {"date": str(r["date"]), "total": float(r["total_waste"] or 0)}
-            for r in rows
-        ],
+        "points": [{"date": str(r["date"]), "total": float(r["total_waste"] or 0)} for r in rows],
     }
 
 
@@ -379,7 +400,7 @@ async def api_metrics(conn=Depends(get_db)):
     cursor.close()
 
     return {
-        "potential_savings": float(result['potential_savings']),
-        "pending_count": int(result['pending_count']),
-        "actions_count": int(result['success_count'])
+        "potential_savings": float(result["potential_savings"]),
+        "pending_count": int(result["pending_count"]),
+        "actions_count": int(result["success_count"]),
     }

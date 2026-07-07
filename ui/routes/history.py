@@ -14,7 +14,7 @@ async def history(
     conn=Depends(get_db),
     status_filter: str = "All",
     action_filter: str = "All",
-    days_back: int = 30
+    days_back: int = 30,
 ):
     """Action history and audit trail."""
     cursor = conn.cursor()
@@ -33,11 +33,11 @@ async def history(
     # Total matching the same filters, uncapped — the table itself stays
     # capped at 100 rows below, but the header must say so honestly rather
     # than silently implying those 100 are everything.
-    cursor.execute(f"SELECT COUNT(*) AS n FROM actions_log a {where_clause}",
-                    tuple(params))
-    total_count = cursor.fetchone()['n']
+    cursor.execute(f"SELECT COUNT(*) AS n FROM actions_log a {where_clause}", tuple(params))
+    total_count = cursor.fetchone()["n"]
 
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
         SELECT
             a.id,
             a.resource_id,
@@ -51,26 +51,32 @@ async def history(
         FROM actions_log a
         {where_clause}
         ORDER BY a.action_date DESC LIMIT 100
-    """, tuple(params))
+    """,
+        tuple(params),
+    )
     actions = cursor.fetchall()
 
     # Summary. Anything that isn't success/failed (pending, blocked, ...)
     # is bucketed as "other" so the three counts always add up to the
     # total shown — a status this doesn't yet know about still gets
     # counted somewhere instead of silently vanishing from the header.
-    success_count = sum(1 for a in actions if a['action_status'] == 'success')
-    failed_count = sum(1 for a in actions if a['action_status'] == 'failed')
+    success_count = sum(1 for a in actions if a["action_status"] == "success")
+    failed_count = sum(1 for a in actions if a["action_status"] == "failed")
     other_count = len(actions) - success_count - failed_count
 
     cursor.close()
 
-    return templates.TemplateResponse(request, "history.html", context={
-        "actions": actions,
-        "total_count": total_count,
-        "success_count": success_count,
-        "failed_count": failed_count,
-        "other_count": other_count,
-        "status_filter": status_filter,
-        "action_filter": action_filter,
-        "days_back": days_back
-    })
+    return templates.TemplateResponse(
+        request,
+        "history.html",
+        context={
+            "actions": actions,
+            "total_count": total_count,
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "other_count": other_count,
+            "status_filter": status_filter,
+            "action_filter": action_filter,
+            "days_back": days_back,
+        },
+    )

@@ -19,10 +19,7 @@ from contextlib import contextmanager
 
 # Add backend path to sys.path to import backend modules
 # Path structure: <repo>/ui/utils/ -> go up 2 levels -> <repo>/ (src/ lives there)
-BACKEND_PATH = os.path.abspath(os.path.join(
-    os.path.dirname(__file__),
-    '..', '..'
-))
+BACKEND_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # Thread lock for protecting remediator initialization
 _remediator_lock = threading.Lock()
@@ -43,11 +40,11 @@ def _check_backend_path() -> tuple[bool, Optional[str]]:
         return False, f"Backend directory not found: {BACKEND_PATH}"
 
     # Check for required backend structure
-    src_path = os.path.join(BACKEND_PATH, 'src')
+    src_path = os.path.join(BACKEND_PATH, "src")
     if not os.path.exists(src_path):
         return False, f"Backend 'src' directory not found: {src_path}"
 
-    remediator_path = os.path.join(src_path, 'remediators', 'ec2_remediator.py')
+    remediator_path = os.path.join(src_path, "remediators", "ec2_remediator.py")
     if not os.path.exists(remediator_path):
         return False, f"EC2Remediator module not found: {remediator_path}"
 
@@ -98,8 +95,8 @@ def _backend_context():
     original_env = os.environ.copy()
     try:
         # Set environment variable for backend config path instead of changing cwd
-        os.environ['WASTELESS_CONFIG_DIR'] = os.path.join(BACKEND_PATH, 'config')
-        os.environ['WASTELESS_BACKEND_PATH'] = BACKEND_PATH
+        os.environ["WASTELESS_CONFIG_DIR"] = os.path.join(BACKEND_PATH, "config")
+        os.environ["WASTELESS_BACKEND_PATH"] = BACKEND_PATH
         yield
     finally:
         # Restore original environment
@@ -153,9 +150,8 @@ class RemediatorProxy:
                 return self._resource_remediators[recommendation_type]
 
             with _backend_context():
-                from src.remediators.resource_remediator import (
-                    REMEDIATORS_BY_RECOMMENDATION
-                )
+                from src.remediators.resource_remediator import REMEDIATORS_BY_RECOMMENDATION
+
                 cls = REMEDIATORS_BY_RECOMMENDATION.get(recommendation_type)
                 remediator = cls(dry_run=self.dry_run) if cls else None
                 self._resource_remediators[recommendation_type] = remediator
@@ -189,8 +185,6 @@ class RemediatorProxy:
                     # For now, we do a simple import with good error handling
                     from src.remediators.ec2_remediator import EC2Remediator
 
-                    # Initialize remediator - pass config path explicitly if supported
-                    config_path = os.path.join(BACKEND_PATH, 'config')
                     self._remediator = EC2Remediator(dry_run=self.dry_run)
 
                     # Cache at class level
@@ -201,7 +195,7 @@ class RemediatorProxy:
             except ImportError as e:
                 logger.error(f"Cannot import EC2Remediator: {e}")
                 logger.error(f"   Backend path: {BACKEND_PATH}")
-                logger.error(f"   Make sure wasteless backend is cloned next to wasteless-ui")
+                logger.error("   Make sure wasteless backend is cloned next to wasteless-ui")
                 raise RuntimeError(
                     f"Cannot import backend remediator: {e}\n"
                     f"Ensure wasteless backend is installed at: {BACKEND_PATH}"
@@ -212,11 +206,7 @@ class RemediatorProxy:
 
         return self._remediator
 
-    def execute_recommendations(
-        self,
-        conn,
-        recommendation_ids: List[int]
-    ) -> List[Dict]:
+    def execute_recommendations(self, conn, recommendation_ids: List[int]) -> List[Dict]:
         """
         Execute multiple recommendations.
 
@@ -233,7 +223,8 @@ class RemediatorProxy:
             try:
                 # Get resource and recommendation details from database
                 cursor = conn.cursor()
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT
                         w.resource_id,
                         r.recommendation_type,
@@ -243,62 +234,66 @@ class RemediatorProxy:
                     FROM recommendations r
                     JOIN waste_detected w ON r.waste_id = w.id
                     WHERE r.id = %s
-                """, (rec_id,))
+                """,
+                    (rec_id,),
+                )
 
                 row = cursor.fetchone()
                 cursor.close()
 
                 if not row:
-                    results.append({
-                        'recommendation_id': rec_id,
-                        'success': False,
-                        'error': f'Recommendation {rec_id} not found in database',
-                        'instance_id': None
-                    })
+                    results.append(
+                        {
+                            "recommendation_id": rec_id,
+                            "success": False,
+                            "error": f"Recommendation {rec_id} not found in database",
+                            "instance_id": None,
+                        }
+                    )
                     continue
 
                 if isinstance(row, dict):
                     # UI connections use RealDictCursor
-                    instance_id = row['resource_id']
-                    rec_type    = row['recommendation_type']
-                    action      = row['action_required']
-                    confidence  = row['confidence_score']
-                    region      = row['region']
+                    instance_id = row["resource_id"]
+                    rec_type = row["recommendation_type"]
+                    action = row["action_required"]
+                    confidence = row["confidence_score"]
+                    region = row["region"]
                 else:
                     instance_id, rec_type, action, confidence, region = row
 
-                if rec_type in ['stop_instance', 'terminate_instance']:
+                if rec_type in ["stop_instance", "terminate_instance"]:
                     # EC2 path (stop works for both stop and terminate intent)
                     result = self._get_remediator().stop_instance(
-                        instance_id=instance_id,
-                        recommendation_id=rec_id,
-                        reason=action
+                        instance_id=instance_id, recommendation_id=rec_id, reason=action
                     )
                 else:
                     resource_remediator = self._get_resource_remediator(rec_type)
                     if resource_remediator is None:
-                        results.append({
-                            'recommendation_id': rec_id,
-                            'instance_id': instance_id,
-                            'success': False,
-                            'error': f'Action type {rec_type} has no automated '
-                                     f'remediator yet',
-                            'recommendation_type': rec_type
-                        })
+                        results.append(
+                            {
+                                "recommendation_id": rec_id,
+                                "instance_id": instance_id,
+                                "success": False,
+                                "error": f"Action type {rec_type} has no automated "
+                                f"remediator yet",
+                                "recommendation_type": rec_type,
+                            }
+                        )
                         continue
 
                     result = resource_remediator.remediate(
                         resource_id=instance_id,
                         recommendation_id=rec_id,
                         reason=action,
-                        region=region
+                        region=region,
                     )
-                    result['instance_id'] = result.get('resource_id')
+                    result["instance_id"] = result.get("resource_id")
 
                 # Add recommendation_id to result
-                result['recommendation_id'] = rec_id
-                result['recommendation_type'] = rec_type
-                result['confidence'] = float(confidence)
+                result["recommendation_id"] = rec_id
+                result["recommendation_type"] = rec_type
+                result["confidence"] = float(confidence)
 
                 # Sanitize datetime objects for JSON serialization
                 result = sanitize_for_json(result)
@@ -307,20 +302,19 @@ class RemediatorProxy:
 
             except Exception as e:
                 logger.error(f"Error executing recommendation {rec_id}: {e}")
-                results.append({
-                    'recommendation_id': rec_id,
-                    'success': False,
-                    'error': str(e),
-                    'instance_id': None
-                })
+                results.append(
+                    {
+                        "recommendation_id": rec_id,
+                        "success": False,
+                        "error": str(e),
+                        "instance_id": None,
+                    }
+                )
 
         return results
 
     def reject_recommendations(
-        self,
-        conn,
-        recommendation_ids: List[int],
-        reason: str = "Rejected by user"
+        self, conn, recommendation_ids: List[int], reason: str = "Rejected by user"
     ) -> Dict:
         """
         Reject recommendations (mark as rejected in database).
@@ -335,30 +329,29 @@ class RemediatorProxy:
         """
         try:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE recommendations
                 SET status = 'rejected',
                     applied_at = NOW()
                 WHERE id = ANY(%s)
                 RETURNING id
-            """, (recommendation_ids,))
+            """,
+                (recommendation_ids,),
+            )
 
             rejected_ids = [row[0] for row in cursor.fetchall()]
             conn.commit()
             cursor.close()
 
             return {
-                'success': True,
-                'rejected_count': len(rejected_ids),
-                'rejected_ids': rejected_ids
+                "success": True,
+                "rejected_count": len(rejected_ids),
+                "rejected_ids": rejected_ids,
             }
         except Exception as e:
             logger.error(f"Error rejecting recommendations: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'rejected_count': 0
-            }
+            return {"success": False, "error": str(e), "rejected_count": 0}
 
 
 def check_backend_available() -> bool:
@@ -383,7 +376,8 @@ def check_backend_available() -> bool:
     try:
         if BACKEND_PATH not in sys.path:
             sys.path.insert(0, BACKEND_PATH)
-        from src.remediators.ec2_remediator import EC2Remediator
+        from src.remediators.ec2_remediator import EC2Remediator  # noqa: F401 -- availability check
+
         _backend_available = True
         return True
     except ImportError as e:

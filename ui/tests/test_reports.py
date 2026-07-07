@@ -28,45 +28,44 @@ class TestResolvePeriod(unittest.TestCase):
         self.assertEqual((end - start).days + 1, 30)
 
     def test_month(self):
-        start, end = resolve_period(month='2026-06')
+        start, end = resolve_period(month="2026-06")
         self.assertEqual(start, date(2026, 6, 1))
         self.assertEqual(end, date(2026, 6, 30))
 
     def test_month_leap_february(self):
-        start, end = resolve_period(month='2024-02')
+        start, end = resolve_period(month="2024-02")
         self.assertEqual(end, date(2024, 2, 29))
 
     def test_month_takes_precedence_over_range(self):
-        start, end = resolve_period(month='2026-06',
-                                    start='2026-01-01', end='2026-01-31')
+        start, end = resolve_period(month="2026-06", start="2026-01-01", end="2026-01-31")
         self.assertEqual(start, date(2026, 6, 1))
 
     def test_explicit_range(self):
-        start, end = resolve_period(start='2026-06-10', end='2026-06-20')
+        start, end = resolve_period(start="2026-06-10", end="2026-06-20")
         self.assertEqual(start, date(2026, 6, 10))
         self.assertEqual(end, date(2026, 6, 20))
 
     def test_single_day_range(self):
-        start, end = resolve_period(start='2026-06-10', end='2026-06-10')
+        start, end = resolve_period(start="2026-06-10", end="2026-06-10")
         self.assertEqual(start, end)
 
     def test_start_without_end_rejected(self):
         with self.assertRaises(ValueError):
-            resolve_period(start='2026-06-10')
+            resolve_period(start="2026-06-10")
 
     def test_reversed_range_rejected(self):
         with self.assertRaises(ValueError):
-            resolve_period(start='2026-06-20', end='2026-06-10')
+            resolve_period(start="2026-06-20", end="2026-06-10")
 
     def test_malformed_date_rejected(self):
         with self.assertRaises(ValueError):
-            resolve_period(start='junk', end='2026-06-10')
+            resolve_period(start="junk", end="2026-06-10")
 
     def test_malformed_month_rejected(self):
         with self.assertRaises(ValueError):
-            resolve_period(month='2026-13')
+            resolve_period(month="2026-13")
         with self.assertRaises(ValueError):
-            resolve_period(month='junk')
+            resolve_period(month="junk")
 
     def test_oversized_range_rejected(self):
         end = date.today()
@@ -83,19 +82,24 @@ class TestReportFilename(unittest.TestCase):
 
     def test_filename_contains_period(self):
         name = report_filename(date(2026, 6, 1), date(2026, 6, 30))
-        self.assertEqual(name, 'wasteless-report_2026-06-01_2026-06-30.md')
+        self.assertEqual(name, "wasteless-report_2026-06-01_2026-06-30.md")
 
 
 class TestBackendBridge(unittest.TestCase):
 
     def test_backend_functions_importable(self):
-        from utils.reports import (collect_digest_data, format_digest,
-                                   generate_narrative, llm_narrative_available)
+        from utils.reports import (
+            collect_digest_data,
+            format_digest,
+            generate_narrative,
+            llm_narrative_available,
+        )
+
         self.assertTrue(callable(collect_digest_data))
         self.assertTrue(callable(format_digest))
         self.assertTrue(callable(generate_narrative))
         self.assertTrue(callable(llm_narrative_available))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

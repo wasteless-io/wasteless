@@ -24,25 +24,24 @@ from collectors.steampipe import SteampipeError
 from detectors.steampipe_base import SteampipeWasteDetector
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 class VPCUnusedDetector(SteampipeWasteDetector):
-    query_name = 'vpc_unused'
-    resource_type = 'vpc'
-    waste_type = 'unused_vpc'
-    recommendation_type = 'delete_vpc'
-    banner = 'UNUSED VPC DETECTION (hygiene — 0 EUR)'
+    query_name = "vpc_unused"
+    resource_type = "vpc"
+    waste_type = "unused_vpc"
+    recommendation_type = "delete_vpc"
+    banner = "UNUSED VPC DETECTION (hygiene — 0 EUR)"
 
     def map_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         items = []
         for row in rows:
-            is_default = bool(row.get('is_default'))
-            name = row.get('name') or ''
-            label = f"{name} ({row['vpc_id']})" if name else row['vpc_id']
+            is_default = bool(row.get("is_default"))
+            name = row.get("name") or ""
+            label = f"{name} ({row['vpc_id']})" if name else row["vpc_id"]
             if is_default:
                 action = (
                     f"REVIEW default VPC {label} in {row.get('region', '')} "
@@ -54,20 +53,22 @@ class VPCUnusedDetector(SteampipeWasteDetector):
                     f"DELETE unused VPC {label} in {row.get('region', '')} "
                     f"— no network interfaces (nothing runs there)"
                 )
-            items.append({
-                'resource_id':  row['vpc_id'],
-                'monthly_cost': 0.0,
-                'confidence':   0.60 if is_default else 0.85,
-                'action':       action,
-                'metadata': {
-                    'name':             name,
-                    'region':           row.get('region') or '',
-                    'cidr_block':       row.get('cidr_block') or '',
-                    'is_default':       is_default,
-                    'monthly_cost_eur': 0.0,
-                    'hygiene':          True,
-                },
-            })
+            items.append(
+                {
+                    "resource_id": row["vpc_id"],
+                    "monthly_cost": 0.0,
+                    "confidence": 0.60 if is_default else 0.85,
+                    "action": action,
+                    "metadata": {
+                        "name": name,
+                        "region": row.get("region") or "",
+                        "cidr_block": row.get("cidr_block") or "",
+                        "is_default": is_default,
+                        "monthly_cost_eur": 0.0,
+                        "hygiene": True,
+                    },
+                }
+            )
         return items
 
 
@@ -87,5 +88,5 @@ def main():
             detector.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

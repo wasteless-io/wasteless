@@ -32,14 +32,13 @@ from core.pricing import stamp_pricing
 load_dotenv()
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 SNAPSHOT_PRICE_EUR_PER_GIB = 0.046  # $0.05 * 0.92 EUR/USD
 SNAPSHOT_AGE_DAYS = 90
-REGIONS = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
+REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
 
 
 def _snapshot_monthly_cost(size_gb: int) -> float:
@@ -49,9 +48,9 @@ def _snapshot_monthly_cost(size_gb: int) -> float:
 def _fetch_ami_snapshot_ids(ec2_client) -> set:
     """Return snapshot IDs that back a registered AMI — must not be deleted."""
     ami_snap_ids = set()
-    for image in ec2_client.describe_images(Owners=['self']).get('Images', []):
-        for mapping in image.get('BlockDeviceMappings', []):
-            snap_id = mapping.get('Ebs', {}).get('SnapshotId')
+    for image in ec2_client.describe_images(Owners=["self"]).get("Images", []):
+        for mapping in image.get("BlockDeviceMappings", []):
+            snap_id = mapping.get("Ebs", {}).get("SnapshotId")
             if snap_id:
                 ami_snap_ids.add(snap_id)
     return ami_snap_ids
@@ -60,7 +59,8 @@ def _fetch_ami_snapshot_ids(ec2_client) -> set:
 def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
     try:
         from core.aws_clients import get_client
-        ec2 = get_client('ec2', region=region)
+
+        ec2 = get_client("ec2", region=region)
         now = datetime.now(timezone.utc)
 
         # Exclude snapshots still backing a registered AMI
@@ -69,8 +69,8 @@ def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
         result = []
         skipped = 0
 
-        for snap in ec2.describe_snapshots(OwnerIds=['self']).get('Snapshots', []):
-            snap_id = snap['SnapshotId']
+        for snap in ec2.describe_snapshots(OwnerIds=["self"]).get("Snapshots", []):
+            snap_id = snap["SnapshotId"]
 
             if snap_id in ami_snap_ids:
                 skipped += 1
@@ -78,12 +78,12 @@ def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
 
             # Managed by AWS Backup or Data Lifecycle Manager: their policies
             # own the retention, deleting would break backup chains
-            tag_keys = {t['Key'] for t in snap.get('Tags', [])}
-            if tag_keys & {'aws:backup:source-resource', 'aws:dlm:lifecycle-policy-id'}:
+            tag_keys = {t["Key"] for t in snap.get("Tags", [])}
+            if tag_keys & {"aws:backup:source-resource", "aws:dlm:lifecycle-policy-id"}:
                 skipped += 1
                 continue
 
-            start_time = snap.get('StartTime')
+            start_time = snap.get("StartTime")
             if not start_time:
                 continue
 
@@ -94,22 +94,26 @@ def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
             if age_days < SNAPSHOT_AGE_DAYS:
                 continue
 
-            size_gb = snap.get('VolumeSize', 0)
-            result.append({
-                'snapshot_id':  snap_id,
-                'description':  snap.get('Description') or '',
-                'volume_id':    snap.get('VolumeId') or '',
-                'size_gb':      size_gb,
-                'state':        snap.get('State', ''),
-                'start_time':   start_time.isoformat(),
-                'age_days':     age_days,
-                'encrypted':    snap.get('Encrypted', False),
-                'region':       region,
-                'monthly_cost': _snapshot_monthly_cost(size_gb),
-            })
+            size_gb = snap.get("VolumeSize", 0)
+            result.append(
+                {
+                    "snapshot_id": snap_id,
+                    "description": snap.get("Description") or "",
+                    "volume_id": snap.get("VolumeId") or "",
+                    "size_gb": size_gb,
+                    "state": snap.get("State", ""),
+                    "start_time": start_time.isoformat(),
+                    "age_days": age_days,
+                    "encrypted": snap.get("Encrypted", False),
+                    "region": region,
+                    "monthly_cost": _snapshot_monthly_cost(size_gb),
+                }
+            )
 
-        logger.info(f"  {region}: {len(result)} old snapshot(s) (>{SNAPSHOT_AGE_DAYS}d), "
-                    f"{skipped} skipped (AMI-backed)")
+        logger.info(
+            f"  {region}: {len(result)} old snapshot(s) (>{SNAPSHOT_AGE_DAYS}d), "
+            f"{skipped} skipped (AMI-backed)"
+        )
         return result, ami_snap_ids
     except Exception as e:
         logger.warning(f"  {region}: error — {e}")
@@ -119,18 +123,18 @@ def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
 class SnapshotOrphanDetector:
 
     def __init__(self):
-        db_vars = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+        db_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
         missing = [v for v in db_vars if not os.getenv(v)]
         if missing:
             raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
 
         self.conn = psycopg2.connect(
-            host=os.getenv('DB_HOST'),
-            port=int(os.getenv('DB_PORT')),
-            database=os.getenv('DB_NAME'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            connect_timeout=10
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT")),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            connect_timeout=10,
         )
 
     def detect(self) -> tuple:
@@ -139,8 +143,10 @@ class SnapshotOrphanDetector:
             results = list(executor.map(_fetch_old_snapshots, REGIONS))
         snapshots = [s for snaps, _ in results for s in snaps]
         all_ami_snap_ids = set().union(*[ids for _, ids in results])
-        logger.info(f"Total old snapshots found: {len(snapshots)} "
-                    f"({len(all_ami_snap_ids)} AMI-backed excluded)")
+        logger.info(
+            f"Total old snapshots found: {len(snapshots)} "
+            f"({len(all_ami_snap_ids)} AMI-backed excluded)"
+        )
         return snapshots, all_ami_snap_ids
 
     def save(self, snapshots: List[Dict[str, Any]]) -> List[int]:
@@ -148,18 +154,19 @@ class SnapshotOrphanDetector:
             return []
 
         cursor = self.conn.cursor()
-        account_id = os.getenv('AWS_ACCOUNT_ID', 'unknown')
+        account_id = os.getenv("AWS_ACCOUNT_ID", "unknown")
         today = date.today()
         waste_ids = []
 
         try:
             for snap in snapshots:
                 # Confidence increases with age: 90d=0.60, 180d=0.75, 365d=0.90
-                age = snap['age_days']
+                age = snap["age_days"]
                 confidence = min(0.90, 0.60 + (age - SNAPSHOT_AGE_DAYS) / 1000)
                 confidence = round(confidence, 2)
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO waste_detected (
                         detection_date, provider, account_id, resource_id,
                         resource_type, waste_type, monthly_waste_eur,
@@ -172,27 +179,33 @@ class SnapshotOrphanDetector:
                         metadata          = EXCLUDED.metadata,
                         updated_at        = NOW()
                     RETURNING id;
-                """, (
-                    today,
-                    'aws',
-                    account_id,
-                    snap['snapshot_id'],
-                    'ebs_snapshot',
-                    'old_snapshot',
-                    snap['monthly_cost'],
-                    confidence,
-                    json.dumps(stamp_pricing({
-                        'description':      snap['description'],
-                        'volume_id':        snap['volume_id'],
-                        'size_gb':          snap['size_gb'],
-                        'state':            snap['state'],
-                        'start_time':       snap['start_time'],
-                        'age_days':         snap['age_days'],
-                        'encrypted':        snap['encrypted'],
-                        'region':           snap['region'],
-                        'monthly_cost_eur': snap['monthly_cost'],
-                    }))
-                ))
+                """,
+                    (
+                        today,
+                        "aws",
+                        account_id,
+                        snap["snapshot_id"],
+                        "ebs_snapshot",
+                        "old_snapshot",
+                        snap["monthly_cost"],
+                        confidence,
+                        json.dumps(
+                            stamp_pricing(
+                                {
+                                    "description": snap["description"],
+                                    "volume_id": snap["volume_id"],
+                                    "size_gb": snap["size_gb"],
+                                    "state": snap["state"],
+                                    "start_time": snap["start_time"],
+                                    "age_days": snap["age_days"],
+                                    "encrypted": snap["encrypted"],
+                                    "region": snap["region"],
+                                    "monthly_cost_eur": snap["monthly_cost"],
+                                }
+                            )
+                        ),
+                    ),
+                )
                 waste_ids.append(cursor.fetchone()[0])
 
             self.conn.commit()
@@ -213,35 +226,41 @@ class SnapshotOrphanDetector:
         count = 0
 
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, resource_id, monthly_waste_eur, metadata
                 FROM waste_detected WHERE id = ANY(%s)
-            """, (waste_ids,))
+            """,
+                (waste_ids,),
+            )
 
             for row in cursor.fetchall():
                 waste_id, snapshot_id, monthly_cost, meta = row
                 if isinstance(meta, str):
                     meta = json.loads(meta)
-                size_gb = meta.get('size_gb', '?')
-                age_days = meta.get('age_days', '?')
-                region = meta.get('region', '')
-                desc = meta.get('description', '')
+                size_gb = meta.get("size_gb", "?")
+                age_days = meta.get("age_days", "?")
+                region = meta.get("region", "")
+                desc = meta.get("description", "")
                 label = f"{snapshot_id}" + (f" ({desc[:40]})" if desc else "")
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO recommendations (
                         waste_id, recommendation_type, action_required,
                         estimated_monthly_savings_eur, status
                     ) VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (waste_id) DO NOTHING;
-                """, (
-                    waste_id,
-                    'delete_snapshot',
-                    f"DELETE old snapshot {label} — "
-                    f"{size_gb} GiB, {age_days} days old, in {region}",
-                    monthly_cost,
-                    'pending'
-                ))
+                """,
+                    (
+                        waste_id,
+                        "delete_snapshot",
+                        f"DELETE old snapshot {label} — "
+                        f"{size_gb} GiB, {age_days} days old, in {region}",
+                        monthly_cost,
+                        "pending",
+                    ),
+                )
                 count += 1
 
             self.conn.commit()
@@ -260,14 +279,17 @@ class SnapshotOrphanDetector:
             return 0
         cursor = self.conn.cursor()
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE recommendations r SET status = 'obsolete'
                 FROM waste_detected w
                 WHERE r.waste_id = w.id
                   AND w.resource_type = 'ebs_snapshot'
                   AND w.resource_id = ANY(%s)
                   AND r.status = 'pending'
-            """, (list(ami_snap_ids),))
+            """,
+                (list(ami_snap_ids),),
+            )
             count = cursor.rowcount
             self.conn.commit()
             if count:
@@ -294,37 +316,42 @@ class SnapshotOrphanDetector:
 
         if not snapshots:
             from core.snapshots import snapshot_active_waste
+
             snapshot_active_waste(self.conn)
             print(f"No snapshots older than {SNAPSHOT_AGE_DAYS} days found.\n")
             return
 
-        total_waste = sum(s['monthly_cost'] for s in snapshots)
+        total_waste = sum(s["monthly_cost"] for s in snapshots)
         print(f"Old snapshots found:  {len(snapshots)}")
         print(f"Total monthly waste:  {total_waste:.2f} EUR/mo")
         print(f"Annual waste:         {total_waste * 12:.2f} EUR/year\n")
 
         for s in snapshots:
-            label = s['snapshot_id']
-            if s['description']:
+            label = s["snapshot_id"]
+            if s["description"]:
                 label += f" ({s['description'][:30]})"
-            print(f"  - {label}: {s['size_gb']} GiB, {s['age_days']}d old "
-                  f"({s['region']}) → {s['monthly_cost']:.2f} EUR/mo")
+            print(
+                f"  - {label}: {s['size_gb']} GiB, {s['age_days']}d old "
+                f"({s['region']}) → {s['monthly_cost']:.2f} EUR/mo"
+            )
 
         waste_ids = self.save(snapshots)
         rec_count = self.recommend(waste_ids)
 
         from core.snapshots import snapshot_active_waste
+
         snapshot_active_waste(self.conn)
 
         # AI insights (no-op unless WASTELESS_LLM_MODEL is configured)
         from core.llm import enrich_recommendations
+
         enrich_recommendations(self.conn)
 
         print(f"\nRecommendations created: {rec_count}")
         print("View at http://localhost:8888/recommendations\n")
 
     def close(self):
-        if hasattr(self, 'conn') and self.conn:
+        if hasattr(self, "conn") and self.conn:
             self.conn.close()
 
     def __del__(self):
@@ -344,5 +371,5 @@ def main():
             detector.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

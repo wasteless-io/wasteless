@@ -90,8 +90,7 @@ def collect_briefing_data(conn) -> Dict[str, Any]:
     def many(query, params=()):
         cursor.execute(query, params)
         rows = cursor.fetchall()
-        return [tuple(r.values()) if isinstance(r, dict) else tuple(r)
-                for r in rows]
+        return [tuple(r.values()) if isinstance(r, dict) else tuple(r) for r in rows]
 
     try:
         total_eur, total_count = one("""
@@ -125,9 +124,9 @@ def collect_briefing_data(conn) -> Dict[str, Any]:
         """)
 
         top_pending = [
-            {'action': a, 'resource_type': t, 'monthly_eur': float(e),
-             'waiting_days': int(d)}
-            for a, t, e, d in many("""
+            {"action": a, "resource_type": t, "monthly_eur": float(e), "waiting_days": int(d)}
+            for a, t, e, d in many(
+                """
                 SELECT r.action_required, w.resource_type,
                        r.estimated_monthly_savings_eur,
                        EXTRACT(DAY FROM NOW() - r.created_at)::int AS waiting_days
@@ -136,7 +135,9 @@ def collect_briefing_data(conn) -> Dict[str, Any]:
                 WHERE r.status = 'pending'
                 ORDER BY r.estimated_monthly_savings_eur DESC
                 LIMIT %s;
-            """, (TOP_PENDING_LIMIT,))
+            """,
+                (TOP_PENDING_LIMIT,),
+            )
         ]
 
         succeeded_7d, failed_7d, dry_run_7d = one("""
@@ -148,7 +149,7 @@ def collect_briefing_data(conn) -> Dict[str, Any]:
             WHERE action_date >= CURRENT_DATE - 7;
         """)
 
-        savings_total, = one("""
+        (savings_total,) = one("""
             SELECT COALESCE(SUM(actual_savings_eur), 0) AS eur FROM savings_realized;
         """)
 
@@ -156,47 +157,52 @@ def collect_briefing_data(conn) -> Dict[str, Any]:
         # Denominator: last complete calendar month, converted to EUR (the
         # writers store USD) — the current month would be a partial
         # month-to-date against a monthly waste rate.
-        month_spend, = one("""
+        (month_spend,) = one(
+            """
             SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
                                      ELSE cost END), 0) AS eur
             FROM cloud_costs_raw
             WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
               AND usage_date < DATE_TRUNC('month', CURRENT_DATE);
-        """, (USD_TO_EUR,))
+        """,
+            (USD_TO_EUR,),
+        )
 
-        last_scan_hours, = one("""
+        (last_scan_hours,) = one("""
             SELECT EXTRACT(EPOCH FROM (NOW() - MAX(updated_at))) / 3600 AS hours
             FROM waste_detected;
         """)
 
         return {
-            'date': date.today().isoformat(),
-            'active_waste': {
-                'monthly_eur': float(total_eur),
-                'count': int(total_count),
-                'by_type': by_type,
+            "date": date.today().isoformat(),
+            "active_waste": {
+                "monthly_eur": float(total_eur),
+                "count": int(total_count),
+                "by_type": by_type,
             },
-            'waste_trend': {
-                'yesterday_eur': float(yesterday_eur) if yesterday_eur is not None else None,
-                'week_ago_eur': float(week_ago_eur) if week_ago_eur is not None else None,
+            "waste_trend": {
+                "yesterday_eur": float(yesterday_eur) if yesterday_eur is not None else None,
+                "week_ago_eur": float(week_ago_eur) if week_ago_eur is not None else None,
             },
-            'pending': {
-                'count': int(pending_count),
-                'monthly_eur': float(pending_eur),
-                'oldest_days': int(oldest_days) if oldest_days is not None else None,
-                'top': top_pending,
+            "pending": {
+                "count": int(pending_count),
+                "monthly_eur": float(pending_eur),
+                "oldest_days": int(oldest_days) if oldest_days is not None else None,
+                "top": top_pending,
             },
-            'actions_7d': {
-                'succeeded': int(succeeded_7d),
-                'failed': int(failed_7d),
-                'dry_run': int(dry_run_7d),
+            "actions_7d": {
+                "succeeded": int(succeeded_7d),
+                "failed": int(failed_7d),
+                "dry_run": int(dry_run_7d),
             },
-            'verified_savings_eur': float(savings_total),
-            'last_month_spend_eur': float(month_spend) if month_spend else None,
-            'waste_rate_pct': round(float(total_eur) / float(month_spend) * 100, 1)
-                              if month_spend else None,
-            'last_scan_hours_ago': round(float(last_scan_hours), 1)
-                                   if last_scan_hours is not None else None,
+            "verified_savings_eur": float(savings_total),
+            "last_month_spend_eur": float(month_spend) if month_spend else None,
+            "waste_rate_pct": (
+                round(float(total_eur) / float(month_spend) * 100, 1) if month_spend else None
+            ),
+            "last_scan_hours_ago": (
+                round(float(last_scan_hours), 1) if last_scan_hours is not None else None
+            ),
         }
     finally:
         cursor.close()
@@ -213,14 +219,15 @@ def generate_briefing(data: Dict[str, Any], conn=None) -> Optional[str]:
 
     try:
         import litellm
+
         response = litellm.completion(
             model=os.getenv(llm.MODEL_ENV_VAR),
-            messages=[{'role': 'user', 'content': build_briefing_prompt(data)}],
+            messages=[{"role": "user", "content": build_briefing_prompt(data)}],
             max_tokens=MAX_TOKENS,
             temperature=0.2,
             timeout=TIMEOUT_SECONDS,
         )
-        llm.record_usage(conn, 'briefing', response)
+        llm.record_usage(conn, "briefing", response)
         briefing = response.choices[0].message.content
         return briefing.strip() if briefing else None
     except Exception as e:
@@ -244,10 +251,15 @@ def get_or_create_briefing(conn, refresh: bool = False) -> Optional[Dict[str, An
             """)
             row = cursor.fetchone()
             if row:
-                content, model, created_at = (tuple(row.values())
-                                              if isinstance(row, dict) else tuple(row))
-                return {'content': content, 'model': model,
-                        'created_at': created_at, 'cached': True}
+                content, model, created_at = (
+                    tuple(row.values()) if isinstance(row, dict) else tuple(row)
+                )
+                return {
+                    "content": content,
+                    "model": model,
+                    "created_at": created_at,
+                    "cached": True,
+                }
 
         if not llm.is_enabled():
             return None
@@ -258,7 +270,8 @@ def get_or_create_briefing(conn, refresh: bool = False) -> Optional[Dict[str, An
             return None
 
         model = os.getenv(llm.MODEL_ENV_VAR)
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO daily_briefings (briefing_date, content, model)
             VALUES (CURRENT_DATE, %s, %s)
             ON CONFLICT (briefing_date)
@@ -266,12 +279,13 @@ def get_or_create_briefing(conn, refresh: bool = False) -> Optional[Dict[str, An
                           model = EXCLUDED.model,
                           created_at = NOW()
             RETURNING created_at;
-        """, (content, model))
+        """,
+            (content, model),
+        )
         row = cursor.fetchone()
         created_at = (tuple(row.values()) if isinstance(row, dict) else tuple(row))[0]
         conn.commit()
-        return {'content': content, 'model': model,
-                'created_at': created_at, 'cached': False}
+        return {"content": content, "model": model, "created_at": created_at, "cached": False}
 
     except Exception as e:
         try:
@@ -287,24 +301,24 @@ def get_or_create_briefing(conn, refresh: bool = False) -> Optional[Dict[str, An
 
 def main() -> None:
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     parser = argparse.ArgumentParser(description="Print today's CTO briefing")
-    parser.add_argument('--refresh', action='store_true',
-                        help="Regenerate even if today's briefing is cached")
+    parser.add_argument(
+        "--refresh", action="store_true", help="Regenerate even if today's briefing is cached"
+    )
     args = parser.parse_args()
 
     from core.database import get_connection
+
     with get_connection() as conn:
         briefing = get_or_create_briefing(conn, refresh=args.refresh)
         if briefing:
-            print(briefing['content'])
+            print(briefing["content"])
         else:
-            print("No briefing available (LLM disabled or generation failed).",
-                  file=sys.stderr)
+            print("No briefing available (LLM disabled or generation failed).", file=sys.stderr)
             sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

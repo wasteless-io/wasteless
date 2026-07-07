@@ -40,25 +40,25 @@ logger = logging.getLogger(__name__)
 class SteampipeWasteDetector:
     """Template for detectors whose collection layer is a Steampipe query."""
 
-    query_name: str = ''             # sql/steampipe/<query_name>.sql
-    resource_type: str = ''          # waste_detected.resource_type
-    waste_type: str = ''             # waste_detected.waste_type
-    recommendation_type: str = ''    # recommendations.recommendation_type
-    banner: str = 'WASTE DETECTION'  # printed by run()
+    query_name: str = ""  # sql/steampipe/<query_name>.sql
+    resource_type: str = ""  # waste_detected.resource_type
+    waste_type: str = ""  # waste_detected.waste_type
+    recommendation_type: str = ""  # recommendations.recommendation_type
+    banner: str = "WASTE DETECTION"  # printed by run()
 
     def __init__(self):
-        db_vars = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+        db_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
         missing = [v for v in db_vars if not os.getenv(v)]
         if missing:
             raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
 
         self.conn = psycopg2.connect(
-            host=os.getenv('DB_HOST'),
-            port=int(os.getenv('DB_PORT')),
-            database=os.getenv('DB_NAME'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            connect_timeout=10
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT")),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            connect_timeout=10,
         )
 
     def map_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -76,17 +76,18 @@ class SteampipeWasteDetector:
             return []
 
         cursor = self.conn.cursor()
-        account_id = os.getenv('AWS_ACCOUNT_ID', 'unknown')
+        account_id = os.getenv("AWS_ACCOUNT_ID", "unknown")
         today = date.today()
         waste_ids = []
 
         try:
             for item in items:
-                metadata = stamp_pricing(item['metadata'])
+                metadata = stamp_pricing(item["metadata"])
                 # waste_type is refreshed too: a resource can move between
                 # detections over time (e.g. an orphaned volume gets attached
                 # and is later flagged for gp2 migration)
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO waste_detected (
                         detection_date, provider, account_id, resource_id,
                         resource_type, waste_type, monthly_waste_eur,
@@ -100,17 +101,19 @@ class SteampipeWasteDetector:
                         metadata          = EXCLUDED.metadata,
                         updated_at        = NOW()
                     RETURNING id;
-                """, (
-                    today,
-                    'aws',
-                    account_id,
-                    item['resource_id'],
-                    self.resource_type,
-                    self.waste_type,
-                    item['monthly_cost'],
-                    item['confidence'],
-                    json.dumps(metadata)
-                ))
+                """,
+                    (
+                        today,
+                        "aws",
+                        account_id,
+                        item["resource_id"],
+                        self.resource_type,
+                        self.waste_type,
+                        item["monthly_cost"],
+                        item["confidence"],
+                        json.dumps(metadata),
+                    ),
+                )
                 waste_ids.append(cursor.fetchone()[0])
 
             self.conn.commit()
@@ -132,19 +135,22 @@ class SteampipeWasteDetector:
 
         try:
             for waste_id, item in zip(waste_ids, items):
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO recommendations (
                         waste_id, recommendation_type, action_required,
                         estimated_monthly_savings_eur, status
                     ) VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (waste_id) DO NOTHING;
-                """, (
-                    waste_id,
-                    self.recommendation_type,
-                    item['action'],
-                    item['monthly_cost'],
-                    'pending'
-                ))
+                """,
+                    (
+                        waste_id,
+                        self.recommendation_type,
+                        item["action"],
+                        item["monthly_cost"],
+                        "pending",
+                    ),
+                )
                 count += 1
 
             self.conn.commit()
@@ -169,7 +175,7 @@ class SteampipeWasteDetector:
             print("Nothing detected — no waste of this type.\n")
             return
 
-        total_waste = sum(i['monthly_cost'] for i in items)
+        total_waste = sum(i["monthly_cost"] for i in items)
         print(f"Items found:         {len(items)}")
         print(f"Total monthly waste: {total_waste:.2f} EUR/mo")
         print(f"Annual waste:        {total_waste * 12:.2f} EUR/year\n")
@@ -188,7 +194,7 @@ class SteampipeWasteDetector:
         print("View at http://localhost:8888/recommendations\n")
 
     def close(self):
-        if hasattr(self, 'conn') and self.conn:
+        if hasattr(self, "conn") and self.conn:
             self.conn.close()
 
     def __del__(self):

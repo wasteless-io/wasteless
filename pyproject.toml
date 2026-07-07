@@ -1,0 +1,14 @@
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["venv", "venv.nosync", ".venv", "ui/venv", "ui/venv.nosync"]
+
+[tool.ruff.lint]
+# E402: this codebase relies on sys.path.insert()/load_dotenv() before local
+# imports in scripts and detectors (see CLAUDE.md) -- not fixable without a
+# packaging change, tracked separately.
+ignore = ["E402"]

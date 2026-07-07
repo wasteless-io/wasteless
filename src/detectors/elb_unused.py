@@ -22,51 +22,51 @@ from collectors.steampipe import SteampipeError
 from detectors.steampipe_base import SteampipeWasteDetector
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # EUR/month by load balancer type (approximate, hourly base only)
 ELB_MONTHLY_COST_EUR: Dict[str, float] = {
-    'application': 16.92,
-    'network':     16.92,
-    'gateway':     8.40,
-    'classic':     18.81,
+    "application": 16.92,
+    "network": 16.92,
+    "gateway": 8.40,
+    "classic": 18.81,
 }
 DEFAULT_ELB_COST_EUR = 16.92
 
 
 class ELBUnusedDetector(SteampipeWasteDetector):
-    query_name = 'elb_unused'
-    resource_type = 'load_balancer'
-    waste_type = 'unused_load_balancer'
-    recommendation_type = 'delete_load_balancer'
-    banner = 'UNUSED LOAD BALANCER DETECTION'
+    query_name = "elb_unused"
+    resource_type = "load_balancer"
+    waste_type = "unused_load_balancer"
+    recommendation_type = "delete_load_balancer"
+    banner = "UNUSED LOAD BALANCER DETECTION"
 
     def map_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         items = []
         for row in rows:
-            lb_type = row.get('lb_type') or 'application'
+            lb_type = row.get("lb_type") or "application"
             cost = ELB_MONTHLY_COST_EUR.get(lb_type, DEFAULT_ELB_COST_EUR)
-            reason = ("no instances attached" if lb_type == 'classic'
-                      else "no registered targets")
-            items.append({
-                'resource_id':  row.get('arn') or row['name'],
-                'monthly_cost': cost,
-                'confidence':   0.90,
-                'action': (
-                    f"DELETE unused {lb_type} load balancer {row['name']} "
-                    f"in {row.get('region', '')} — {reason}"
-                ),
-                'metadata': {
-                    'name':             row['name'],
-                    'lb_type':          lb_type,
-                    'arn':              row.get('arn') or '',
-                    'region':           row.get('region') or '',
-                    'monthly_cost_eur': cost,
-                },
-            })
+            reason = "no instances attached" if lb_type == "classic" else "no registered targets"
+            items.append(
+                {
+                    "resource_id": row.get("arn") or row["name"],
+                    "monthly_cost": cost,
+                    "confidence": 0.90,
+                    "action": (
+                        f"DELETE unused {lb_type} load balancer {row['name']} "
+                        f"in {row.get('region', '')} — {reason}"
+                    ),
+                    "metadata": {
+                        "name": row["name"],
+                        "lb_type": lb_type,
+                        "arn": row.get("arn") or "",
+                        "region": row.get("region") or "",
+                        "monthly_cost_eur": cost,
+                    },
+                }
+            )
         return items
 
 
@@ -86,5 +86,5 @@ def main():
             detector.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

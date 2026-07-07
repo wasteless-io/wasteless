@@ -20,9 +20,7 @@ Author: Wasteless
 
 import os
 import sys
-import boto3
 import argparse
-from datetime import datetime
 from typing import Set, Dict, List
 from dotenv import load_dotenv
 
@@ -35,9 +33,9 @@ from core.aws_clients import get_client
 load_dotenv()
 
 import logging
+
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -53,10 +51,10 @@ class RecommendationCleaner:
             dry_run: If True, only show what would be cleaned without making changes
         """
         self.dry_run = dry_run
-        self.region = os.getenv('AWS_REGION', 'eu-west-1')
+        self.region = os.getenv("AWS_REGION", "eu-west-1")
 
         # Initialize AWS client
-        self.ec2_client = get_client('ec2', region=self.region)
+        self.ec2_client = get_client("ec2", region=self.region)
 
         # Database connection
         self.conn = get_db_connection()
@@ -76,17 +74,17 @@ class RecommendationCleaner:
 
         try:
             # Pagination support for large accounts
-            paginator = self.ec2_client.get_paginator('describe_instances')
+            paginator = self.ec2_client.get_paginator("describe_instances")
 
             for page in paginator.paginate():
-                for reservation in page['Reservations']:
-                    for instance in reservation['Instances']:
-                        instance_id = instance['InstanceId']
-                        state = instance['State']['Name']
+                for reservation in page["Reservations"]:
+                    for instance in reservation["Instances"]:
+                        instance_id = instance["InstanceId"]
+                        state = instance["State"]["Name"]
 
                         # Include all instances EXCEPT terminated ones
                         # (terminated instances are truly gone after ~1 hour)
-                        if state != 'terminated':
+                        if state != "terminated":
                             instance_ids.add(instance_id)
                         else:
                             logger.debug(f"Skipping terminated instance: {instance_id}")
@@ -130,15 +128,17 @@ class RecommendationCleaner:
 
         recommendations = []
         for row in results:
-            recommendations.append({
-                'recommendation_id': row[0],
-                'waste_id': row[1],
-                'status': row[2],
-                'recommendation_type': row[3],
-                'resource_id': row[4],
-                'resource_type': row[5],
-                'detection_date': row[6]
-            })
+            recommendations.append(
+                {
+                    "recommendation_id": row[0],
+                    "waste_id": row[1],
+                    "status": row[2],
+                    "recommendation_type": row[3],
+                    "resource_id": row[4],
+                    "resource_type": row[5],
+                    "detection_date": row[6],
+                }
+            )
 
         cursor.close()
         logger.info(f"✅ Found {len(recommendations)} active recommendations")
@@ -159,7 +159,9 @@ class RecommendationCleaner:
             return 0
 
         if self.dry_run:
-            logger.info(f"[DRY-RUN] Would mark {len(recommendation_ids)} recommendations as obsolete")
+            logger.info(
+                f"[DRY-RUN] Would mark {len(recommendation_ids)} recommendations as obsolete"
+            )
             return len(recommendation_ids)
 
         cursor = self.conn.cursor()
@@ -195,7 +197,9 @@ class RecommendationCleaner:
         print("\n" + "=" * 70)
         print("🧹 CLEANUP ORPHANED RECOMMENDATIONS")
         print("=" * 70)
-        print(f"Mode: {'DRY-RUN (no changes will be made)' if self.dry_run else 'LIVE (will update database)'}")
+        print(
+            f"Mode: {'DRY-RUN (no changes will be made)' if self.dry_run else 'LIVE (will update database)'}"
+        )
         print(f"Region: {self.region}")
         print("=" * 70 + "\n")
 
@@ -213,7 +217,7 @@ class RecommendationCleaner:
         print("=" * 70)
 
         for rec in recommendations:
-            instance_id = rec['resource_id']
+            instance_id = rec["resource_id"]
 
             if instance_id not in aws_instance_ids:
                 orphaned_recommendations.append(rec)
@@ -246,7 +250,7 @@ class RecommendationCleaner:
 
         # Step 5: Mark as obsolete
         if orphaned_recommendations:
-            orphaned_ids = [rec['recommendation_id'] for rec in orphaned_recommendations]
+            orphaned_ids = [rec["recommendation_id"] for rec in orphaned_recommendations]
             updated_count = self.mark_as_obsolete(orphaned_ids)
 
             print("=" * 70)
@@ -264,19 +268,17 @@ class RecommendationCleaner:
 
     def __del__(self):
         """Close database connection on cleanup."""
-        if hasattr(self, 'conn'):
+        if hasattr(self, "conn"):
             self.conn.close()
 
 
 def main():
     """Main execution."""
     parser = argparse.ArgumentParser(
-        description='Clean up orphaned recommendations for deleted AWS resources'
+        description="Clean up orphaned recommendations for deleted AWS resources"
     )
     parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Show what would be cleaned without making changes'
+        "--dry-run", action="store_true", help="Show what would be cleaned without making changes"
     )
 
     args = parser.parse_args()
@@ -292,5 +294,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

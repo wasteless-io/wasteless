@@ -22,12 +22,14 @@ logger = logging.getLogger(__name__)
 
 class ConfigurationError(Exception):
     """Exception raised for configuration errors."""
+
     pass
 
 
 @dataclass
 class AWSConfig:
     """AWS-related configuration."""
+
     region: str
     account_id: str
     access_key_id: Optional[str] = None
@@ -38,13 +40,13 @@ class AWSConfig:
     role_arn: Optional[str] = None
     write_role_arn: Optional[str] = None
     external_id: Optional[str] = None
-    role_session_name: str = 'wasteless'
+    role_session_name: str = "wasteless"
 
     @classmethod
-    def from_env(cls) -> 'AWSConfig':
+    def from_env(cls) -> "AWSConfig":
         """Load AWS config from environment variables."""
-        region = os.getenv('AWS_REGION', 'eu-west-1')
-        account_id = os.getenv('AWS_ACCOUNT_ID', '')
+        region = os.getenv("AWS_REGION", "eu-west-1")
+        account_id = os.getenv("AWS_ACCOUNT_ID", "")
 
         if not account_id:
             logger.warning("AWS_ACCOUNT_ID not set, some features may not work")
@@ -52,18 +54,19 @@ class AWSConfig:
         return cls(
             region=region,
             account_id=account_id,
-            access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-            role_arn=os.getenv('AWS_ROLE_ARN'),
-            write_role_arn=os.getenv('AWS_WRITE_ROLE_ARN'),
-            external_id=os.getenv('AWS_EXTERNAL_ID'),
-            role_session_name=os.getenv('AWS_ROLE_SESSION_NAME', 'wasteless'),
+            access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            role_arn=os.getenv("AWS_ROLE_ARN"),
+            write_role_arn=os.getenv("AWS_WRITE_ROLE_ARN"),
+            external_id=os.getenv("AWS_EXTERNAL_ID"),
+            role_session_name=os.getenv("AWS_ROLE_SESSION_NAME", "wasteless"),
         )
 
 
 @dataclass
 class DatabaseConfig:
     """Database configuration."""
+
     host: str
     port: int
     name: str
@@ -74,9 +77,9 @@ class DatabaseConfig:
     connect_timeout: int = 10
 
     @classmethod
-    def from_env(cls) -> 'DatabaseConfig':
+    def from_env(cls) -> "DatabaseConfig":
         """Load database config from environment variables."""
-        required = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+        required = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
         missing = [var for var in required if not os.getenv(var)]
 
         if missing:
@@ -85,14 +88,14 @@ class DatabaseConfig:
             )
 
         return cls(
-            host=os.getenv('DB_HOST'),
-            port=int(os.getenv('DB_PORT')),
-            name=os.getenv('DB_NAME'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            min_connections=int(os.getenv('DB_MIN_CONNECTIONS', '2')),
-            max_connections=int(os.getenv('DB_MAX_CONNECTIONS', '10')),
-            connect_timeout=int(os.getenv('DB_CONNECT_TIMEOUT', '10')),
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT")),
+            name=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            min_connections=int(os.getenv("DB_MIN_CONNECTIONS", "2")),
+            max_connections=int(os.getenv("DB_MAX_CONNECTIONS", "10")),
+            connect_timeout=int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
         )
 
     def to_dsn(self) -> str:
@@ -105,18 +108,19 @@ class DatabaseConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Return connection parameters as dictionary."""
         return {
-            'host': self.host,
-            'port': self.port,
-            'database': self.name,
-            'user': self.user,
-            'password': self.password,
-            'connect_timeout': self.connect_timeout,
+            "host": self.host,
+            "port": self.port,
+            "database": self.name,
+            "user": self.user,
+            "password": self.password,
+            "connect_timeout": self.connect_timeout,
         }
 
 
 @dataclass
 class DetectorConfig:
     """Configuration for waste detection."""
+
     cpu_threshold: float = 5.0
     analysis_days: int = 7
     min_datapoints: int = 3
@@ -136,10 +140,11 @@ class DetectorConfig:
 @dataclass
 class TerraformPRConfig:
     """Configuration for Terraform PR remediation (GitOps mode)."""
+
     enabled: bool = False
-    repo: str = ''  # GitHub repo "owner/name" holding the Terraform code
-    base_branch: str = 'main'
-    terraform_dir: str = '.'  # Path of the Terraform root module within the repo
+    repo: str = ""  # GitHub repo "owner/name" holding the Terraform code
+    base_branch: str = "main"
+    terraform_dir: str = "."  # Path of the Terraform root module within the repo
     pr_threshold_eur: float = 50.0  # Monthly savings above which a PR is required
     pr_required_resource_types: list = field(default_factory=list)
 
@@ -152,20 +157,21 @@ class TerraformPRConfig:
         return monthly_savings_eur >= self.pr_threshold_eur
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'TerraformPRConfig':
+    def from_dict(cls, data: dict) -> "TerraformPRConfig":
         return cls(
-            enabled=data.get('enabled', False),
-            repo=data.get('repo', ''),
-            base_branch=data.get('base_branch', 'main'),
-            terraform_dir=data.get('terraform_dir', '.'),
-            pr_threshold_eur=float(data.get('pr_threshold_eur', 50.0)),
-            pr_required_resource_types=data.get('pr_required_resource_types', []) or [],
+            enabled=data.get("enabled", False),
+            repo=data.get("repo", ""),
+            base_branch=data.get("base_branch", "main"),
+            terraform_dir=data.get("terraform_dir", "."),
+            pr_threshold_eur=float(data.get("pr_threshold_eur", 50.0)),
+            pr_required_resource_types=data.get("pr_required_resource_types", []) or [],
         )
 
 
 @dataclass
 class RemediationConfig:
     """Configuration for auto-remediation."""
+
     enabled: bool = False
     dry_run_days: int = 7
     min_instance_age_days: int = 30
@@ -184,10 +190,10 @@ class RemediationConfig:
         return self.action_toggles.get(action_type, True)
 
     @classmethod
-    def from_yaml(cls, config_path: str = "config/remediation.yaml") -> 'RemediationConfig':
+    def from_yaml(cls, config_path: str = "config/remediation.yaml") -> "RemediationConfig":
         """Load remediation config from YAML file."""
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
         except FileNotFoundError:
             logger.warning(f"Config file {config_path} not found, using defaults")
@@ -198,30 +204,31 @@ class RemediationConfig:
         if config is None:
             return cls()
 
-        auto_rem = config.get('auto_remediation', {})
-        protection = config.get('protection', {})
-        whitelist = config.get('whitelist', {})
-        schedule = config.get('schedule', {})
+        auto_rem = config.get("auto_remediation", {})
+        protection = config.get("protection", {})
+        whitelist = config.get("whitelist", {})
+        schedule = config.get("schedule", {})
 
         return cls(
-            enabled=auto_rem.get('enabled', False),
-            dry_run_days=auto_rem.get('dry_run_days', 7),
-            min_instance_age_days=protection.get('min_instance_age_days', 30),
-            min_idle_days=protection.get('min_idle_days', 14),
-            min_confidence_score=protection.get('min_confidence_score', 0.80),
-            max_instances_per_run=protection.get('max_instances_per_run', 3),
-            whitelisted_instance_ids=whitelist.get('instance_ids', []),
-            whitelisted_tags=whitelist.get('tags', []),
-            allowed_days=schedule.get('allowed_days', []),
-            allowed_hours=schedule.get('allowed_hours', []),
-            action_toggles=auto_rem.get('actions', {}) or {},
-            terraform_pr=TerraformPRConfig.from_dict(config.get('terraform_pr', {}) or {}),
+            enabled=auto_rem.get("enabled", False),
+            dry_run_days=auto_rem.get("dry_run_days", 7),
+            min_instance_age_days=protection.get("min_instance_age_days", 30),
+            min_idle_days=protection.get("min_idle_days", 14),
+            min_confidence_score=protection.get("min_confidence_score", 0.80),
+            max_instances_per_run=protection.get("max_instances_per_run", 3),
+            whitelisted_instance_ids=whitelist.get("instance_ids", []),
+            whitelisted_tags=whitelist.get("tags", []),
+            allowed_days=schedule.get("allowed_days", []),
+            allowed_hours=schedule.get("allowed_hours", []),
+            action_toggles=auto_rem.get("actions", {}) or {},
+            terraform_pr=TerraformPRConfig.from_dict(config.get("terraform_pr", {}) or {}),
         )
 
 
 @dataclass
 class AppConfig:
     """Main application configuration container."""
+
     aws: AWSConfig
     database: DatabaseConfig
     detector: DetectorConfig
@@ -230,10 +237,10 @@ class AppConfig:
     dry_run: bool = True
 
     @classmethod
-    def load(cls, remediation_config_path: str = "config/remediation.yaml") -> 'AppConfig':
+    def load(cls, remediation_config_path: str = "config/remediation.yaml") -> "AppConfig":
         """Load complete application configuration."""
-        log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
-        dry_run = os.getenv('DRY_RUN', 'true').lower() in ('true', '1', 'yes')
+        log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+        dry_run = os.getenv("DRY_RUN", "true").lower() in ("true", "1", "yes")
 
         return cls(
             aws=AWSConfig.from_env(),
@@ -268,14 +275,14 @@ def setup_logging(level: Optional[str] = None) -> None:
                If None, uses config or defaults to INFO
     """
     if level is None:
-        level = os.getenv('LOG_LEVEL', 'INFO').upper()
+        level = os.getenv("LOG_LEVEL", "INFO").upper()
 
     numeric_level = getattr(logging, level, logging.INFO)
 
     logging.basicConfig(
         level=numeric_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     logger.info(f"Logging configured at {level} level")
@@ -289,15 +296,25 @@ def validate_environment() -> Dict[str, bool]:
         Dict mapping variable names to their presence status
     """
     required_vars = [
-        'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD',
-        'AWS_REGION', 'AWS_ACCOUNT_ID'
+        "DB_HOST",
+        "DB_PORT",
+        "DB_NAME",
+        "DB_USER",
+        "DB_PASSWORD",
+        "AWS_REGION",
+        "AWS_ACCOUNT_ID",
     ]
 
     optional_vars = [
-        'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY',
-        'AWS_ROLE_ARN', 'AWS_WRITE_ROLE_ARN', 'AWS_EXTERNAL_ID',
-        'AWS_ROLE_SESSION_NAME',
-        'METABASE_URL', 'LOG_LEVEL', 'DRY_RUN'
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_ROLE_ARN",
+        "AWS_WRITE_ROLE_ARN",
+        "AWS_EXTERNAL_ID",
+        "AWS_ROLE_SESSION_NAME",
+        "METABASE_URL",
+        "LOG_LEVEL",
+        "DRY_RUN",
     ]
 
     status = {}

@@ -32,31 +32,33 @@ from core.pricing import stamp_pricing
 load_dotenv()
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 EIP_MONTHLY_COST_EUR = 3.36  # $0.005/hr * 730h * 0.92 EUR/USD
-REGIONS = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
+REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
 
 
 def _fetch_unassociated_eips(region: str) -> List[Dict[str, Any]]:
     try:
         from core.aws_clients import get_client
-        ec2 = get_client('ec2', region=region)
+
+        ec2 = get_client("ec2", region=region)
         result = []
-        for addr in ec2.describe_addresses().get('Addresses', []):
+        for addr in ec2.describe_addresses().get("Addresses", []):
             # Skip if associated with an instance or network interface
-            if addr.get('InstanceId') or addr.get('NetworkInterfaceId'):
+            if addr.get("InstanceId") or addr.get("NetworkInterfaceId"):
                 continue
-            result.append({
-                'allocation_id': addr.get('AllocationId', addr.get('PublicIp')),
-                'public_ip':     addr.get('PublicIp', ''),
-                'domain':        addr.get('Domain', 'vpc'),
-                'region':        region,
-                'monthly_cost':  EIP_MONTHLY_COST_EUR,
-            })
+            result.append(
+                {
+                    "allocation_id": addr.get("AllocationId", addr.get("PublicIp")),
+                    "public_ip": addr.get("PublicIp", ""),
+                    "domain": addr.get("Domain", "vpc"),
+                    "region": region,
+                    "monthly_cost": EIP_MONTHLY_COST_EUR,
+                }
+            )
         logger.info(f"  {region}: {len(result)} unassociated EIP(s)")
         return result
     except Exception as e:
@@ -67,18 +69,18 @@ def _fetch_unassociated_eips(region: str) -> List[Dict[str, Any]]:
 class EIPOrphanDetector:
 
     def __init__(self):
-        db_vars = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+        db_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
         missing = [v for v in db_vars if not os.getenv(v)]
         if missing:
             raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
 
         self.conn = psycopg2.connect(
-            host=os.getenv('DB_HOST'),
-            port=int(os.getenv('DB_PORT')),
-            database=os.getenv('DB_NAME'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            connect_timeout=10
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT")),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            connect_timeout=10,
         )
 
     def detect(self) -> List[Dict[str, Any]]:
@@ -94,13 +96,14 @@ class EIPOrphanDetector:
             return []
 
         cursor = self.conn.cursor()
-        account_id = os.getenv('AWS_ACCOUNT_ID', 'unknown')
+        account_id = os.getenv("AWS_ACCOUNT_ID", "unknown")
         today = date.today()
         waste_ids = []
 
         try:
             for eip in eips:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO waste_detected (
                         detection_date, provider, account_id, resource_id,
                         resource_type, waste_type, monthly_waste_eur,
@@ -113,23 +116,29 @@ class EIPOrphanDetector:
                         metadata          = EXCLUDED.metadata,
                         updated_at        = NOW()
                     RETURNING id;
-                """, (
-                    today,
-                    'aws',
-                    account_id,
-                    eip['allocation_id'],
-                    'elastic_ip',
-                    'unassociated_ip',
-                    eip['monthly_cost'],
-                    0.99,  # unambiguous — no association = billing waste
-                    json.dumps(stamp_pricing({
-                        'public_ip':        eip['public_ip'],
-                        'allocation_id':    eip['allocation_id'],
-                        'domain':           eip['domain'],
-                        'region':           eip['region'],
-                        'monthly_cost_eur': eip['monthly_cost'],
-                    }))
-                ))
+                """,
+                    (
+                        today,
+                        "aws",
+                        account_id,
+                        eip["allocation_id"],
+                        "elastic_ip",
+                        "unassociated_ip",
+                        eip["monthly_cost"],
+                        0.99,  # unambiguous — no association = billing waste
+                        json.dumps(
+                            stamp_pricing(
+                                {
+                                    "public_ip": eip["public_ip"],
+                                    "allocation_id": eip["allocation_id"],
+                                    "domain": eip["domain"],
+                                    "region": eip["region"],
+                                    "monthly_cost_eur": eip["monthly_cost"],
+                                }
+                            )
+                        ),
+                    ),
+                )
                 waste_ids.append(cursor.fetchone()[0])
 
             self.conn.commit()
@@ -150,32 +159,38 @@ class EIPOrphanDetector:
         count = 0
 
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, resource_id, monthly_waste_eur, metadata
                 FROM waste_detected WHERE id = ANY(%s)
-            """, (waste_ids,))
+            """,
+                (waste_ids,),
+            )
 
             for row in cursor.fetchall():
                 waste_id, allocation_id, monthly_cost, meta = row
                 if isinstance(meta, str):
                     meta = json.loads(meta)
-                public_ip = meta.get('public_ip', allocation_id)
-                region = meta.get('region', '')
+                public_ip = meta.get("public_ip", allocation_id)
+                region = meta.get("region", "")
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO recommendations (
                         waste_id, recommendation_type, action_required,
                         estimated_monthly_savings_eur, status
                     ) VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (waste_id) DO NOTHING;
-                """, (
-                    waste_id,
-                    'release_ip',
-                    f"RELEASE unassociated Elastic IP {public_ip} ({allocation_id}) in {region} — "
-                    f"not attached to any instance or interface",
-                    monthly_cost,
-                    'pending'
-                ))
+                """,
+                    (
+                        waste_id,
+                        "release_ip",
+                        f"RELEASE unassociated Elastic IP {public_ip} ({allocation_id}) in {region} — "
+                        f"not attached to any instance or interface",
+                        monthly_cost,
+                        "pending",
+                    ),
+                )
                 count += 1
 
             self.conn.commit()
@@ -197,34 +212,39 @@ class EIPOrphanDetector:
 
         if not eips:
             from core.snapshots import snapshot_active_waste
+
             snapshot_active_waste(self.conn)
             print("No unassociated Elastic IPs found.\n")
             return
 
-        total_waste = sum(e['monthly_cost'] for e in eips)
+        total_waste = sum(e["monthly_cost"] for e in eips)
         print(f"Unassociated EIPs found: {len(eips)}")
         print(f"Total monthly waste:     {total_waste:.2f} EUR/mo")
         print(f"Annual waste:            {total_waste * 12:.2f} EUR/year\n")
 
         for e in eips:
-            print(f"  - {e['public_ip']} ({e['allocation_id']}) in {e['region']} "
-                  f"→ {e['monthly_cost']:.2f} EUR/mo")
+            print(
+                f"  - {e['public_ip']} ({e['allocation_id']}) in {e['region']} "
+                f"→ {e['monthly_cost']:.2f} EUR/mo"
+            )
 
         waste_ids = self.save(eips)
         rec_count = self.recommend(waste_ids)
 
         from core.snapshots import snapshot_active_waste
+
         snapshot_active_waste(self.conn)
 
         # AI insights (no-op unless WASTELESS_LLM_MODEL is configured)
         from core.llm import enrich_recommendations
+
         enrich_recommendations(self.conn)
 
         print(f"\nRecommendations created: {rec_count}")
         print("View at http://localhost:8888/recommendations\n")
 
     def close(self):
-        if hasattr(self, 'conn') and self.conn:
+        if hasattr(self, "conn") and self.conn:
             self.conn.close()
 
     def __del__(self):
@@ -244,5 +264,5 @@ def main():
             detector.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

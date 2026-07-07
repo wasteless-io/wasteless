@@ -24,9 +24,8 @@ from utils.config_manager import (
 class TestGracePeriodConfig(unittest.TestCase):
 
     def setUp(self):
-        self.tmp = tempfile.NamedTemporaryFile(
-            mode='w', suffix='.yaml', delete=False)
-        yaml.safe_dump({'auto_remediation': {'enabled': False}}, self.tmp)
+        self.tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False)
+        yaml.safe_dump({"auto_remediation": {"enabled": False}}, self.tmp)
         self.tmp.close()
         self.manager = ConfigManager(config_path=self.tmp.name)
 
@@ -54,14 +53,14 @@ class TestGracePeriodConfig(unittest.TestCase):
             self.manager.set_grace_period_days(-1)
 
     def test_type_coercion(self):
-        self.manager.set_grace_period_days('7')
+        self.manager.set_grace_period_days("7")
         self.assertEqual(self.manager.get_grace_period_days(), 7)
 
     def test_validation_limits_registered(self):
-        self.assertEqual(validate_config_value('grace_period_days', 30), 30)
+        self.assertEqual(validate_config_value("grace_period_days", 30), 30)
         with self.assertRaises(ConfigValidationError):
-            validate_config_value('grace_period_days', 'abc')
+            validate_config_value("grace_period_days", "abc")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -16,7 +16,7 @@ import os
 import sys
 from typing import Any, Dict, List
 
-sys.path.insert(0, os.path.dirname(__file__) + '/..')
+sys.path.insert(0, os.path.dirname(__file__) + "/..")
 
 from core.finops_invariants import (  # noqa: E402
     Violation,
@@ -28,35 +28,39 @@ from core.finops_invariants import (  # noqa: E402
 # used in section 11. Any rule not in this dict still surfaces (see
 # _section_11) but without a friendly label.
 CHECK_LABELS = {
-    'waste_within_spend': 'Waste percentage calculation',
-    'potential_within_detected': 'Potential vs. detected savings',
-    'yearly_is_monthly_x12': 'Monthly to annual savings consistency',
-    'reduction_recomputable': 'Reduction percentage recomputable',
-    'forecast_not_below_spend': 'Forecast sanity',
-    'budget_used_recomputable': 'Budget usage calculation',
-    'service_sum_matches_total': 'Service cost sum',
-    'duplicate_resource': 'Duplicate resources',
-    'saving_within_resource_cost': 'Saving does not exceed resource cost',
-    'risk_floor': 'Production destructive action safety',
+    "waste_within_spend": "Waste percentage calculation",
+    "potential_within_detected": "Potential vs. detected savings",
+    "yearly_is_monthly_x12": "Monthly to annual savings consistency",
+    "reduction_recomputable": "Reduction percentage recomputable",
+    "forecast_not_below_spend": "Forecast sanity",
+    "budget_used_recomputable": "Budget usage calculation",
+    "service_sum_matches_total": "Service cost sum",
+    "duplicate_resource": "Duplicate resources",
+    "saving_within_resource_cost": "Saving does not exceed resource cost",
+    "risk_floor": "Production destructive action safety",
 }
 
 # Checks that audit_dataset() can run only when both operands are present in
 # the dataset. Declaring them here lets section 11 report "Not enough data"
 # instead of silently omitting the row.
 CHECK_REQUIREMENTS = {
-    'waste_within_spend': ('cloud_spend_monthly', 'detected_waste_monthly'),
-    'potential_within_detected': ('detected_waste_monthly', 'potential_savings_monthly'),
-    'yearly_is_monthly_x12': ('potential_savings_monthly', 'potential_savings_yearly'),
-    'reduction_recomputable': ('reduction_percentage', 'cloud_spend_monthly', 'potential_savings_monthly'),
-    'forecast_not_below_spend': ('forecast_end_of_month', 'cloud_spend_monthly'),
-    'budget_used_recomputable': ('budget_monthly', 'cloud_spend_monthly', 'budget_used_percentage'),
-    'service_sum_matches_total': ('services', 'cloud_spend_monthly'),
-    'duplicate_resource': ('recommendations',),
-    'saving_within_resource_cost': ('recommendations',),
-    'risk_floor': ('recommendations',),
+    "waste_within_spend": ("cloud_spend_monthly", "detected_waste_monthly"),
+    "potential_within_detected": ("detected_waste_monthly", "potential_savings_monthly"),
+    "yearly_is_monthly_x12": ("potential_savings_monthly", "potential_savings_yearly"),
+    "reduction_recomputable": (
+        "reduction_percentage",
+        "cloud_spend_monthly",
+        "potential_savings_monthly",
+    ),
+    "forecast_not_below_spend": ("forecast_end_of_month", "cloud_spend_monthly"),
+    "budget_used_recomputable": ("budget_monthly", "cloud_spend_monthly", "budget_used_percentage"),
+    "service_sum_matches_total": ("services", "cloud_spend_monthly"),
+    "duplicate_resource": ("recommendations",),
+    "saving_within_resource_cost": ("recommendations",),
+    "risk_floor": ("recommendations",),
 }
 
-RISK_LEVELS = ('critical', 'high', 'medium', 'low')
+RISK_LEVELS = ("critical", "high", "medium", "low")
 
 
 def _fmt_eur(value: Any) -> str:
@@ -83,11 +87,11 @@ def _get(d: Dict[str, Any], *path, default="Not provided"):
 
 
 def _section_1(dataset: Dict[str, Any]) -> str:
-    meta = dataset.get('meta', {})
+    meta = dataset.get("meta", {})
     fin = dataset
-    recs = dataset.get('recommendations', [])
-    high_confidence = sum(1 for r in recs if (r.get('confidence') or 0) >= 0.80)
-    critical = sum(1 for r in recs if r.get('risk') == 'critical')
+    recs = dataset.get("recommendations", [])
+    high_confidence = sum(1 for r in recs if (r.get("confidence") or 0) >= 0.80)
+    critical = sum(1 for r in recs if r.get("risk") == "critical")
 
     lines = [
         "## 1. Executive Summary",
@@ -118,9 +122,9 @@ def _section_1(dataset: Dict[str, Any]) -> str:
 
 
 def _section_2(dataset: Dict[str, Any]) -> str:
-    scope = dataset.get('scope', {})
-    analyzed = scope.get('analyzed_services', [])
-    exclusions = scope.get('exclusions', [])
+    scope = dataset.get("scope", {})
+    analyzed = scope.get("analyzed_services", [])
+    exclusions = scope.get("exclusions", [])
     lines = ["## 2. Audit Scope", "", "### Analyzed services", ""]
     lines += [f"- {s}" for s in analyzed] or ["- Not provided"]
     lines += ["", "### Exclusions", ""]
@@ -131,15 +135,18 @@ def _section_2(dataset: Dict[str, Any]) -> str:
 def _section_3(dataset: Dict[str, Any]) -> str:
     fin = dataset
     rows = [
-        ("Monthly spend", _fmt_eur(fin.get('cloud_spend_monthly'))),
-        ("Forecast", _fmt_eur(fin.get('forecast_end_of_month'))),
-        ("Budget", _fmt_eur(fin.get('budget_monthly'))),
-        ("Budget usage", _fmt_pct(fin.get('budget_used_percentage'))),
-        ("Detected waste", _fmt_eur(fin.get('detected_waste_monthly'))),
-        ("Potential savings", _fmt_eur(fin.get('potential_savings_monthly'))),
-        ("Annualized potential savings", _fmt_eur(fin.get('potential_savings_yearly'))),
-        ("Realized savings", _fmt_eur(fin.get('realized_savings_monthly', 0))),
-        ("Confirmed savings (verified via Cost Explorer)", _fmt_eur(fin.get('confirmed_savings_monthly', 0))),
+        ("Monthly spend", _fmt_eur(fin.get("cloud_spend_monthly"))),
+        ("Forecast", _fmt_eur(fin.get("forecast_end_of_month"))),
+        ("Budget", _fmt_eur(fin.get("budget_monthly"))),
+        ("Budget usage", _fmt_pct(fin.get("budget_used_percentage"))),
+        ("Detected waste", _fmt_eur(fin.get("detected_waste_monthly"))),
+        ("Potential savings", _fmt_eur(fin.get("potential_savings_monthly"))),
+        ("Annualized potential savings", _fmt_eur(fin.get("potential_savings_yearly"))),
+        ("Realized savings", _fmt_eur(fin.get("realized_savings_monthly", 0))),
+        (
+            "Confirmed savings (verified via Cost Explorer)",
+            _fmt_eur(fin.get("confirmed_savings_monthly", 0)),
+        ),
     ]
     lines = ["## 3. Financial Overview", "", "| Metric | Value |", "|---|---:|"]
     lines += [f"| {label} | {value} |" for label, value in rows]
@@ -147,29 +154,35 @@ def _section_3(dataset: Dict[str, Any]) -> str:
 
 
 def _section_4(dataset: Dict[str, Any]) -> str:
-    services = dataset.get('services', [])
-    spend = dataset.get('cloud_spend_monthly') or 0
+    services = dataset.get("services", [])
+    spend = dataset.get("cloud_spend_monthly") or 0
     lines = ["## 4. Cost Breakdown by Service", "", "| Service | Cost | Share |", "|---|---:|---:|"]
     for s in services:
-        share = (s['monthly_cost'] / spend * 100) if spend else 0
+        share = (s["monthly_cost"] / spend * 100) if spend else 0
         lines.append(f"| {s['name']} | {_fmt_eur(s['monthly_cost'])} | {share:.1f}% |")
-    accounted = sum(s['monthly_cost'] for s in services)
+    accounted = sum(s["monthly_cost"] for s in services)
     if spend and abs(spend - accounted) > max(spend * 0.005, 0.01):
-        lines.append(f"| Other (unaccounted) | {_fmt_eur(spend - accounted)} | {(spend - accounted) / spend * 100:.1f}% |")
+        lines.append(
+            f"| Other (unaccounted) | {_fmt_eur(spend - accounted)} | {(spend - accounted) / spend * 100:.1f}% |"
+        )
     return "\n".join(lines)
 
 
 def _section_5(dataset: Dict[str, Any]) -> str:
-    recs = sorted(dataset.get('recommendations', []),
-                   key=lambda r: r.get('potential_saving', 0), reverse=True)
+    recs = sorted(
+        dataset.get("recommendations", []), key=lambda r: r.get("potential_saving", 0), reverse=True
+    )
     lines = [
-        "## 5. Top Recommendations", "",
+        "## 5. Top Recommendations",
+        "",
         "| Priority | Resource | Service | Env | Owner | Saving | Risk | Confidence | Action |",
         "|---:|---|---|---|---|---:|---|---|---|",
     ]
     for i, r in enumerate(recs, start=1):
-        confidence = r.get('confidence')
-        confidence_str = f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "Not provided"
+        confidence = r.get("confidence")
+        confidence_str = (
+            f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "Not provided"
+        )
         lines.append(
             f"| {i} | {r.get('resource_id', 'Not provided')} | {r.get('service', 'Not provided')} | "
             f"{r.get('environment', 'Not provided')} | {r.get('owner') or 'Not provided'} | "
@@ -180,11 +193,13 @@ def _section_5(dataset: Dict[str, Any]) -> str:
 
 
 def _section_6(dataset: Dict[str, Any]) -> str:
-    recs = dataset.get('recommendations', [])
+    recs = dataset.get("recommendations", [])
     blocks = ["## 6. Detailed Findings"]
     for r in recs:
-        evidence = r.get('evidence') or {}
-        evidence_lines = "\n".join(f"  - {k}: {v}" for k, v in evidence.items()) or "  - Not provided"
+        evidence = r.get("evidence") or {}
+        evidence_lines = (
+            "\n".join(f"  - {k}: {v}" for k, v in evidence.items()) or "  - Not provided"
+        )
         blocks.append(f"""
 ### Recommendation: {r.get('id', 'Not provided')}
 
@@ -208,15 +223,17 @@ def _section_6(dataset: Dict[str, Any]) -> str:
 
 
 def _section_7(dataset: Dict[str, Any]) -> str:
-    recs = dataset.get('recommendations', [])
+    recs = dataset.get("recommendations", [])
     counts = {level: 0 for level in RISK_LEVELS}
     for r in recs:
-        risk = r.get('risk')
+        risk = r.get("risk")
         if risk in counts:
             counts[risk] += 1
     lines = [
-        "## 7. Risk Summary", "",
-        "| Risk level | Count | Comment |", "|---|---:|---|",
+        "## 7. Risk Summary",
+        "",
+        "| Risk level | Count | Comment |",
+        "|---|---:|---|",
         f"| Low | {counts['low']} | |",
         f"| Medium | {counts['medium']} | |",
         f"| High | {counts['high']} | |",
@@ -224,7 +241,7 @@ def _section_7(dataset: Dict[str, Any]) -> str:
         "",
         "No production destructive action should be executed without explicit approval.",
     ]
-    red_flags = [r for r in recs if r.get('risk') in ('high', 'critical')]
+    red_flags = [r for r in recs if r.get("risk") in ("high", "critical")]
     if red_flags:
         lines += ["", "### Operational Red Flags", ""]
         for r in red_flags:
@@ -237,13 +254,13 @@ def _section_7(dataset: Dict[str, Any]) -> str:
 
 
 def _section_8(dataset: Dict[str, Any]) -> str:
-    tagging = dataset.get('tagging', {})
+    tagging = dataset.get("tagging", {})
     rows = [
-        ("Resources analyzed", tagging.get('resources_analyzed', 'Not provided')),
-        ("Owner tag coverage", _fmt_pct(tagging.get('owner_tag_coverage_pct'))),
-        ("Environment tag coverage", _fmt_pct(tagging.get('environment_tag_coverage_pct'))),
-        ("Untagged spend", _fmt_eur(tagging.get('untagged_spend_eur'))),
-        ("Resources without owner", tagging.get('resources_without_owner', 'Not provided')),
+        ("Resources analyzed", tagging.get("resources_analyzed", "Not provided")),
+        ("Owner tag coverage", _fmt_pct(tagging.get("owner_tag_coverage_pct"))),
+        ("Environment tag coverage", _fmt_pct(tagging.get("environment_tag_coverage_pct"))),
+        ("Untagged spend", _fmt_eur(tagging.get("untagged_spend_eur"))),
+        ("Resources without owner", tagging.get("resources_without_owner", "Not provided")),
     ]
     lines = ["## 8. Tagging & Ownership", "", "| Metric | Value |", "|---|---:|"]
     lines += [f"| {label} | {value} |" for label, value in rows]
@@ -285,15 +302,15 @@ signal. A missing currency or period caps confidence at low regardless of signal
 
 
 def _section_10(dataset: Dict[str, Any]) -> str:
-    a = dataset.get('assumptions', {})
+    a = dataset.get("assumptions", {})
     fields = [
-        ("Pricing source", a.get('pricing_source')),
-        ("Currency", dataset.get('currency')),
-        ("Period", a.get('period')),
-        ("Forecast method", a.get('forecast_method')),
-        ("Services not analyzed", ", ".join(a.get('services_not_analyzed', [])) or None),
-        ("Discounts not included", ", ".join(a.get('discounts_not_included', [])) or None),
-        ("Data freshness", a.get('data_freshness')),
+        ("Pricing source", a.get("pricing_source")),
+        ("Currency", dataset.get("currency")),
+        ("Period", a.get("period")),
+        ("Forecast method", a.get("forecast_method")),
+        ("Services not analyzed", ", ".join(a.get("services_not_analyzed", [])) or None),
+        ("Discounts not included", ", ".join(a.get("discounts_not_included", [])) or None),
+        ("Data freshness", a.get("data_freshness")),
     ]
     lines = ["## 10. Assumptions & Limitations", ""]
     lines += [f"- {label}: {value if value else 'Not provided'}" for label, value in fields]
@@ -307,20 +324,22 @@ def _check_status(rule: str, violations: List[Violation], dataset: Dict[str, Any
     matches = [v for v in violations if v.rule == rule]
     if not matches:
         return "OK"
-    return "Error" if any(v.severity in ('critical', 'high') for v in matches) else "Warning"
+    return "Error" if any(v.severity in ("critical", "high") for v in matches) else "Warning"
 
 
 def _section_11(dataset: Dict[str, Any]) -> str:
     violations = audit_dataset(dataset)
     lines = [
-        "## 11. Data Quality & Consistency Checks", "",
-        "| Check | Status | Comment |", "|---|---|---|",
+        "## 11. Data Quality & Consistency Checks",
+        "",
+        "| Check | Status | Comment |",
+        "|---|---|---|",
     ]
     for rule, label in CHECK_LABELS.items():
         status = _check_status(rule, violations, dataset)
         comment = next((v.message for v in violations if v.rule == rule), "")
         lines.append(f"| {label} | {status} | {comment} |")
-    if dataset.get('currency'):
+    if dataset.get("currency"):
         lines.append("| Currency present | OK | |")
     else:
         lines.append("| Currency present | Error | Dataset has no currency |")

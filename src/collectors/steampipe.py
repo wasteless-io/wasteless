@@ -26,24 +26,26 @@ from typing import Any, Dict, List
 logger = logging.getLogger(__name__)
 
 # Directory holding the detection queries (sql/steampipe/*.sql)
-QUERIES_DIR = Path(__file__).resolve().parents[2] / 'sql' / 'steampipe'
+QUERIES_DIR = Path(__file__).resolve().parents[2] / "sql" / "steampipe"
 
 DEFAULT_TIMEOUT_SECONDS = 120
 
 
 class SteampipeError(Exception):
     """Raised when a Steampipe query fails."""
+
     pass
 
 
 class SteampipeNotInstalledError(SteampipeError):
     """Raised when the steampipe binary is not on PATH."""
+
     pass
 
 
 def is_available() -> bool:
     """Return True if the steampipe binary is on PATH."""
-    return shutil.which('steampipe') is not None
+    return shutil.which("steampipe") is not None
 
 
 def run_query(sql: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> List[Dict[str, Any]]:
@@ -69,7 +71,7 @@ def run_query(sql: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> List[Dict[str
         # '--' terminates flag parsing: SQL starting with a '-- comment'
         # would otherwise be read as a flag by steampipe's CLI
         result = subprocess.run(
-            ['steampipe', 'query', '--output', 'json', '--', sql],
+            ["steampipe", "query", "--output", "json", "--", sql],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -79,8 +81,7 @@ def run_query(sql: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> List[Dict[str
 
     if result.returncode != 0:
         raise SteampipeError(
-            f"Steampipe query failed (exit {result.returncode}): "
-            f"{result.stderr.strip()}"
+            f"Steampipe query failed (exit {result.returncode}): " f"{result.stderr.strip()}"
         )
 
     try:
@@ -93,14 +94,12 @@ def run_query(sql: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> List[Dict[str
     # Steampipe >= 0.21 wraps rows in {"rows": [...]}; older versions
     # return a bare JSON array.
     if isinstance(payload, dict):
-        rows = payload.get('rows', [])
+        rows = payload.get("rows", [])
     else:
         rows = payload
 
     if not isinstance(rows, list):
-        raise SteampipeError(
-            f"Unexpected Steampipe output shape: {type(rows).__name__}"
-        )
+        raise SteampipeError(f"Unexpected Steampipe output shape: {type(rows).__name__}")
 
     logger.info(f"Steampipe query returned {len(rows)} row(s)")
     return rows
@@ -117,7 +116,7 @@ def run_query_file(name: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> List[Di
     Raises:
         SteampipeError: If the query file does not exist or the query fails
     """
-    path = QUERIES_DIR / f'{name}.sql'
+    path = QUERIES_DIR / f"{name}.sql"
     if not path.is_file():
         raise SteampipeError(f"Query file not found: {path}")
     return run_query(path.read_text(), timeout=timeout)

@@ -20,11 +20,11 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-MODEL_ENV_VAR = 'WASTELESS_LLM_MODEL'
+MODEL_ENV_VAR = "WASTELESS_LLM_MODEL"
 MAX_TOKENS = 220
 TIMEOUT_SECONDS = 20
 # Cap per detector run: keeps cost/latency bounded on large accounts
@@ -37,15 +37,15 @@ MAX_QUESTION_LEN = 500
 # and capping length blocks the cheap version of prompt injection (fake
 # multi-line "system:"-style blocks smuggled inside a tag value) before it
 # ever reaches the model.
-_CONTROL_CHARS_RE = re.compile(r'[\r\n\t]+')
-_EXTRA_SPACES_RE = re.compile(r' {2,}')
+_CONTROL_CHARS_RE = re.compile(r"[\r\n\t]+")
+_EXTRA_SPACES_RE = re.compile(r" {2,}")
 MAX_METADATA_FIELD_LEN = 300
 
 
 def _sanitize_value(value: Any) -> Any:
     if isinstance(value, str):
-        value = _CONTROL_CHARS_RE.sub(' ', value)
-        value = _EXTRA_SPACES_RE.sub(' ', value).strip()
+        value = _CONTROL_CHARS_RE.sub(" ", value)
+        value = _EXTRA_SPACES_RE.sub(" ", value).strip()
         return value[:MAX_METADATA_FIELD_LEN]
     if isinstance(value, dict):
         return {k: _sanitize_value(v) for k, v in value.items()}
@@ -56,6 +56,7 @@ def _sanitize_value(value: Any) -> Any:
 
 def _sanitize_metadata(metadata: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return _sanitize_value(metadata or {})
+
 
 PROMPT_TEMPLATE = """\
 You are the FinOps assistant inside wasteless, an AWS cost-waste detector.
@@ -80,6 +81,7 @@ def is_enabled() -> bool:
         return False
     try:
         import litellm  # noqa: F401
+
         return True
     except ImportError:
         logger.debug("litellm not installed — AI insights disabled")
@@ -98,7 +100,8 @@ def record_usage(conn, feature: str, response: Any) -> None:
         return
     try:
         import litellm
-        usage = getattr(response, 'usage', None)
+
+        usage = getattr(response, "usage", None)
         try:
             cost_usd = litellm.completion_cost(completion_response=response)
         except Exception:
@@ -106,17 +109,20 @@ def record_usage(conn, feature: str, response: Any) -> None:
 
         cursor = conn.cursor()
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO llm_usage
                     (feature, model, prompt_tokens, completion_tokens, cost_usd)
                 VALUES (%s, %s, %s, %s, %s);
-            """, (
-                feature,
-                getattr(response, 'model', None) or os.getenv(MODEL_ENV_VAR),
-                getattr(usage, 'prompt_tokens', None),
-                getattr(usage, 'completion_tokens', None),
-                cost_usd,
-            ))
+            """,
+                (
+                    feature,
+                    getattr(response, "model", None) or os.getenv(MODEL_ENV_VAR),
+                    getattr(usage, "prompt_tokens", None),
+                    getattr(usage, "completion_tokens", None),
+                    cost_usd,
+                ),
+            )
             conn.commit()
         finally:
             cursor.close()
@@ -128,8 +134,9 @@ def record_usage(conn, feature: str, response: Any) -> None:
         logger.warning(f"LLM usage tracking failed (continuing without): {e}")
 
 
-def build_prompt(action: str, resource_type: str, savings: Any,
-                 confidence: Any, metadata: Dict[str, Any]) -> str:
+def build_prompt(
+    action: str, resource_type: str, savings: Any, confidence: Any, metadata: Dict[str, Any]
+) -> str:
     return PROMPT_TEMPLATE.format(
         action=action,
         resource_type=resource_type,
@@ -167,8 +174,14 @@ which fact is missing instead of hedging generically.
 Question: {question}"""
 
 
-def build_qa_prompt(question: str, action: str, resource_type: str, savings: Any,
-                    confidence: Any, metadata: Dict[str, Any]) -> str:
+def build_qa_prompt(
+    question: str,
+    action: str,
+    resource_type: str,
+    savings: Any,
+    confidence: Any,
+    metadata: Dict[str, Any],
+) -> str:
     return QA_PROMPT_TEMPLATE.format(
         action=action,
         resource_type=resource_type,
@@ -179,24 +192,34 @@ def build_qa_prompt(question: str, action: str, resource_type: str, savings: Any
     )
 
 
-def generate_insight(action: str, resource_type: str, savings: Any,
-                     confidence: Any, metadata: Dict[str, Any],
-                     conn=None) -> Optional[str]:
+def generate_insight(
+    action: str,
+    resource_type: str,
+    savings: Any,
+    confidence: Any,
+    metadata: Dict[str, Any],
+    conn=None,
+) -> Optional[str]:
     """One AI insight for a recommendation, or None (never raises)."""
     if not is_enabled():
         return None
 
     try:
         import litellm
+
         response = litellm.completion(
             model=os.getenv(MODEL_ENV_VAR),
-            messages=[{'role': 'user', 'content': build_prompt(
-                action, resource_type, savings, confidence, metadata)}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": build_prompt(action, resource_type, savings, confidence, metadata),
+                }
+            ],
             max_tokens=MAX_TOKENS,
             temperature=0.2,
             timeout=TIMEOUT_SECONDS,
         )
-        record_usage(conn, 'insight', response)
+        record_usage(conn, "insight", response)
         insight = response.choices[0].message.content
         return insight.strip() if insight else None
     except Exception as e:
@@ -204,9 +227,15 @@ def generate_insight(action: str, resource_type: str, savings: Any,
         return None
 
 
-def answer_question(question: str, action: str, resource_type: str, savings: Any,
-                    confidence: Any, metadata: Dict[str, Any],
-                    conn=None) -> Optional[str]:
+def answer_question(
+    question: str,
+    action: str,
+    resource_type: str,
+    savings: Any,
+    confidence: Any,
+    metadata: Dict[str, Any],
+    conn=None,
+) -> Optional[str]:
     """One-shot answer to a human question about a specific recommendation.
 
     Stateless like generate_insight: no conversation history, each call
@@ -215,21 +244,28 @@ def answer_question(question: str, action: str, resource_type: str, savings: Any
     """
     if not is_enabled():
         return None
-    question = (question or '').strip()
+    question = (question or "").strip()
     if not question:
         return None
 
     try:
         import litellm
+
         response = litellm.completion(
             model=os.getenv(MODEL_ENV_VAR),
-            messages=[{'role': 'user', 'content': build_qa_prompt(
-                question, action, resource_type, savings, confidence, metadata)}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": build_qa_prompt(
+                        question, action, resource_type, savings, confidence, metadata
+                    ),
+                }
+            ],
             max_tokens=MAX_TOKENS,
             temperature=0.2,
             timeout=TIMEOUT_SECONDS,
         )
-        record_usage(conn, 'qa', response)
+        record_usage(conn, "qa", response)
         answer = response.choices[0].message.content
         return answer.strip() if answer else None
     except Exception as e:
@@ -250,7 +286,8 @@ def enrich_recommendations(conn, limit: int = MAX_INSIGHTS_PER_RUN) -> int:
 
     cursor = conn.cursor()
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT r.id, r.action_required, r.estimated_monthly_savings_eur,
                    w.resource_type, w.confidence_score, w.metadata
             FROM recommendations r
@@ -258,19 +295,22 @@ def enrich_recommendations(conn, limit: int = MAX_INSIGHTS_PER_RUN) -> int:
             WHERE r.status = 'pending' AND r.ai_insight IS NULL
             ORDER BY r.estimated_monthly_savings_eur DESC
             LIMIT %s;
-        """, (limit,))
+        """,
+            (limit,),
+        )
         rows = cursor.fetchall()
 
         generated = 0
         for rec_id, action, savings, resource_type, confidence, metadata in rows:
             if isinstance(metadata, str):
                 metadata = json.loads(metadata)
-            insight = generate_insight(action, resource_type, savings,
-                                       confidence, metadata or {}, conn=conn)
+            insight = generate_insight(
+                action, resource_type, savings, confidence, metadata or {}, conn=conn
+            )
             if insight:
                 cursor.execute(
-                    "UPDATE recommendations SET ai_insight = %s WHERE id = %s;",
-                    (insight, rec_id))
+                    "UPDATE recommendations SET ai_insight = %s WHERE id = %s;", (insight, rec_id)
+                )
                 conn.commit()
                 generated += 1
 

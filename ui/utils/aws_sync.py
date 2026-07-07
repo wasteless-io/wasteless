@@ -15,43 +15,35 @@ from typing import Callable, Dict, List, Set
 
 logger = logging.getLogger(__name__)
 
-SYNC_REGIONS = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
+SYNC_REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
 
 
 def _existing_instances(ec2, ids: List[str]) -> Set[str]:
     """Instance IDs that exist and are not terminated."""
     found = set()
-    response = ec2.describe_instances(
-        Filters=[{'Name': 'instance-id', 'Values': ids}]
-    )
-    for reservation in response.get('Reservations', []):
-        for instance in reservation.get('Instances', []):
-            if instance['State']['Name'] != 'terminated':
-                found.add(instance['InstanceId'])
+    response = ec2.describe_instances(Filters=[{"Name": "instance-id", "Values": ids}])
+    for reservation in response.get("Reservations", []):
+        for instance in reservation.get("Instances", []):
+            if instance["State"]["Name"] != "terminated":
+                found.add(instance["InstanceId"])
     return found
 
 
 def _existing_volumes(ec2, ids: List[str]) -> Set[str]:
-    response = ec2.describe_volumes(
-        Filters=[{'Name': 'volume-id', 'Values': ids}]
-    )
-    return {v['VolumeId'] for v in response.get('Volumes', [])}
+    response = ec2.describe_volumes(Filters=[{"Name": "volume-id", "Values": ids}])
+    return {v["VolumeId"] for v in response.get("Volumes", [])}
 
 
 def _existing_eips(ec2, ids: List[str]) -> Set[str]:
-    response = ec2.describe_addresses(
-        Filters=[{'Name': 'allocation-id', 'Values': ids}]
-    )
-    return {a['AllocationId'] for a in response.get('Addresses', [])
-            if a.get('AllocationId')}
+    response = ec2.describe_addresses(Filters=[{"Name": "allocation-id", "Values": ids}])
+    return {a["AllocationId"] for a in response.get("Addresses", []) if a.get("AllocationId")}
 
 
 def _existing_snapshots(ec2, ids: List[str]) -> Set[str]:
     response = ec2.describe_snapshots(
-        OwnerIds=['self'],
-        Filters=[{'Name': 'snapshot-id', 'Values': ids}]
+        OwnerIds=["self"], Filters=[{"Name": "snapshot-id", "Values": ids}]
     )
-    return {s['SnapshotId'] for s in response.get('Snapshots', [])}
+    return {s["SnapshotId"] for s in response.get("Snapshots", [])}
 
 
 def _existing_nat_gateways(ec2, ids: List[str]) -> Set[str]:
@@ -60,11 +52,12 @@ def _existing_nat_gateways(ec2, ids: List[str]) -> Set[str]:
     Deleted NAT gateways stay visible in the API for a while, so state
     must be checked, not just presence.
     """
-    response = ec2.describe_nat_gateways(
-        Filters=[{'Name': 'nat-gateway-id', 'Values': ids}]
-    )
-    return {n['NatGatewayId'] for n in response.get('NatGateways', [])
-            if n.get('State') not in ('deleted', 'deleting')}
+    response = ec2.describe_nat_gateways(Filters=[{"Name": "nat-gateway-id", "Values": ids}])
+    return {
+        n["NatGatewayId"]
+        for n in response.get("NatGateways", [])
+        if n.get("State") not in ("deleted", "deleting")
+    }
 
 
 def _existing_load_balancers(elbv2, elb) -> Set[str]:
@@ -74,13 +67,12 @@ def _existing_load_balancers(elbv2, elb) -> Set[str]:
     ARN/name raises NotFound for missing ones instead of skipping them.
     """
     found: Set[str] = set()
-    paginator = elbv2.get_paginator('describe_load_balancers')
+    paginator = elbv2.get_paginator("describe_load_balancers")
     for page in paginator.paginate():
-        found.update(lb['LoadBalancerArn'] for lb in page.get('LoadBalancers', []))
-    paginator = elb.get_paginator('describe_load_balancers')
+        found.update(lb["LoadBalancerArn"] for lb in page.get("LoadBalancers", []))
+    paginator = elb.get_paginator("describe_load_balancers")
     for page in paginator.paginate():
-        found.update(lb['LoadBalancerName']
-                     for lb in page.get('LoadBalancerDescriptions', []))
+        found.update(lb["LoadBalancerName"] for lb in page.get("LoadBalancerDescriptions", []))
     return found
 
 
@@ -107,11 +99,11 @@ def find_vanished_resources(
             return get_client(service, region=region_name)
 
     checkers = {
-        'ec2_instance': _existing_instances,
-        'ebs_volume':   _existing_volumes,
-        'elastic_ip':   _existing_eips,
-        'ebs_snapshot': _existing_snapshots,
-        'nat_gateway':  _existing_nat_gateways,
+        "ec2_instance": _existing_instances,
+        "ebs_volume": _existing_volumes,
+        "elastic_ip": _existing_eips,
+        "ebs_snapshot": _existing_snapshots,
+        "nat_gateway": _existing_nat_gateways,
     }
 
     vanished: Dict[str, List[str]] = {}
@@ -120,10 +112,9 @@ def find_vanished_resources(
         if not ids:
             continue
 
-        if resource_type != 'load_balancer' and resource_type not in checkers:
+        if resource_type != "load_balancer" and resource_type not in checkers:
             # Unknown type: skip rather than wrongly obsolete
-            logger.warning(f"No sync checker for resource type "
-                           f"'{resource_type}', skipping")
+            logger.warning(f"No sync checker for resource type " f"'{resource_type}', skipping")
             continue
 
         existing: Set[str] = set()
@@ -131,25 +122,26 @@ def find_vanished_resources(
 
         for region in regions:
             try:
-                if resource_type == 'load_balancer':
+                if resource_type == "load_balancer":
                     existing |= _existing_load_balancers(
-                        client_factory('elbv2', region_name=region),
-                        client_factory('elb', region_name=region),
+                        client_factory("elbv2", region_name=region),
+                        client_factory("elb", region_name=region),
                     )
                 else:
                     existing |= checkers[resource_type](
-                        client_factory('ec2', region_name=region), ids
+                        client_factory("ec2", region_name=region), ids
                     )
                 regions_checked += 1
             except Exception as e:
-                logger.warning(f"Sync check failed for {resource_type} "
-                               f"in {region}: {e}")
+                logger.warning(f"Sync check failed for {resource_type} " f"in {region}: {e}")
 
         if regions_checked < len(regions):
             # A resource in an unchecked region would look vanished; only
             # conclude when every region answered
-            logger.warning(f"Skipping obsoletion for '{resource_type}': "
-                           f"only {regions_checked}/{len(regions)} regions checked")
+            logger.warning(
+                f"Skipping obsoletion for '{resource_type}': "
+                f"only {regions_checked}/{len(regions)} regions checked"
+            )
             continue
 
         gone = [rid for rid in ids if rid not in existing]

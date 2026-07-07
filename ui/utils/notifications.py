@@ -26,17 +26,17 @@ logger = logging.getLogger(__name__)
 
 
 def _smtp_settings() -> Optional[dict]:
-    host = os.getenv('SMTP_HOST')
+    host = os.getenv("SMTP_HOST")
     if not host:
         return None
-    user = os.getenv('SMTP_USER', '')
+    user = os.getenv("SMTP_USER", "")
     return {
-        'host': host,
-        'port': int(os.getenv('SMTP_PORT', '587')),
-        'user': user,
-        'password': os.getenv('SMTP_PASSWORD', ''),
-        'from_addr': os.getenv('SMTP_FROM') or user,
-        'use_tls': os.getenv('SMTP_USE_TLS', 'true').lower() != 'false',
+        "host": host,
+        "port": int(os.getenv("SMTP_PORT", "587")),
+        "user": user,
+        "password": os.getenv("SMTP_PASSWORD", ""),
+        "from_addr": os.getenv("SMTP_FROM") or user,
+        "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() != "false",
     }
 
 
@@ -49,24 +49,24 @@ def notify_action_failure(action_type: str, resource_id: str, error: Optional[st
     """
     try:
         notifications = ConfigManager().get_notifications()
-        if not notifications.get('notify_on_error'):
+        if not notifications.get("notify_on_error"):
             return False
 
-        to_addr = (notifications.get('email') or '').strip()
+        to_addr = (notifications.get("email") or "").strip()
         if not to_addr:
             return False
 
         smtp = _smtp_settings()
         if smtp is None:
             logger.debug(
-                "notify_on_error is enabled but SMTP_HOST is not set — "
-                "skipping failure email")
+                "notify_on_error is enabled but SMTP_HOST is not set — " "skipping failure email"
+            )
             return False
 
         msg = EmailMessage()
-        msg['Subject'] = f"[wasteless] Action failed: {action_type} on {resource_id}"
-        msg['From'] = smtp['from_addr']
-        msg['To'] = to_addr
+        msg["Subject"] = f"[wasteless] Action failed: {action_type} on {resource_id}"
+        msg["From"] = smtp["from_addr"]
+        msg["To"] = to_addr
         msg.set_content(
             "Wasteless failed to execute a remediation action.\n\n"
             f"Action: {action_type}\n"
@@ -74,11 +74,11 @@ def notify_action_failure(action_type: str, resource_id: str, error: Optional[st
             f"Error: {error or '(no details)'}\n"
         )
 
-        with smtplib.SMTP(smtp['host'], smtp['port'], timeout=10) as server:
-            if smtp['use_tls']:
+        with smtplib.SMTP(smtp["host"], smtp["port"], timeout=10) as server:
+            if smtp["use_tls"]:
                 server.starttls()
-            if smtp['user']:
-                server.login(smtp['user'], smtp['password'])
+            if smtp["user"]:
+                server.login(smtp["user"], smtp["password"])
             server.send_message(msg)
 
         return True

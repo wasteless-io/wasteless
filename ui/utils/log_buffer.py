@@ -12,12 +12,12 @@ import logging
 import threading
 from collections import deque
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 BUFFER_SIZE = 2000
 
 # uvicorn loggers don't propagate to root; capture them explicitly
-CAPTURED_LOGGERS = ['', 'uvicorn', 'uvicorn.access', 'uvicorn.error']
+CAPTURED_LOGGERS = ["", "uvicorn", "uvicorn.access", "uvicorn.error"]
 
 
 class RingBufferHandler(logging.Handler):
@@ -34,27 +34,29 @@ class RingBufferHandler(logging.Handler):
             # levelno, not levelname: other formatters (ColoredFormatter)
             # mutate record.levelname in place with ANSI codes.
             entry = {
-                'ts': datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                'level': logging.getLevelName(record.levelno),
-                'levelno': record.levelno,
-                'logger': record.name,
-                'message': record.getMessage(),
+                "ts": datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                "level": logging.getLevelName(record.levelno),
+                "levelno": record.levelno,
+                "logger": record.name,
+                "message": record.getMessage(),
             }
             if record.exc_info and record.exc_info[0] is not None:
-                entry['message'] += '\n' + self.formatException(record.exc_info)
+                entry["message"] += "\n" + self.formatException(record.exc_info)
         except Exception:
             return  # a broken record must never break the app
         with self._lock_buf:
-            entry['id'] = self._next_id
+            entry["id"] = self._next_id
             self._next_id += 1
             self._buffer.append(entry)
 
     def formatException(self, exc_info) -> str:
         import traceback
-        return ''.join(traceback.format_exception(*exc_info)).rstrip()
 
-    def query(self, after_id: int = 0, min_levelno: int = 0,
-              search: str = '', limit: int = 500) -> Dict[str, Any]:
+        return "".join(traceback.format_exception(*exc_info)).rstrip()
+
+    def query(
+        self, after_id: int = 0, min_levelno: int = 0, search: str = "", limit: int = 500
+    ) -> Dict[str, Any]:
         """Entries newer than after_id, filtered, oldest first.
 
         `last_id` always reflects the newest captured entry so pollers
@@ -62,16 +64,15 @@ class RingBufferHandler(logging.Handler):
         """
         needle = search.lower()
         with self._lock_buf:
-            entries = [e for e in self._buffer if e['id'] > after_id]
+            entries = [e for e in self._buffer if e["id"] > after_id]
             last_id = self._next_id - 1
         matched = [
-            e for e in entries
-            if e['levelno'] >= min_levelno
-            and (not needle
-                 or needle in e['message'].lower()
-                 or needle in e['logger'].lower())
+            e
+            for e in entries
+            if e["levelno"] >= min_levelno
+            and (not needle or needle in e["message"].lower() or needle in e["logger"].lower())
         ]
-        return {'entries': matched[-limit:], 'last_id': last_id}
+        return {"entries": matched[-limit:], "last_id": last_id}
 
 
 _handler: Optional[RingBufferHandler] = None

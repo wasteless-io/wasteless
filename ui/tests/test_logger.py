@@ -1,6 +1,7 @@
 """
 Unit tests for logging utility
 """
+
 import unittest
 import logging
 import sys
@@ -10,13 +11,7 @@ from io import StringIO
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.logger import (
-    setup_logging,
-    get_logger,
-    log_user_action,
-    log_db_query,
-    log_config_change
-)
+from utils.logger import setup_logging, get_logger, log_user_action, log_db_query, log_config_change
 
 
 class TestLoggingSetup(unittest.TestCase):
@@ -26,18 +21,18 @@ class TestLoggingSetup(unittest.TestCase):
         """Test that setup_logging creates a valid logger."""
         logger = setup_logging(log_level=logging.DEBUG)
         self.assertIsNotNone(logger)
-        self.assertEqual(logger.name, 'wasteless_ui')
+        self.assertEqual(logger.name, "wasteless_ui")
         self.assertEqual(logger.level, logging.DEBUG)
 
     def test_get_logger_with_name(self):
         """Test get_logger with custom name."""
-        logger = get_logger('test_module')
-        self.assertEqual(logger.name, 'wasteless_ui.test_module')
+        logger = get_logger("test_module")
+        self.assertEqual(logger.name, "wasteless_ui.test_module")
 
     def test_get_logger_default(self):
         """Test get_logger without name."""
         logger = get_logger()
-        self.assertEqual(logger.name, 'wasteless_ui')
+        self.assertEqual(logger.name, "wasteless_ui")
 
     def test_logger_has_handlers(self):
         """Test that logger has at least one handler."""
@@ -54,11 +49,11 @@ class TestLoggingFunctions(unittest.TestCase):
         self.log_capture = StringIO()
         handler = logging.StreamHandler(self.log_capture)
         handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(levelname)s - %(message)s')
+        formatter = logging.Formatter("%(levelname)s - %(message)s")
         handler.setFormatter(formatter)
 
         # Get logger and add handler
-        self.logger = get_logger('test')
+        self.logger = get_logger("test")
         self.logger.handlers = []
         self.logger.addHandler(handler)
         self.logger.setLevel(logging.DEBUG)
@@ -67,7 +62,7 @@ class TestLoggingFunctions(unittest.TestCase):
         """Test log_user_action function."""
         # This function uses its own logger, so we just test it doesn't crash
         try:
-            log_user_action('test_action', {'key': 'value'}, user='test_user')
+            log_user_action("test_action", {"key": "value"}, user="test_user")
             success = True
         except Exception:
             success = False
@@ -76,7 +71,7 @@ class TestLoggingFunctions(unittest.TestCase):
     def test_log_db_query_success(self):
         """Test log_db_query with success."""
         try:
-            log_db_query('test_query', 123.45, success=True)
+            log_db_query("test_query", 123.45, success=True)
             success = True
         except Exception:
             success = False
@@ -85,7 +80,7 @@ class TestLoggingFunctions(unittest.TestCase):
     def test_log_db_query_failure(self):
         """Test log_db_query with failure."""
         try:
-            log_db_query('test_query', 50.0, success=False)
+            log_db_query("test_query", 50.0, success=False)
             success = True
         except Exception:
             success = False
@@ -94,7 +89,7 @@ class TestLoggingFunctions(unittest.TestCase):
     def test_log_config_change(self):
         """Test log_config_change function."""
         try:
-            log_config_change('test_setting', 'old_value', 'new_value', user='test_user')
+            log_config_change("test_setting", "old_value", "new_value", user="test_user")
             success = True
         except Exception:
             success = False
@@ -117,5 +112,5 @@ class TestLogLevels(unittest.TestCase):
         self.assertEqual(logger.level, logging.WARNING)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

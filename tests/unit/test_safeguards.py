@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-from core.safeguards import Safeguards, SafeguardException
+from core.safeguards import Safeguards, SafeguardException, InvalidSafeguardConfig
 
 
 class TestSafeguardException:
@@ -313,3 +313,77 @@ class TestSafeguardsSchedule:
             'enabled': True, 'allowed_days': [], 'allowed_hours': [],
         })
         assert sg.check_schedule() is True
+
+
+class TestSafeguardConfigValidation:
+    """A malformed remediation.yaml must fail loudly (InvalidSafeguardConfig),
+    not silently loosen a check's threshold."""
+
+    def test_valid_config_passes(self):
+        Safeguards._validate_config({
+            'protection': {
+                'min_instance_age_days': 30,
+                'min_idle_days': 14,
+                'min_confidence_score': 0.8,
+                'max_instances_per_run': 3,
+            },
+            'whitelist': {
+                'instance_ids': ['i-abc123'],
+                'tags': [{'key': 'Environment', 'value': 'Production'}],
+            },
+            'schedule': {
+                'allowed_days': ['Saturday', 'Sunday'],
+                'allowed_hours': [2, 3, 4],
+            },
+        })  # must not raise
+
+    def test_empty_config_passes(self):
+        Safeguards._validate_config({})  # all sections optional, defaults apply
+
+    def test_confidence_score_above_one_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'protection': {'min_confidence_score': 8.0}})
+
+    def test_negative_confidence_score_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'protection': {'min_confidence_score': -1}})
+
+    def test_confidence_score_as_string_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'protection': {'min_confidence_score': '0.8'}})
+
+    def test_negative_idle_days_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'protection': {'min_idle_days': -5}})
+
+    def test_max_instances_per_run_zero_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'protection': {'max_instances_per_run': 0}})
+
+    def test_whitelist_instance_ids_not_a_list_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'whitelist': {'instance_ids': 'i-abc123'}})
+
+    def test_whitelist_tag_missing_value_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'whitelist': {'tags': [{'key': 'Environment'}]}})
+
+    def test_schedule_invalid_weekday_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'schedule': {'allowed_days': ['Someday']}})
+
+    def test_schedule_hour_out_of_range_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'schedule': {'allowed_hours': [24]}})
+
+    def test_schedule_hour_as_bool_rejected(self):
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards._validate_config({'schedule': {'allowed_hours': [True]}})
+
+    def test_malformed_config_blocks_init(self, tmp_path):
+        """A real remediation.yaml with an out-of-range value must fail at
+        Safeguards() construction, not at first check_confidence_score() call."""
+        bad_config = tmp_path / "remediation.yaml"
+        bad_config.write_text("protection:\n  min_confidence_score: -1\n")
+        with pytest.raises(InvalidSafeguardConfig):
+            Safeguards(config_path=str(bad_config))

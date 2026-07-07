@@ -36,16 +36,16 @@ async def settings(request: Request, conn=Depends(get_db)):
     cursor.close()
 
     from utils.action_registry import EXECUTION_MODES
+
     automatable_actions = [
-        {"type": t, "mode": m} for t, m in EXECUTION_MODES.items()
-        if m in ('boto3', 'remediator')
+        {"type": t, "mode": m} for t, m in EXECUTION_MODES.items() if m in ("boto3", "remediator")
     ]
 
-    return templates.TemplateResponse(request, "settings.html", context={
-        "config": config,
-        "stats": stats,
-        "automatable_actions": automatable_actions
-    })
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        context={"config": config, "stats": stats, "automatable_actions": automatable_actions},
+    )
 
 
 @router.post("/api/config")
@@ -65,17 +65,17 @@ async def api_update_config(update: ConfigUpdate):
         elif update.key == "dry_run":
             success = config_manager.set_dry_run(update.value)
         elif update.key.startswith("terraform_pr:"):
-            field = update.key[len("terraform_pr:"):]
+            field = update.key[len("terraform_pr:") :]
             success = config_manager.set_terraform_pr_field(field, update.value)
         elif update.key.startswith("action:"):
-            action_type = update.key[len("action:"):]
+            action_type = update.key[len("action:") :]
             from utils.action_registry import EXECUTION_MODES
-            if EXECUTION_MODES.get(action_type) not in ('boto3', 'remediator'):
+
+            if EXECUTION_MODES.get(action_type) not in ("boto3", "remediator"):
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"'{action_type}' is not an automatable action type")
-            success = config_manager.set_action_enabled(
-                action_type, bool(update.value))
+                    status_code=400, detail=f"'{action_type}' is not an automatable action type"
+                )
+            success = config_manager.set_action_enabled(action_type, bool(update.value))
         else:
             success = config_manager.update_protection_rule(update.key, update.value)
 
@@ -92,9 +92,11 @@ def api_policies_export():
 
     content = export_policy_yaml(ConfigManager().load_config())
     filename = f"wasteless-policies_{datetime.now().strftime('%Y-%m-%d')}.yaml"
-    return PlainTextResponse(content, media_type="application/x-yaml", headers={
-        "Content-Disposition": f'attachment; filename="{filename}"'
-    })
+    return PlainTextResponse(
+        content,
+        media_type="application/x-yaml",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/api/policies/import")

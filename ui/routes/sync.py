@@ -14,7 +14,7 @@ async def api_sync_aws(conn=Depends(get_db)):
     import traceback
 
     try:
-        import boto3
+        import boto3  # noqa: F401 -- availability check
     except ImportError as e:
         raise HTTPException(status_code=500, detail=f"boto3 not installed: {e}")
 
@@ -25,30 +25,33 @@ async def api_sync_aws(conn=Depends(get_db)):
         # instances go through the state logic below; other types are
         # existence-checked with the proper API (an EIP id would never be
         # found by describe_instances and used to be wrongly obsoleted)
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
             FROM recommendations r
             JOIN waste_detected w ON r.waste_id = w.id
             WHERE r.status = ANY(%s)
             GROUP BY w.resource_type
-        """, (list(SYNCABLE_STATUSES),))
-        pending_by_type = {row['resource_type']: row['ids']
-                           for row in cursor.fetchall()}
-        pending_instances = pending_by_type.pop('ec2_instance', [])
+        """,
+            (list(SYNCABLE_STATUSES),),
+        )
+        pending_by_type = {row["resource_type"]: row["ids"] for row in cursor.fetchall()}
+        pending_instances = pending_by_type.pop("ec2_instance", [])
 
         if not pending_instances and not pending_by_type:
             return {"synced": 0, "obsolete": 0, "message": "No pending recommendations"}
 
-        total_checked = len(pending_instances) + sum(
-            len(ids) for ids in pending_by_type.values())
+        total_checked = len(pending_instances) + sum(len(ids) for ids in pending_by_type.values())
 
         # Non-EC2 resources: obsolete recommendations whose resource is gone
         obsolete_count = 0
         if pending_by_type:
             from utils.aws_sync import find_vanished_resources
+
             vanished = find_vanished_resources(pending_by_type)
             for resource_type, ids in vanished.items():
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE recommendations r
                     SET status = 'obsolete', applied_at = NOW()
                     FROM waste_detected w
@@ -56,7 +59,9 @@ async def api_sync_aws(conn=Depends(get_db)):
                     AND w.resource_type = %s
                     AND w.resource_id = ANY(%s)
                     AND r.status = ANY(%s)
-                """, (resource_type, ids, list(SYNCABLE_STATUSES)))
+                """,
+                    (resource_type, ids, list(SYNCABLE_STATUSES)),
+                )
                 obsolete_count += cursor.rowcount
 
         # EC2 instances: same state-based reconciliation as sync_aws_job,
@@ -72,7 +77,7 @@ async def api_sync_aws(conn=Depends(get_db)):
             "synced": synced_count,
             "obsolete": obsolete_count,
             "total_checked": total_checked,
-            "message": f"Synced {synced_count} instances, marked {obsolete_count} as obsolete"
+            "message": f"Synced {synced_count} instances, marked {obsolete_count} as obsolete",
         }
 
     except Exception as e:
