@@ -93,9 +93,12 @@ def _insert_waste(cur, resource_type, resource_id, monthly_eur,
 
 
 def _active_waste_total(cur, resource_type):
+    # Scoped to the test account: without it, this sums real production
+    # waste alongside the fixtures the moment this same database holds any
+    # — passing today only because the dev DB happens to be empty.
     cur.execute("""
         SELECT COALESCE(SUM(monthly_waste_eur), 0), COUNT(*)
-        FROM active_waste WHERE resource_type = %s
+        FROM active_waste WHERE resource_type = %s AND account_id = 'test-coherence'
     """, (resource_type,))
     total_eur, count = cur.fetchone()
     return float(total_eur), count
@@ -108,6 +111,7 @@ def _recommendations_pending_count(cur, resource_type):
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         WHERE r.status = 'pending' AND w.resource_type = %s
+          AND w.account_id = 'test-coherence'
     """, (resource_type,))
     return cur.fetchone()[0]
 
@@ -119,6 +123,7 @@ def _declined_kpi(cur, resource_type):
         FROM active_waste w
         JOIN recommendations r ON r.waste_id = w.id
         WHERE r.status = 'rejected' AND w.resource_type = %s
+          AND w.account_id = 'test-coherence'
     """, (resource_type,))
     count, total_eur = cur.fetchone()
     return count, float(total_eur)
