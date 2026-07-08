@@ -58,7 +58,7 @@ DEFAULT_MIN_OBSERVATION_DAYS = 14
 # Mots interdits dans un claim portant sur du potential savings : ils
 # suggèrent une certitude ou une absence de risque qu'aucune donnée
 # détectée-mais-non-remédiée ne peut soutenir.
-FORBIDDEN_WORDS_FOR_POTENTIAL_CLAIMS = (
+FORBIDDEN_WORDS_FOR_POTENTIAL_CLAIMS: tuple[str, ...] = (
     "guaranteed",
     "instantly",
     "no risk",

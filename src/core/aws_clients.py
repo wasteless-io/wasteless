@@ -34,7 +34,7 @@ from botocore.credentials import (
 from .config import AWSConfig, ConfigurationError
 
 _lock = threading.Lock()
-_sessions = {}
+_sessions: dict[str, "boto3.Session"] = {}
 
 # Cache key for the default-chain session (role_arn is None)
 _DEFAULT_KEY = "__default_chain__"
