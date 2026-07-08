@@ -14,11 +14,8 @@ recreates a deleted default VPC on support request.
 
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List
 
-# Allow running as a script: python3 src/detectors/vpc_unused.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from collectors.steampipe import SteampipeError
 from detectors.steampipe_base import SteampipeWasteDetector

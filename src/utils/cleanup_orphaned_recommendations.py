@@ -24,8 +24,6 @@ import argparse
 from typing import Set, Dict, List
 from dotenv import load_dotenv
 
-# Add parent directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.database import get_db_connection
 from core.aws_clients import get_client

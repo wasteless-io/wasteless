@@ -65,7 +65,7 @@ class TestMaybeOpenPR(unittest.TestCase):
         remediator.propose_removal.return_value = None
         with (
             patch.object(tf_pr, "_load_backend_config", return_value=_fake_config()),
-            patch("src.remediators.terraform_pr.TerraformPRRemediator", return_value=remediator),
+            patch("remediators.terraform_pr.TerraformPRRemediator", return_value=remediator),
         ):
             result = tf_pr.maybe_open_pr(self.conn, 1, _row(), dry_run=True)
         self.assertIsNone(result)
@@ -80,7 +80,7 @@ class TestMaybeOpenPR(unittest.TestCase):
         remediator.propose_removal.return_value = proposal
         with (
             patch.object(tf_pr, "_load_backend_config", return_value=_fake_config()),
-            patch("src.remediators.terraform_pr.TerraformPRRemediator", return_value=remediator),
+            patch("remediators.terraform_pr.TerraformPRRemediator", return_value=remediator),
         ):
             result = tf_pr.maybe_open_pr(self.conn, 1, _row(), dry_run=False)
 
@@ -97,7 +97,7 @@ class TestMaybeOpenPR(unittest.TestCase):
         remediator.propose_removal.return_value = proposal
         with (
             patch.object(tf_pr, "_load_backend_config", return_value=_fake_config()),
-            patch("src.remediators.terraform_pr.TerraformPRRemediator", return_value=remediator),
+            patch("remediators.terraform_pr.TerraformPRRemediator", return_value=remediator),
         ):
             result = tf_pr.maybe_open_pr(self.conn, 1, _row(), dry_run=True)
 
@@ -107,13 +107,13 @@ class TestMaybeOpenPR(unittest.TestCase):
         self.assertIn("actions_log", sql_calls)
 
     def test_unsafe_change_surfaces_error_without_fallback(self):
-        from src.remediators.terraform_pr import TerraformPRError
+        from remediators.terraform_pr import TerraformPRError
 
         remediator = MagicMock()
         remediator.propose_removal.side_effect = TerraformPRError("dangling references")
         with (
             patch.object(tf_pr, "_load_backend_config", return_value=_fake_config()),
-            patch("src.remediators.terraform_pr.TerraformPRRemediator", return_value=remediator),
+            patch("remediators.terraform_pr.TerraformPRRemediator", return_value=remediator),
         ):
             result = tf_pr.maybe_open_pr(self.conn, 1, _row(), dry_run=False)
 

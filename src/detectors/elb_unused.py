@@ -12,11 +12,8 @@ Pricing (hourly base * 730h * 0.92 EUR/USD, eu-west-1, LCU/data excluded):
 
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List
 
-# Allow running as a script: python3 src/detectors/elb_unused.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from collectors.steampipe import SteampipeError
 from detectors.steampipe_base import SteampipeWasteDetector

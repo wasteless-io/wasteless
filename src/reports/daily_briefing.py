@@ -24,11 +24,8 @@ import logging
 import os
 import sys
 from datetime import date
-from pathlib import Path
 from typing import Any, Dict, Optional
 
-# Allow running as a script: python3 src/reports/daily_briefing.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from constants import USD_TO_EUR
 from core import llm

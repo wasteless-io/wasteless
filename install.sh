@@ -327,6 +327,17 @@ print_verbose "installation des dependances (requirements.lock)"
 # edite requirements.txt :  uv pip compile requirements.txt --universal \
 #   --output-file requirements.lock
 install_deps venv requirements.lock
+
+# Backend (src/core, src/detectors, ...) installe en editable dans le venv
+# racine (pyproject.toml). Rend `core`, `detectors`, etc. importables partout
+# sans sys.path.insert() en tete de chaque module : `python3 src/detectors/
+# ec2_idle.py` (ce que fait wasteless.sh) trouve `core` via le package installe.
+print_verbose "installation du backend en editable dans venv (pyproject.toml)"
+if [ $USE_UV -eq 1 ]; then
+    silence uv pip install --python venv/bin/python3 -e .
+else
+    silence venv/bin/pip install -e . $PIP_OPT
+fi
 print_step "Dependances Python installees"
 
 # =============================================================================

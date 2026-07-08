@@ -13,7 +13,6 @@ Author: Wasteless
 """
 
 import os
-import sys
 import json
 from datetime import datetime, timedelta, date
 from typing import Dict, List, Optional
@@ -28,9 +27,6 @@ class DateTimeEncoder(json.JSONEncoder):
             return obj.isoformat()
         return super().default(obj)
 
-
-# Add parent directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.safeguards import Safeguards, SafeguardException
 from core.database import get_db_connection

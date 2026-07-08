@@ -12,11 +12,8 @@ but never replaces it — the numbers and the consistency checks must stay
 reproducible without a model in the loop.
 """
 
-import os
-import sys
 from typing import Any, Dict, List
 
-sys.path.insert(0, os.path.dirname(__file__) + "/..")
 
 from core.finops_invariants import (  # noqa: E402
     Violation,
