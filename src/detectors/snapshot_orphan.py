@@ -17,12 +17,9 @@ import sys
 import json
 import logging
 from datetime import date, datetime, timezone
-from pathlib import Path
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
-# Allow running as a script: python3 src/detectors/snapshot_orphan.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dotenv import load_dotenv
 import psycopg2

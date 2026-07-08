@@ -22,14 +22,11 @@ Author: Wasteless
 """
 
 import logging
-import os
 import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from remediators.terraform_editor import (
     find_references,

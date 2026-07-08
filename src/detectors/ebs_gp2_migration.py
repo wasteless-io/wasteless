@@ -12,11 +12,8 @@ Savings: size_gb * (0.0920 - 0.0736) EUR/GiB/month = size_gb * 0.0184
 
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List
 
-# Allow running as a script: python3 src/detectors/ebs_gp2_migration.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from collectors.steampipe import SteampipeError
 from detectors.ebs_orphan import EBS_PRICING_EUR_PER_GIB

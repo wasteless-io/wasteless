@@ -230,6 +230,9 @@ jobs:
         run: |
           python3 -m venv venv
           venv/bin/pip install -q -r requirements.lock
+          # Editable backend so the detector scripts wasteless.sh runs can
+          # `import core` without a sys.path hack (see pyproject.toml).
+          venv/bin/pip install -q -e .
       - name: Confirm steampipe is absent (sanity check for this job's premise)
         run: '! command -v steampipe'
       - name: Run wasteless.sh collect

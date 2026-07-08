@@ -11,11 +11,8 @@ Pricing: $0.048/hour (eu-west-1) * 730h * 0.92 EUR/USD ≈ 32.24 EUR/month
 
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List
 
-# Allow running as a script: python3 src/detectors/nat_gateway_unused.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from collectors.steampipe import SteampipeError
 from detectors.steampipe_base import SteampipeWasteDetector
