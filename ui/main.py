@@ -58,6 +58,13 @@ logging.getLogger("apscheduler").setLevel(logging.WARNING)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown."""
+    # Optional Sentry error tracking — no-op without SENTRY_DSN
+    # (see src/core/observability.py). Covers the UI routes and the
+    # APScheduler jobs, which run in this process.
+    from utils.observability import init_sentry
+
+    init_sentry(component="ui")
+
     # Startup: test database connection
     try:
         conn = psycopg2.connect(**DB_CONFIG)

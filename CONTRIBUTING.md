@@ -100,8 +100,17 @@ cd ui && python run_tests.py
 2. Make changes, add tests if applicable
 3. Format and lint
 4. Open PR against `dev` with a clear description
-5. Address review feedback
-6. Merged by maintainers once approved
+5. Work through the review checklist in the PR template — it covers this
+   repo's specific risks (safeguards order, action registry, pricing
+   provenance, dry-run defaults), not just style
+6. Address review feedback
+7. Merged by maintainers once approved
+
+Maintainer changes follow the same discipline: anything touching
+`src/core/safeguards.py`, `src/remediators/`, `ui/jobs.py` or a detector's
+`save()`/`recommend()` goes through a PR with the same checklist, even
+without an external reviewer — CI (lint + 4 test jobs) is the minimum
+second gate, the checklist is the second pair of eyes.
 
 ---
 
