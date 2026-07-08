@@ -90,21 +90,306 @@ print_verbose() {
 }
 
 # =============================================================================
+# DETECTION DE L'HOTE (OS, init system, WSL) — pilote la remediation systeme
+# =============================================================================
+detect_host() {
+    OS_NAME="$(uname -s)"
+    ARCH="$(uname -m)"
+    INIT_SYSTEM="$(ps -p 1 -o comm= 2>/dev/null | tr -d ' ' || echo unknown)"
+    IS_WSL=0
+    grep -qi microsoft /proc/version 2>/dev/null && IS_WSL=1
+
+    if [ -f /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        OS_ID="${ID:-unknown}"
+        OS_ID_LIKE="${ID_LIKE:-}"
+        OS_VERSION="${VERSION_ID:-unknown}"
+        OS_CODENAME="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
+        OS_PRETTY="${PRETTY_NAME:-$OS_ID}"
+    else
+        OS_ID="$( [ "$OS_NAME" = "Darwin" ] && echo macos || echo unknown )"
+        OS_ID_LIKE=""
+        OS_VERSION="unknown"
+        OS_CODENAME=""
+        OS_PRETTY="$OS_NAME"
+    fi
+
+    print_info "Systeme: $OS_PRETTY ($ARCH) — init: $INIT_SYSTEM"
+    [ "$IS_WSL" -eq 1 ] && print_info "Environnement WSL detecte"
+    # return 0 explicite : appele "nu" sous set -e, un dernier test a 1
+    # (machine non-WSL) ferait sinon planter tout le script.
+    return 0
+}
+
+has_systemd() {
+    [ "$INIT_SYSTEM" = "systemd" ] && command -v systemctl >/dev/null 2>&1
+}
+
+# Execute une commande en root : direct si deja root, sinon via sudo.
+sudo_cmd() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+# Demande l'accord de l'utilisateur avant une modification systeme.
+# Toujours OK en mode --install-system-deps ou -y (non-interactif).
+confirm_system_change() {
+    local message="$1"
+    if [ "$AUTO_INSTALL_DEPS" -eq 1 ] || [ "$ASSUME_YES" -eq 1 ]; then
+        return 0
+    fi
+    echo ""
+    print_warning "$message"
+    read -p "Autoriser cette modification systeme ? (o/N): " answer
+    [[ "$answer" =~ ^[OoYy]$ ]]
+}
+
+# Wrapper Docker Compose : plugin v2 (docker compose) ou binaire v1 legacy.
+compose() {
+    if docker compose version >/dev/null 2>&1; then
+        docker compose "$@"
+    elif command -v docker-compose >/dev/null 2>&1; then
+        docker-compose "$@"
+    else
+        return 127
+    fi
+}
+
+# =============================================================================
+# CHARGEMENT SUR DE .ENV (sans `source` — un mot de passe avec $, `, #, espace
+# casserait l'install ou executerait du shell arbitraire)
+# =============================================================================
+get_env_var() {
+    local key="$1" file="${2:-.env}"
+    grep -E "^${key}=" "$file" 2>/dev/null | tail -n1 | cut -d= -f2-
+}
+
+load_env_file() {
+    local env_file="${1:-.env}"
+    if [ ! -f "$env_file" ]; then
+        print_error "Fichier $env_file introuvable"
+        return 1
+    fi
+    DB_HOST="$(get_env_var DB_HOST "$env_file")"
+    DB_PORT="$(get_env_var DB_PORT "$env_file")"
+    DB_NAME="$(get_env_var DB_NAME "$env_file")"
+    DB_USER="$(get_env_var DB_USER "$env_file")"
+    DB_PASSWORD="$(get_env_var DB_PASSWORD "$env_file")"
+    AWS_REGION="$(get_env_var AWS_REGION "$env_file")"
+    export DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD AWS_REGION
+}
+
+# =============================================================================
+# REMEDIATION DOCKER : installe (depuis les depots officiels) et/ou demarre
+# =============================================================================
+install_docker_debian_ubuntu() {
+    print_info "Installation de Docker Engine depuis le depot officiel Docker..."
+    local distro="debian"
+    if [ "$OS_ID" = "ubuntu" ] || echo "$OS_ID_LIKE" | grep -q ubuntu; then
+        distro="ubuntu"
+    fi
+    local codename="${OS_CODENAME}"
+    if [ -z "$codename" ]; then
+        print_error "Codename de distribution introuvable — installation Docker impossible"
+        return 1
+    fi
+    sudo_cmd apt-get update
+    sudo_cmd apt-get install -y ca-certificates curl
+    sudo_cmd install -m 0755 -d /etc/apt/keyrings
+    sudo_cmd curl -fsSL "https://download.docker.com/linux/${distro}/gpg" -o /etc/apt/keyrings/docker.asc
+    sudo_cmd chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${distro} ${codename} stable" \
+        | sudo_cmd tee /etc/apt/sources.list.d/docker.list >/dev/null
+    sudo_cmd apt-get update
+    sudo_cmd apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+}
+
+install_docker_fedora() {
+    print_info "Installation de Docker Engine depuis le depot officiel Fedora..."
+    sudo_cmd dnf -y install dnf-plugins-core
+    sudo_cmd dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo 2>/dev/null \
+        || sudo_cmd dnf config-manager addrepo --from-repofile https://download.docker.com/linux/fedora/docker-ce.repo
+    sudo_cmd dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+}
+
+install_docker_arch() {
+    print_info "Installation de Docker via pacman..."
+    sudo_cmd pacman -Sy --noconfirm docker docker-compose
+}
+
+install_docker() {
+    if [ "$IS_WSL" -eq 1 ]; then
+        print_error "Docker absent dans WSL — pas d'installation automatique."
+        print_info "Installez Docker Desktop cote Windows, activez l'integration WSL2, puis relancez."
+        return 1
+    fi
+    if [ "$OS_ID" = "macos" ]; then
+        print_error "Docker absent sur macOS — pas d'installation automatique."
+        print_info "Installez Docker Desktop (brew install --cask docker) puis relancez."
+        return 1
+    fi
+    if ! confirm_system_change "Docker est absent. Le script peut l'installer depuis les depots officiels."; then
+        print_error "Docker requis. Relancez avec --install-system-deps pour l'installer automatiquement."
+        return 1
+    fi
+    case "$OS_ID" in
+        ubuntu|debian) install_docker_debian_ubuntu ;;
+        fedora|rhel|centos|rocky|almalinux) install_docker_fedora ;;
+        arch|manjaro|endeavouros) install_docker_arch ;;
+        *)
+            if command -v apt-get >/dev/null 2>&1; then install_docker_debian_ubuntu
+            elif command -v dnf >/dev/null 2>&1; then install_docker_fedora
+            elif command -v pacman >/dev/null 2>&1; then install_docker_arch
+            else
+                print_error "Distribution non supportee pour l'installation automatique: $OS_PRETTY"
+                return 1
+            fi
+            ;;
+    esac
+}
+
+start_docker() {
+    if docker info >/dev/null 2>&1; then
+        return 0
+    fi
+    if [ "$IS_WSL" -eq 1 ]; then
+        print_error "Docker installe mais daemon inaccessible depuis WSL"
+        print_info "Ouvrez Docker Desktop cote Windows et activez l'integration WSL2."
+        return 1
+    fi
+    if [ "$OS_ID" = "macos" ]; then
+        print_error "Docker installe mais non demarre — lancez Docker Desktop."
+        return 1
+    fi
+    if has_systemd; then
+        if confirm_system_change "Docker est arrete. Le script peut demarrer et activer le service."; then
+            print_info "Demarrage du service Docker..."
+            sudo_cmd systemctl enable --now docker || true
+        fi
+    else
+        print_warning "systemd absent — impossible de demarrer Docker automatiquement."
+    fi
+    if docker info >/dev/null 2>&1; then
+        return 0
+    fi
+    # Daemon up mais l'utilisateur courant n'est pas dans le groupe docker
+    if sudo docker info >/dev/null 2>&1; then
+        print_warning "Docker fonctionne avec sudo mais pas pour l'utilisateur courant"
+        if confirm_system_change "Ajouter '$USER' au groupe docker (necessite une relance de shell)"; then
+            sudo_cmd usermod -aG docker "$USER"
+            print_warning "Utilisateur ajoute au groupe docker."
+            print_info "Ouvrez un nouveau shell (ou 'newgrp docker') puis relancez ./install.sh"
+        fi
+        return 1
+    fi
+    return 1
+}
+
+ensure_docker() {
+    if ! command -v docker >/dev/null 2>&1; then
+        install_docker || return 1
+    fi
+    if ! start_docker; then
+        print_error "Docker installe mais non fonctionnel"
+        return 1
+    fi
+    print_step "Docker detecte et fonctionnel"
+    if ! compose version >/dev/null 2>&1; then
+        print_error "Docker Compose introuvable — installez le plugin docker-compose-plugin"
+        return 1
+    fi
+    print_step "Docker Compose detecte"
+    return 0
+}
+
+# =============================================================================
+# ATTENTE POSTGRESQL ROBUSTE + DUMP DIAGNOSTIC EN CAS D'ECHEC
+# =============================================================================
+check_port_conflict() {
+    local port="${DB_PORT:-5432}"
+    if command -v ss >/dev/null 2>&1; then
+        if ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}$"; then
+            print_warning "Le port ${port} semble deja utilise sur l'hote"
+            print_info "Si le demarrage echoue, changez DB_PORT dans .env (ex: DB_PORT=5433)"
+        fi
+    fi
+    return 0
+}
+
+postgres_debug_dump() {
+    print_error "PostgreSQL indisponible apres attente"
+    echo ""
+    print_info "Etat Docker Compose:"; compose ps 2>/dev/null || true
+    echo ""
+    print_info "Logs PostgreSQL (120 dernieres lignes):"
+    compose logs --tail=120 postgres 2>/dev/null || docker logs --tail=120 wasteless-postgres 2>/dev/null || true
+    echo ""
+    print_info "Etat du conteneur:"
+    docker inspect wasteless-postgres \
+        --format='Status={{.State.Status}} ExitCode={{.State.ExitCode}} Error={{.State.Error}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+        2>/dev/null || true
+    echo ""
+    print_info "Causes probables: port ${DB_PORT:-5432} occupe · DB_PASSWORD different du volume existant · volume postgres corrompu"
+}
+
+wait_for_postgres() {
+    local timeout="${1:-120}" elapsed=0
+    print_info "Attente de la disponibilite de PostgreSQL..."
+    while [ "$elapsed" -lt "$timeout" ]; do
+        if docker exec wasteless-postgres pg_isready -U "${DB_USER:-wasteless}" -d "${DB_NAME:-wasteless}" >/dev/null 2>&1; then
+            print_step "PostgreSQL est pret"
+            return 0
+        fi
+        # Sortie anticipee si le conteneur est mort (crash au boot)
+        if docker inspect wasteless-postgres >/dev/null 2>&1; then
+            local running
+            running="$(docker inspect -f '{{.State.Running}}' wasteless-postgres 2>/dev/null || echo false)"
+            if [ "$running" != "true" ]; then
+                postgres_debug_dump
+                return 1
+            fi
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    postgres_debug_dump
+    return 1
+}
+
+# =============================================================================
 # ARGUMENTS
 # =============================================================================
+# AUTO_INSTALL_DEPS : autorise l'installation des prerequis systeme manquants
+#   (Docker Engine) via le gestionnaire de paquets de la distro.
+# ASSUME_YES        : mode non-interactif, valide toutes les modifs systeme.
+# DOCTOR_ONLY       : diagnostic seul, aucune modification (sort apres 1/7).
+AUTO_INSTALL_DEPS=0
+ASSUME_YES=0
+DOCTOR_ONLY=0
+
 for arg in "$@"; do
     case "$arg" in
         -q|--quiet) VERBOSE=0 ;;
         -v|--verbose) VERBOSE=1 ;;  # rétrocompatibilité
+        --install-system-deps) AUTO_INSTALL_DEPS=1 ;;
+        -y|--yes) ASSUME_YES=1 ;;
+        --doctor) DOCTOR_ONLY=1 ;;
         -h|--help)
             echo "Usage: ./install.sh [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  -q, --quiet    Masque la sortie detaillee des commandes"
-            echo "  -h, --help     Affiche cette aide"
+            echo "  -q, --quiet              Masque la sortie detaillee des commandes"
+            echo "  --doctor                 Diagnostic uniquement, aucune modification systeme"
+            echo "  --install-system-deps    Installe les prerequis systeme manquants (Docker)"
+            echo "  -y, --yes                Mode non-interactif (valide les modifs systeme)"
+            echo "  -h, --help               Affiche cette aide"
             exit 0
             ;;
-        *) echo "Option inconnue: $arg"; echo "Usage: ./install.sh [-q|--quiet]"; exit 1 ;;
+        *) echo "Option inconnue: $arg"; echo "Usage: ./install.sh [-q|--quiet] [--doctor] [--install-system-deps] [-y]"; exit 1 ;;
     esac
 done
 
@@ -136,10 +421,12 @@ print_header "1/7 - Verification des prerequis"
 
 MISSING_DEPS=0
 
+# Detection de l'hote (OS, init system, WSL) — pilote la remediation systeme
+detect_host
+
 # WSL : le projet doit vivre dans le systeme de fichiers Linux (~), pas dans
 # le disque Windows monte (/mnt/c/...) ou les permissions et les perfs cassent.
-if grep -qi microsoft /proc/version 2>/dev/null; then
-    print_step "Environnement WSL detecte"
+if [ "$IS_WSL" -eq 1 ]; then
     case "$PWD" in
         /mnt/*)
             print_error "Le projet est sur le disque Windows ($PWD)"
@@ -167,26 +454,23 @@ else
     MISSING_DEPS=1
 fi
 
-# Docker
-if check_command docker; then
-    if docker info &> /dev/null; then
+# Docker + Docker Compose : couche de remediation active.
+#   --doctor              -> diagnostic seul, aucune modif systeme
+#   --install-system-deps -> installe Docker depuis les depots officiels si absent
+#   defaut interactif     -> demande confirmation avant toute modif systeme
+if [ "$DOCTOR_ONLY" -eq 1 ]; then
+    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
         print_step "Docker detecte et fonctionnel"
+        compose version >/dev/null 2>&1 && print_step "Docker Compose detecte" \
+            || { print_warning "Docker Compose introuvable (plugin docker-compose-plugin)"; MISSING_DEPS=1; }
+    elif command -v docker >/dev/null 2>&1; then
+        print_warning "Docker installe mais non demarre (relancez sans --doctor pour le demarrer)"
+        MISSING_DEPS=1
     else
-        print_error "Docker installe mais non demarre"
-        print_info "Lancez Docker Desktop et reexecutez ce script"
+        print_warning "Docker absent (relancez avec --install-system-deps pour l'installer)"
         MISSING_DEPS=1
     fi
-else
-    print_error "Docker non trouve"
-    print_info "Installez Docker: https://docs.docker.com/get-docker/"
-    MISSING_DEPS=1
-fi
-
-# Docker Compose
-if check_command docker-compose || docker compose version &> /dev/null; then
-    print_step "Docker Compose detecte"
-else
-    print_error "Docker Compose non trouve"
+elif ! ensure_docker; then
     MISSING_DEPS=1
 fi
 
@@ -250,6 +534,13 @@ if git rev-parse --is-inside-work-tree &> /dev/null; then
     git config core.fsmonitor true
     git config core.untrackedCache true
     print_step "git fsmonitor + untracked cache actives (git status rapide)"
+fi
+
+# Mode diagnostic : on s'arrete ici, avant toute creation de venv / conteneur.
+if [ "$DOCTOR_ONLY" -eq 1 ]; then
+    echo ""
+    print_step "Diagnostic termine (--doctor) — aucune modification effectuee"
+    exit 0
 fi
 
 # =============================================================================
@@ -366,11 +657,16 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
     echo ""
 
     # Mot de passe DB
+    # Charset restreint volontairement : le mot de passe transite par .env (lu
+    # sans `source`) et par docker-compose (substitution ${DB_PASSWORD}). On
+    # exclut $, `, ", ', #, espace et \ qui casseraient l'un ou l'autre.
     while true; do
         read -sp "Creez un mot de passe pour la base de donnees: " DB_PASSWORD
         echo ""
         if [ ${#DB_PASSWORD} -lt 8 ]; then
             print_error "Le mot de passe doit contenir au moins 8 caracteres"
+        elif [[ ! "$DB_PASSWORD" =~ ^[A-Za-z0-9_@%+=:,.~-]+$ ]]; then
+            print_error "Caracteres autorises: lettres, chiffres et _ @ % + = : , . ~ -"
         else
             break
         fi
@@ -534,54 +830,33 @@ fi
 # =============================================================================
 print_header "4/7 - Demarrage de la base de donnees"
 
-# Charger le mot de passe depuis .env
-source .env
+# Charger la config DB depuis .env sans `source` (parsing sur, pas d'execution)
+load_env_file ".env" || exit 1
 
-# Demarrer PostgreSQL
-print_info "Demarrage de PostgreSQL via Docker..."
+# Signaler un eventuel conflit de port avant de tenter le demarrage
+check_port_conflict
 
-if docker ps | grep -q wasteless-postgres; then
+print_info "Demarrage de PostgreSQL via Docker Compose..."
+
+if docker ps --format '{{.Names}}' | grep -q '^wasteless-postgres$'; then
     print_warning "PostgreSQL deja en cours d'execution"
-elif docker ps -a | grep -q wasteless-postgres; then
+elif docker ps -a --format '{{.Names}}' | grep -q '^wasteless-postgres$'; then
     print_warning "Conteneur wasteless-postgres existant detecte (arrete) — tentative de redemarrage..."
     if ! silence docker start wasteless-postgres; then
         print_warning "Redemarrage echoue (volumes invalides) — suppression et recreation du conteneur..."
         silence docker rm wasteless-postgres
-        docker compose up -d postgres
+        compose up -d postgres
         print_step "PostgreSQL recree et demarre"
     else
         print_step "PostgreSQL redemarre"
     fi
-
-    # Attendre que PostgreSQL soit pret
-    print_info "Attente de la disponibilite de PostgreSQL..."
-    for i in {1..30}; do
-        if docker exec wasteless-postgres pg_isready -U wasteless &> /dev/null; then
-            break
-        fi
-        sleep 1
-    done
 else
-    docker compose up -d postgres
+    compose up -d postgres
     print_step "PostgreSQL demarre"
-
-    # Attendre que PostgreSQL soit pret
-    print_info "Attente de la disponibilite de PostgreSQL..."
-    for i in {1..30}; do
-        if docker exec wasteless-postgres pg_isready -U wasteless &> /dev/null; then
-            break
-        fi
-        sleep 1
-    done
 fi
 
-# Verifier la connexion
-if docker exec wasteless-postgres pg_isready -U wasteless &> /dev/null; then
-    print_step "PostgreSQL est pret"
-else
-    print_error "PostgreSQL n'a pas demarre correctement"
-    exit 1
-fi
+# Attente robuste (120s, sortie anticipee si crash, dump diagnostic si echec)
+wait_for_postgres 120 || exit 1
 
 # =============================================================================
 # INITIALISATION DU SCHEMA
@@ -596,7 +871,12 @@ done
 
 print_info "Application de $MIGRATION_COUNT migration(s)..."
 
+# ON_ERROR_STOP=1 : une migration qui echoue interrompt l'install au lieu de
+# passer inapercue (l'ancien `|| true` masquait tout). Les migrations sont
+# idempotentes (CREATE ... IF NOT EXISTS / OR REPLACE, gardes DO $$), donc
+# une reexecution ne produit pas d'erreur.
 MIGRATION_NUM=0
+MIGRATION_FAILED=0
 for migration in sql/ec2_metrics.sql sql/migrations/*.sql; do
     if [ -f "$migration" ]; then
         MIGRATION_NUM=$((MIGRATION_NUM + 1))
@@ -605,14 +885,24 @@ for migration in sql/ec2_metrics.sql sql/migrations/*.sql; do
         START_TIME=$(date +%s)
         if [ $VERBOSE -eq 1 ]; then
             echo ""
-            docker exec -i wasteless-postgres psql -U wasteless -d wasteless < "$migration" || true
+            if ! docker exec -i wasteless-postgres psql -v ON_ERROR_STOP=1 -U "${DB_USER:-wasteless}" -d "${DB_NAME:-wasteless}" < "$migration"; then
+                MIGRATION_FAILED=1; echo -e " ${RED}ECHEC${NC}"; break
+            fi
         else
-            docker exec -i wasteless-postgres psql -U wasteless -d wasteless < "$migration" &>/dev/null || true
+            if ! docker exec -i wasteless-postgres psql -v ON_ERROR_STOP=1 -U "${DB_USER:-wasteless}" -d "${DB_NAME:-wasteless}" < "$migration" &>/dev/null; then
+                MIGRATION_FAILED=1; echo -e " ${RED}ECHEC${NC}"; break
+            fi
         fi
         ELAPSED=$(( $(date +%s) - START_TIME ))
         echo -e " ${GREEN}OK${NC} (${ELAPSED}s)"
     fi
 done
+
+if [ $MIGRATION_FAILED -eq 1 ]; then
+    print_error "Migration '$MIGRATION_NAME' echouee — installation interrompue"
+    print_info "Relancez en mode verbose pour voir l'erreur SQL: ./install.sh (sans -q)"
+    exit 1
+fi
 
 print_step "Schema de base de donnees initialise"
 
