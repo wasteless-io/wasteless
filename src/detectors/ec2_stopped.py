@@ -174,11 +174,10 @@ class EC2StoppedDetector:
 
         # Resolve actual EBS cost from AWS (parallel per instance × region)
         def _resolve(row):
-            instance_id, instance_type, datapoints = (
-                row["instance_id"],
-                row["instance_type"],
-                row["datapoints"],
-            )
+            # Plain cursor rows are tuples in SELECT order — dict-style
+            # access here raised TypeError as soon as a stopped instance
+            # actually existed (never hit in CI, whose DB is empty).
+            instance_id, instance_type, datapoints = row
             for region in REGIONS:
                 info = _fetch_ebs_cost_for_instance(instance_id, region)
                 if info.get("found"):
@@ -195,7 +194,6 @@ class EC2StoppedDetector:
             logger.info(f"  {instance_id}: not found in any region, skipping")
             return None
 
-        # Use dict-style access for psycopg2 RealDictRow
         results = []
         with ThreadPoolExecutor(max_workers=min(len(stopped), 8)) as executor:
             futures = [executor.submit(_resolve, row) for row in stopped]

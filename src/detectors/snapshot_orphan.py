@@ -56,7 +56,7 @@ def _fetch_ami_snapshot_ids(ec2_client) -> set:
     return ami_snap_ids
 
 
-def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
+def _fetch_old_snapshots(region: str) -> tuple:
     try:
         from core.aws_clients import get_client
 
@@ -160,7 +160,7 @@ class SnapshotOrphanDetector:
 
         try:
             for snap in snapshots:
-                # Confidence increases with age: 90d=0.60, 180d=0.75, 365d=0.90
+                # Confidence increases with age: 90d=0.60, 190d=0.70, capped at 0.90 (>=390d)
                 age = snap["age_days"]
                 confidence = min(0.90, 0.60 + (age - SNAPSHOT_AGE_DAYS) / 1000)
                 confidence = round(confidence, 2)
