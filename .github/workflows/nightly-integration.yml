@@ -1,0 +1,120 @@
+name: Nightly integration
+
+# Scheduled regression run for the integration suite (tests/integration/):
+# moto-mocked AWS write path, Postgres-backed DB coherence, backup/restore.
+# This is also the designated home for LIVE AWS sandbox validation — the
+# "job réel planifié" of the maturity roadmap (docs/MATURITY_TODO.md #1/#3):
+# once a sandbox account exists, its live tests plug into the gated step below
+# without touching the per-PR pipeline (which stays credential-free).
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC daily
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  integration:
+    name: Integration suite (moto + Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wasteless
+          POSTGRES_USER: wasteless
+          POSTGRES_PASSWORD: wasteless_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wasteless"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: wasteless
+      DB_USER: wasteless
+      DB_PASSWORD: wasteless_ci
+      PGPASSWORD: wasteless_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Install postgresql-client-16 (psql)
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+      - name: Apply database schema
+        run: |
+          psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f sql/init.sql
+          psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f sql/ec2_metrics.sql
+          for migration in sql/migrations/*.sql; do
+            psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Run integration suite (mocked AWS, real Postgres)
+        run: pytest tests/integration -q
+
+  live-aws:
+    name: Live AWS sandbox (opt-in, gated on secret)
+    runs-on: ubuntu-latest
+    # Only runs when a sandbox role is configured in repo secrets. Until then
+    # this job is skipped, so the workflow never touches a real account by
+    # accident. Wire tests marked `-m live_aws` here once the sandbox exists.
+    if: ${{ vars.AWS_SANDBOX_ENABLED == 'true' }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wasteless
+          POSTGRES_USER: wasteless
+          POSTGRES_PASSWORD: wasteless_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wasteless"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: wasteless
+      DB_USER: wasteless
+      DB_PASSWORD: wasteless_ci
+      PGPASSWORD: wasteless_ci
+      AWS_REGION: ${{ vars.AWS_SANDBOX_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_SANDBOX_ACCOUNT_ID }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_SANDBOX_ROLE_ARN }}
+      AWS_WRITE_ROLE_ARN: ${{ secrets.AWS_SANDBOX_WRITE_ROLE_ARN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_SANDBOX_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SANDBOX_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Install postgresql-client-16 (psql)
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+      - name: Apply database schema
+        run: |
+          psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f sql/init.sql
+          psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f sql/ec2_metrics.sql
+          for migration in sql/migrations/*.sql; do
+            psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Run live AWS tests against sandbox
+        run: pytest tests/integration -q -m live_aws
