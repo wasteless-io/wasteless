@@ -17,11 +17,11 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: |
-            requirements.txt
-            ui/requirements.txt
+            requirements.lock
+            ui/requirements.lock
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt -r ui/requirements.txt
+          pip install -r requirements.lock -r ui/requirements.lock
           pip install ruff black mypy
       - name: ruff check
         run: ruff check src ui tests
@@ -71,9 +71,9 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: requirements.lock
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.lock
       # Pinned to match the postgres:16-alpine service exactly: a newer
       # psql/pg_dump client can emit settings (e.g. transaction_timeout)
       # the older server doesn't recognize, breaking restores.
@@ -152,11 +152,11 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: |
-            requirements.txt
-            ui/requirements.txt
+            requirements.lock
+            ui/requirements.lock
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt -r ui/requirements.txt
+          pip install -r requirements.lock -r ui/requirements.lock
           pip install -e .
       # Pinned to match the postgres:16-alpine service exactly (see the
       # backend job above for why version drift breaks restores/dumps).
@@ -213,7 +213,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: requirements.lock
       - name: Install postgresql-client-16 (psql)
         run: |
           sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
@@ -229,7 +229,7 @@ jobs:
       - name: Create venv (wasteless.sh requires ./venv to exist)
         run: |
           python3 -m venv venv
-          venv/bin/pip install -q -r requirements.txt
+          venv/bin/pip install -q -r requirements.lock
       - name: Confirm steampipe is absent (sanity check for this job's premise)
         run: '! command -v steampipe'
       - name: Run wasteless.sh collect
