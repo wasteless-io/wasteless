@@ -88,11 +88,11 @@ class DatabaseConfig:
             )
 
         return cls(
-            host=os.getenv("DB_HOST"),
-            port=int(os.getenv("DB_PORT")),
-            name=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
+            host=os.environ["DB_HOST"],
+            port=int(os.environ["DB_PORT"]),
+            name=os.environ["DB_NAME"],
+            user=os.environ["DB_USER"],
+            password=os.environ["DB_PASSWORD"],
             min_connections=int(os.getenv("DB_MIN_CONNECTIONS", "2")),
             max_connections=int(os.getenv("DB_MAX_CONNECTIONS", "10")),
             connect_timeout=int(os.getenv("DB_CONNECT_TIMEOUT", "10")),

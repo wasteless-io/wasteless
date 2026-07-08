@@ -13,3 +13,7 @@ click>=8.1.7
 # Testing
 pytest>=8.0.0
 pytest-cov>=4.1.0
+# moto mocks the AWS API in-process so the remediation write path (stop/start,
+# describe) is exercised at every PR without real credentials — see
+# tests/integration/test_ec2_remediator_moto.py.
+moto[ec2]>=5.0.0

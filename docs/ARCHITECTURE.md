@@ -173,6 +173,10 @@ the repo root into `sys.path` (`ui/utils/remediator.py`).
 | **Docker Compose** | Reproducible local/VPS deployment without Kubernetes complexity. |
 | **litellm** | Provider-agnostic LLM access for AI insights; no vendor lock-in. |
 
+The non-obvious decisions (sync routes + connection pool, one detector per
+resource, auto-remediation off by default, the two-venv split, scoped CI gates)
+are recorded as lightweight ADRs in [`adr/`](adr/).
+
 ---
 
 ## Security

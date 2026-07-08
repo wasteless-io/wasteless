@@ -241,6 +241,17 @@ fi
 echo ""
 print_step "Tous les prerequis sont satisfaits"
 
+# Les venvs vivent en .nosync (voir create_venv plus bas) : ~20 000 fichiers
+# qu'iCloud stocke en "dataless". `git status` scanne les untracked et doit
+# materialiser chaque stat -> plus de 2 min par appel. Le fsmonitor integre de
+# git (>= 2.37) + le cache des untracked ramenent ca a l'instantane. Config
+# locale (.git/config), sans effet sur les autres clones.
+if git rev-parse --is-inside-work-tree &> /dev/null; then
+    git config core.fsmonitor true
+    git config core.untrackedCache true
+    print_step "git fsmonitor + untracked cache actives (git status rapide)"
+fi
+
 # =============================================================================
 # CREATION DE L'ENVIRONNEMENT VIRTUEL
 # =============================================================================

@@ -9,3 +9,8 @@ output "expected_detections" {
     vpc_unused         = aws_vpc.empty.id
   }
 }
+
+output "remediation_target_instance_id" {
+  description = "Idle EC2 instance the remediator may stop during the production-validation run (docs/PRODUCTION_VALIDATION.md)"
+  value       = aws_instance.idle_target.id
+}
