@@ -19,13 +19,11 @@ Every remediation follows the same guarded flow as EC2Remediator:
 import json
 import logging
 import os
-import sys
 from datetime import datetime, timedelta, date
 from typing import Dict, Optional
 
 from dotenv import load_dotenv
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.safeguards import Safeguards, SafeguardException
 from core.database import get_db_connection

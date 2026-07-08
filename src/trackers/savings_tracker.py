@@ -12,13 +12,11 @@ Author: Wasteless
 """
 
 import os
-import sys
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 import json
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from constants import USD_TO_EUR
 from core.database import get_db_connection
 from core.aws_clients import get_client

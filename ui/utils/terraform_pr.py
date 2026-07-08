@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 def _load_backend_config():
     """Load the backend TerraformPRConfig from config/remediation.yaml."""
     with _backend_context():
-        from src.core.config import RemediationConfig
+        from core.config import RemediationConfig
 
         config_path = os.path.join(BACKEND_PATH, "config", "remediation.yaml")
         return RemediationConfig.from_yaml(config_path).terraform_pr
@@ -64,7 +64,7 @@ def maybe_open_pr(conn, rec_id: int, row: Dict, dry_run: bool) -> Optional[Dict]
     if not config.requires_pr(row["resource_type"], savings):
         return None
 
-    from src.remediators.terraform_pr import TerraformPRError, TerraformPRRemediator
+    from remediators.terraform_pr import TerraformPRError, TerraformPRRemediator
 
     result = {
         "recommendation_id": rec_id,

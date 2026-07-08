@@ -2,7 +2,6 @@
 approve/reject/dismiss/cancel/execute action endpoint."""
 
 import json
-import os
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -259,14 +258,10 @@ def ask_about_recommendation(rec_id: int, body: AskQuestionRequest, conn=Depends
     Sync route on purpose: the LLM call blocks up to 20s and must run in
     the threadpool, not on the event loop.
     """
-    # src/ is a package importable from the repo root, not from ui/ — same
-    # sys.path trick as ui/utils/remediator.py's backend integration.
-    import sys
-
-    backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    if backend_path not in sys.path:
-        sys.path.insert(0, backend_path)
-    from src.core.llm import answer_question
+    # Backend is pip-installed editable into ui/venv (see pyproject.toml), so
+    # core.* imports directly — no sys.path juggling. Kept local because llm
+    # pulls in the optional litellm dependency.
+    from core.llm import answer_question
 
     question = (body.question or "").strip()
     if not question:
