@@ -321,8 +321,12 @@ source venv/bin/activate
 print_step "Environnement virtuel active"
 
 PIP_OPT=$([ $VERBOSE -eq 0 ] && echo "-q" || echo "")
-print_verbose "installation des dependances (requirements.txt)"
-install_deps venv requirements.txt
+print_verbose "installation des dependances (requirements.lock)"
+# On installe depuis le lock (versions epinglees, reproductibles), pas depuis
+# requirements.txt (contraintes >= flottantes). Regenerer le lock apres avoir
+# edite requirements.txt :  uv pip compile requirements.txt --universal \
+#   --output-file requirements.lock
+install_deps venv requirements.lock
 print_step "Dependances Python installees"
 
 # =============================================================================
@@ -621,8 +625,10 @@ else
     print_step "Environnement virtuel UI cree"
 fi
 
-print_verbose "installation des dependances UI (ui/requirements.txt)"
-install_deps ui/venv ui/requirements.txt
+print_verbose "installation des dependances UI (ui/requirements.lock)"
+# Idem cote UI : lock epingle. Regenerer :
+#   uv pip compile ui/requirements.txt --universal --output-file ui/requirements.lock
+install_deps ui/venv ui/requirements.lock
 
 # Backend (src/core, src/remediators, ...) installe en editable dans le venv
 # UI: ui/utils/remediator.py fait `from remediators.ec2_remediator import ...`

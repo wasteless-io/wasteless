@@ -1,3 +1,7 @@
+# Sources de dependances (contraintes >=, editees a la main). Ce qui est
+# REELLEMENT installe (install.sh + CI) est requirements.lock, un lock epingle
+# et reproductible. Apres toute edition ici, regenerer le lock :
+#   uv pip compile requirements.txt --universal --output-file requirements.lock
 boto3>=1.34.0
 pandas>=2.2.3
 numpy>=1.26.4

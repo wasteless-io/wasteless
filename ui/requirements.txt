@@ -1,3 +1,6 @@
+# Sources de dependances UI (contraintes >=). Ce qui est installe est
+# ui/requirements.lock (lock epingle). Apres edition, regenerer :
+#   uv pip compile ui/requirements.txt --universal --output-file ui/requirements.lock
 # FastAPI Web Framework
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
