@@ -27,11 +27,13 @@ jobs:
         run: ruff check src ui tests
       - name: black --check
         run: black --check src ui tests
-      # Scoped to the two files that execute AWS remediation actions:
-      # a type error there is the most expensive place for one to hide.
-      # Broader mypy coverage is tracked separately, not a blocking gate yet.
-      - name: mypy (safeguards + remediator proxy)
-        run: mypy src/core/safeguards.py ui/utils/remediator.py --ignore-missing-imports --follow-imports=silent
+      # Scoped to the files that gate or execute real AWS actions: a type
+      # error there is the most expensive place for one to hide. ui/jobs.py
+      # runs the scheduled executions (grace executor, sync), aws_clients is
+      # the client factory bridge. Broader mypy coverage is tracked
+      # separately, not a blocking gate yet.
+      - name: mypy (safeguards, remediator proxy, jobs, aws clients)
+        run: mypy src/core/safeguards.py ui/utils/remediator.py ui/jobs.py ui/utils/aws_clients.py --ignore-missing-imports --follow-imports=silent
 
   backend:
     name: Backend (pytest)

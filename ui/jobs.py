@@ -4,7 +4,7 @@ see main.py's lifespan) plus the AWS execution helpers they share with the
 /api/actions route (ui/routes/recommendations.py).
 """
 
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -13,7 +13,7 @@ from state import DB_CONFIG, SYNCABLE_STATUSES, _config_manager, _aws_status, ch
 from utils.action_registry import execution_mode
 
 
-def _sync_ec2_instance_states(cursor, instance_ids):
+def _sync_ec2_instance_states(cursor: Any, instance_ids: List[str]) -> Tuple[int, int]:
     """Reconcile EC2 recommendations against live instance state.
 
     A stop_instance/terminate_instance recommendation whose instance was
@@ -28,7 +28,7 @@ def _sync_ec2_instance_states(cursor, instance_ids):
     """
     from utils.aws_clients import get_client
 
-    aws_states = {}
+    aws_states: Dict[str, Dict[str, str]] = {}
     for region in ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]:
         try:
             ec2 = get_client("ec2", region=region)
@@ -112,7 +112,7 @@ def _sync_ec2_instance_states(cursor, instance_ids):
     return synced_count, obsolete_count
 
 
-def sync_aws_job():
+def sync_aws_job() -> None:
     """Background job to sync recommendations with AWS state.
 
     Covers every resource type detectors can produce (EC2 instances, EBS
@@ -183,7 +183,7 @@ def sync_aws_job():
         _aws_status["checked_at"] = _dt.now()
 
 
-def terraform_pr_sync_job():
+def terraform_pr_sync_job() -> None:
     """Reconcile open Terraform remediation PRs with GitHub.
 
     A merged PR means the change went through the user's Terraform
@@ -220,7 +220,9 @@ def _grace_execution_status(success: bool, error: Optional[str], dry_run: bool, 
     return "pending"
 
 
-def _execute_ec2_boto3(instance_id, rec_type, metadata):
+def _execute_ec2_boto3(
+    instance_id: str, rec_type: str, metadata: Optional[Dict[str, Any]]
+) -> Tuple[bool, Optional[str]]:
     """Stop/terminate an EC2 instance via boto3, trying likely regions.
 
     Returns (success, error_message). Shared by the approval API and the
@@ -234,7 +236,7 @@ def _execute_ec2_boto3(instance_id, rec_type, metadata):
         stored_region = (metadata or {}).get("region")
         if stored_region:
             regions = [stored_region] + [r for r in regions if r != stored_region]
-        region_errors = []
+        region_errors: List[str] = []
 
         for region in regions:
             try:
@@ -273,7 +275,7 @@ def _execute_ec2_boto3(instance_id, rec_type, metadata):
         return False, str(e)
 
 
-def grace_executor_job():
+def grace_executor_job() -> None:
     """Execute scheduled approvals whose grace period has elapsed.
 
     Mirrors the /api/actions execution path: remediator mode goes through

@@ -13,6 +13,7 @@ behavior.
 import logging
 import os
 import sys
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +32,22 @@ except ImportError as exc:  # pragma: no cover - standalone UI deployment
         exc,
     )
 
-    class ConfigurationError(Exception):
+    class ConfigurationError(Exception):  # type: ignore[no-redef]
         pass
 
-    def reset_cache():
+    # Fallback signatures must stay identical to src/core/aws_clients.py —
+    # mypy enforces this (conditional function variants).
+    def reset_cache() -> None:  # type: ignore[no-redef]
         pass
 
-    def get_client(service, *, region=None, write=False, session_factory=None, **client_kwargs):
+    def get_client(  # type: ignore[no-redef]
+        service: str,
+        *,
+        region: Optional[str] = None,
+        write: bool = False,
+        session_factory: Optional[Callable] = None,
+        **client_kwargs: Any,
+    ):
         import boto3
 
         return boto3.client(service, region_name=region, **client_kwargs)
