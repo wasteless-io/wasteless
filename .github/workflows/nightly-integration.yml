@@ -58,6 +58,10 @@ jobs:
           for migration in sql/migrations/*.sql; do
             psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f "$migration"
           done
+      # config/remediation.yaml is gitignored; recreate it from the template
+      # (as install.sh does) so EC2Remediator -> Safeguards() can load it.
+      - name: Create remediation config from template
+        run: cp config/remediation.yaml.template config/remediation.yaml
       - name: Run integration suite (mocked AWS, real Postgres)
         run: pytest tests/integration -q
 
@@ -116,5 +120,9 @@ jobs:
           for migration in sql/migrations/*.sql; do
             psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f "$migration"
           done
+      # config/remediation.yaml is gitignored; recreate it from the template
+      # (as install.sh does) so EC2Remediator -> Safeguards() can load it.
+      - name: Create remediation config from template
+        run: cp config/remediation.yaml.template config/remediation.yaml
       - name: Run live AWS tests against sandbox
         run: pytest tests/integration -q -m live_aws

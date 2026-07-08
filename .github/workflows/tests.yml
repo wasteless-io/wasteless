@@ -93,6 +93,12 @@ jobs:
           for migration in sql/migrations/*.sql; do
             psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -f "$migration"
           done
+      # config/remediation.yaml is gitignored (per-clone, created from the
+      # template by install.sh) so it's absent in CI. The moto integration
+      # tests build EC2Remediator -> Safeguards(), which loads it and would
+      # otherwise fail with FileNotFoundError.
+      - name: Create remediation config from template
+        run: cp config/remediation.yaml.template config/remediation.yaml
       # Coverage is now a blocking gate: --cov-fail-under=60 fails the job if
       # src/ coverage regresses below the floor (current ~62%). The floor is
       # meant to be ratcheted up over time, not lowered.
