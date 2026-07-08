@@ -13,7 +13,6 @@ Author: Wasteless
 import os
 import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.aws_clients import get_client
 
 from datetime import datetime, timedelta, date

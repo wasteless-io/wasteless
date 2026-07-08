@@ -24,13 +24,9 @@ import argparse
 import json
 import logging
 import os
-import sys
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-# Allow running as a script: python3 src/reports/weekly_digest.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core import llm
 

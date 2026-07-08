@@ -10,15 +10,14 @@ picker, free range) into a concrete [start_date, end_date] period.
 
 import calendar
 import os
-import sys
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Tuple
 
-# Add backend src/ to sys.path to import backend modules
+# Backend modules (core.*, reports.*) import directly: the backend is
+# pip-installed editable into ui/venv (see pyproject.toml). BACKEND_SRC_PATH
+# is still resolved to locate the root .env for the LLM config below.
 # Path structure: <repo>/ui/utils/ -> go up 2 levels -> <repo>/src
 BACKEND_SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
-if BACKEND_SRC_PATH not in sys.path:
-    sys.path.insert(0, BACKEND_SRC_PATH)
 
 # The LLM configuration (WASTELESS_LLM_MODEL + provider key) lives in the
 # root .env, not ui/.env — load it without overriding the UI environment.

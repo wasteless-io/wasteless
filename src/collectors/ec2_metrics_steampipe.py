@@ -17,15 +17,12 @@ Prerequisites: see src/collectors/steampipe.py
 import logging
 import os
 import sys
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import execute_values
 
-# Allow running as a script: python3 src/collectors/ec2_metrics_steampipe.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from collectors.steampipe import SteampipeError, run_query_file
 

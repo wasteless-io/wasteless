@@ -1,24 +1,18 @@
 """
-UI-side access to the backend Sentry init (src/core/observability.py),
-through the same sys.path injection as ui/utils/aws_clients.py.
+UI-side access to the backend Sentry init (src/core/observability.py).
 
-If the backend is not importable (UI deployed standalone), init_sentry
-degrades to a no-op — same contract as the backend implementation.
+The backend is pip-installed editable into ui/venv (see pyproject.toml), so
+`core.*` imports directly. If it isn't importable (UI deployed standalone
+without the editable backend), init_sentry degrades to a no-op — same
+contract as the backend implementation.
 """
 
 import logging
-import os
-import sys
 
 logger = logging.getLogger(__name__)
 
-BACKEND_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-
-if BACKEND_PATH not in sys.path:
-    sys.path.insert(0, BACKEND_PATH)
-
 try:
-    from src.core.observability import init_sentry  # noqa: F401
+    from core.observability import init_sentry  # noqa: F401
 except ImportError as exc:  # pragma: no cover - standalone UI deployment
     logger.warning(
         "Backend observability not importable (%s); Sentry disabled",
