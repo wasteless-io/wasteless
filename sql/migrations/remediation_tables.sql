@@ -20,9 +20,9 @@ CREATE TABLE IF NOT EXISTS actions_log (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_actions_log_resource ON actions_log(resource_id);
-CREATE INDEX idx_actions_log_date ON actions_log(action_date);
-CREATE INDEX idx_actions_log_status ON actions_log(action_status);
+CREATE INDEX IF NOT EXISTS idx_actions_log_resource ON actions_log(resource_id);
+CREATE INDEX IF NOT EXISTS idx_actions_log_date ON actions_log(action_date);
+CREATE INDEX IF NOT EXISTS idx_actions_log_status ON actions_log(action_status);
 
 -- Table: savings_realized
 -- Tracks actual savings after remediation
@@ -57,8 +57,8 @@ CREATE TABLE IF NOT EXISTS savings_realized (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_savings_realized_resource ON savings_realized(resource_id);
-CREATE INDEX idx_savings_realized_dates ON savings_realized(measurement_start_date, measurement_end_date);
+CREATE INDEX IF NOT EXISTS idx_savings_realized_resource ON savings_realized(resource_id);
+CREATE INDEX IF NOT EXISTS idx_savings_realized_dates ON savings_realized(measurement_start_date, measurement_end_date);
 
 -- Table: rollback_snapshots
 -- Stores instance state before action for rollback
@@ -80,8 +80,8 @@ CREATE TABLE IF NOT EXISTS rollback_snapshots (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_rollback_snapshots_action ON rollback_snapshots(action_log_id);
-CREATE INDEX idx_rollback_snapshots_resource ON rollback_snapshots(resource_id);
+CREATE INDEX IF NOT EXISTS idx_rollback_snapshots_action ON rollback_snapshots(action_log_id);
+CREATE INDEX IF NOT EXISTS idx_rollback_snapshots_resource ON rollback_snapshots(resource_id);
 
 -- Comments
 COMMENT ON TABLE actions_log IS 'Log of all remediation actions taken';

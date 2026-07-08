@@ -50,7 +50,9 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-CREATE TRIGGER update_ec2_metrics_updated_at
+-- CREATE OR REPLACE TRIGGER : idempotent sous ON_ERROR_STOP=1 (PostgreSQL 14+,
+-- l'image est postgres:16-alpine). Un CREATE TRIGGER nu echouait au 2e run.
+CREATE OR REPLACE TRIGGER update_ec2_metrics_updated_at
     BEFORE UPDATE ON ec2_metrics
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();

@@ -35,6 +35,19 @@ source ~/.zshrc
 wasteless             # Start the web UI
 ```
 
+**Install options:**
+
+| Flag | Effet |
+|---|---|
+| `--doctor` | Diagnostic seul (OS, Docker, Python…), aucune modification système |
+| `--install-system-deps` | Installe Docker Engine depuis les dépôts officiels s'il manque (Linux : Debian/Ubuntu, Fedora/RHEL, Arch) |
+| `-y`, `--yes` | Non-interactif : valide les modifications système sans demander |
+| `-q`, `--quiet` | Masque la sortie détaillée des commandes |
+
+Sur **Linux natif**, `./install.sh --install-system-deps` installe et démarre
+Docker automatiquement (via `sudo`). Sur **macOS** et **WSL**, Docker Desktop
+reste à installer manuellement — le script détecte l'environnement et l'indique.
+
 Open http://localhost:8888
 
 Then collect data and detect waste:
