@@ -4,6 +4,7 @@ see main.py's lifespan) plus the AWS execution helpers they share with the
 /api/actions route (ui/routes/recommendations.py).
 """
 
+from contextlib import closing
 from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
@@ -124,55 +125,56 @@ def sync_aws_job() -> None:
     from utils.aws_sync import find_vanished_resources
 
     try:
-        conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
-        cursor = conn.cursor()
+        # closing() guarantees the connection is released on every exit path
+        # (early return, exception mid-query, commit failure). Leaking it here
+        # would exhaust Postgres over repeated scheduler ticks.
+        with closing(psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)) as conn:
+            cursor = conn.cursor()
 
-        # Open recommendations grouped by resource type — see
-        # SYNCABLE_STATUSES for which statuses are checked and why.
-        cursor.execute(
-            """
-            SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
-            FROM recommendations r
-            JOIN waste_detected w ON r.waste_id = w.id
-            WHERE r.status = ANY(%s)
-            GROUP BY w.resource_type
-        """,
-            (list(SYNCABLE_STATUSES),),
-        )
-        pending = {row["resource_type"]: row["ids"] for row in cursor.fetchall()}
-
-        if not pending:
-            conn.close()
-            return
-
-        instance_ids = pending.pop("ec2_instance", [])
-        vanished = find_vanished_resources(pending)
-
-        obsolete_count = 0
-        for resource_type, ids in vanished.items():
+            # Open recommendations grouped by resource type — see
+            # SYNCABLE_STATUSES for which statuses are checked and why.
             cursor.execute(
                 """
-                UPDATE recommendations r
-                SET status = 'obsolete', applied_at = NOW()
-                FROM waste_detected w
-                WHERE r.waste_id = w.id
-                AND w.resource_type = %s
-                AND w.resource_id = ANY(%s)
-                AND r.status = ANY(%s)
+                SELECT w.resource_type, array_agg(DISTINCT w.resource_id) AS ids
+                FROM recommendations r
+                JOIN waste_detected w ON r.waste_id = w.id
+                WHERE r.status = ANY(%s)
+                GROUP BY w.resource_type
             """,
-                (resource_type, ids, list(SYNCABLE_STATUSES)),
+                (list(SYNCABLE_STATUSES),),
             )
-            obsolete_count += cursor.rowcount
+            pending = {row["resource_type"]: row["ids"] for row in cursor.fetchall()}
 
-        if instance_ids:
-            _, ec2_obsolete = _sync_ec2_instance_states(cursor, instance_ids)
-            obsolete_count += ec2_obsolete
+            if not pending:
+                return
 
-        conn.commit()
-        conn.close()
+            instance_ids = pending.pop("ec2_instance", [])
+            vanished = find_vanished_resources(pending)
 
-        if obsolete_count > 0:
-            print(f"Auto-sync: marked {obsolete_count} recommendations as obsolete")
+            obsolete_count = 0
+            for resource_type, ids in vanished.items():
+                cursor.execute(
+                    """
+                    UPDATE recommendations r
+                    SET status = 'obsolete', applied_at = NOW()
+                    FROM waste_detected w
+                    WHERE r.waste_id = w.id
+                    AND w.resource_type = %s
+                    AND w.resource_id = ANY(%s)
+                    AND r.status = ANY(%s)
+                """,
+                    (resource_type, ids, list(SYNCABLE_STATUSES)),
+                )
+                obsolete_count += cursor.rowcount
+
+            if instance_ids:
+                _, ec2_obsolete = _sync_ec2_instance_states(cursor, instance_ids)
+                obsolete_count += ec2_obsolete
+
+            conn.commit()
+
+            if obsolete_count > 0:
+                print(f"Auto-sync: marked {obsolete_count} recommendations as obsolete")
 
     except Exception as e:
         print(f"Auto-sync error: {e}")
@@ -191,14 +193,13 @@ def terraform_pr_sync_job() -> None:
     rejection (-> rejected). Still-open PRs are left alone.
     """
     try:
-        conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
-        from utils.terraform_pr import sync_open_prs
+        with closing(psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)) as conn:
+            from utils.terraform_pr import sync_open_prs
 
-        updated = sync_open_prs(conn)
-        conn.commit()
-        conn.close()
-        if updated > 0:
-            print(f"Terraform PR sync: {updated} recommendation(s) updated")
+            updated = sync_open_prs(conn)
+            conn.commit()
+            if updated > 0:
+                print(f"Terraform PR sync: {updated} recommendation(s) updated")
     except Exception as e:
         print(f"Terraform PR sync error: {e}")
 
@@ -282,6 +283,7 @@ def grace_executor_job() -> None:
     the backend safeguards pipeline, boto3 mode acts on EC2 directly.
     dry_run and per-action toggles are re-read at execution time.
     """
+    conn = None
     try:
         conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
         cursor = conn.cursor()
@@ -296,7 +298,6 @@ def grace_executor_job() -> None:
         """)
         due = cursor.fetchall()
         if not due:
-            conn.close()
             return
 
         from utils.remediator import RemediatorProxy
@@ -372,7 +373,10 @@ def grace_executor_job() -> None:
                 f"{'OK' if success else f'FAILED: {error}'}"
             )
 
-        conn.close()
-
     except Exception as e:
         print(f"Grace executor error: {e}")
+    finally:
+        # Guarantee the connection is released on every path (early return,
+        # exception, commit failure) so scheduler ticks don't leak connections.
+        if conn is not None:
+            conn.close()
