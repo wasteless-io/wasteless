@@ -277,7 +277,11 @@ class EC2Remediator:
         return action_id
 
     def stop_instance(
-        self, instance_id: str, recommendation_id: int, reason: str = "Idle instance detected"
+        self,
+        instance_id: str,
+        recommendation_id: int,
+        reason: str = "Idle instance detected",
+        current_count: int = 0,
     ) -> Dict:
         """
         Stop an EC2 instance (main remediation action).
@@ -286,6 +290,9 @@ class EC2Remediator:
             instance_id: EC2 instance ID
             recommendation_id: ID from recommendations table
             reason: Why we're stopping
+            current_count: Instances already stopped this run — fed to the
+                max_instances_per_run safeguard so the configured cap is
+                actually enforced (callers must increment it per success).
 
         Returns:
             Dict with execution results
@@ -338,7 +345,7 @@ class EC2Remediator:
                 launch_time=instance_details["launch_time"],
                 confidence=float(confidence),
                 idle_days=idle_days or 0,
-                current_count=0,  # TODO: Track per run
+                current_count=current_count,
             )
 
             if not safeguard_result["safe_to_proceed"]:
@@ -548,7 +555,15 @@ class EC2Remediator:
 
             logger.info(f"Found {len(pending)} pending recommendations")
 
+            # Single source of truth for the per-run cap: the same config value
+            # the max_instances_per_run safeguard reads. Used both to feed the
+            # safeguard (current_count) and to stop looping once it's reached.
+            max_per_run = self.safeguards.config.get("protection", {}).get(
+                "max_instances_per_run", 3
+            )
+
             results = []
+            stopped_count = 0
 
             for row in pending:
                 rec_id, action, savings, instance_id, confidence = row
@@ -563,14 +578,20 @@ class EC2Remediator:
                 )
 
                 result = self.stop_instance(
-                    instance_id=instance_id, recommendation_id=rec_id, reason=action
+                    instance_id=instance_id,
+                    recommendation_id=rec_id,
+                    reason=action,
+                    current_count=stopped_count,
                 )
 
                 results.append(result)
 
+                if result["success"]:
+                    stopped_count += 1
+
                 # Respect max_instances_per_run limit
-                if len([r for r in results if r["success"]]) >= 3:
-                    logger.info("⚠️  Max instances per run reached (3)")
+                if stopped_count >= max_per_run:
+                    logger.info(f"⚠️  Max instances per run reached ({max_per_run})")
                     break
 
             return results
