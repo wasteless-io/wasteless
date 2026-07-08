@@ -67,6 +67,22 @@ resource "aws_ebs_volume" "orphan" {
   tags = { Name = "wasteless-fixture-orphan-volume" }
 }
 
+# --- ec2_idle remediation target: a bare, idle instance the remediator may
+# actually stop (t3.nano ~0.0059 USD/h) ------------------------------------
+# This is the write-path fixture for the production-validation run
+# (docs/PRODUCTION_VALIDATION.md): with no workload its CPU sits near 0%, so
+# after ~7 days of CloudWatch metrics the ec2_idle detector flags it and the
+# remediator can stop it end to end (detect -> remediate -> verify ->
+# rollback). Kept separate from aws_instance.holder so stopping it never
+# disturbs the gp2 volume-attachment fixture.
+resource "aws_instance" "idle_target" {
+  ami           = var.holder_ami
+  instance_type = "t3.nano"
+  subnet_id     = aws_subnet.a.id
+
+  tags = { Name = "wasteless-fixture-idle-target" }
+}
+
 # --- vpc_unused: VPC with zero network interfaces (free — hygiene check) ---
 # Deliberately separate from aws_vpc.fixtures above: that VPC hosts the NAT
 # gateway/ALB/instance fixtures, which all create ENIs and would make it a
