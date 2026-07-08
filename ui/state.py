@@ -124,7 +124,7 @@ templates.env.globals["usd_to_eur"] = USD_TO_EUR
 scheduler = AsyncIOScheduler()
 
 # Cached AWS reachability status (refreshed by sync job)
-_aws_status = {"reachable": None, "checked_at": None}
+_aws_status: dict = {"reachable": None, "checked_at": None}
 
 
 def check_aws_reachable() -> bool:
