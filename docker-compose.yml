@@ -1,9 +1,10 @@
-version: '3.8'
-
+# Pas d'attribut `version:` : obsolete depuis Compose v2, il ne sert plus qu'a
+# emettre un warning. Compose lit la version du schema depuis le binaire.
 services:
   postgres:
     image: postgres:16-alpine
     container_name: wasteless-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-wasteless}
       POSTGRES_USER: ${DB_USER:-wasteless}
@@ -14,10 +15,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-wasteless}"]
+      # start_period : le temps d'initdb (premier boot avec init.sql) n'est pas
+      # compte comme un echec. retries 30 x 5s = jusqu'a 2,5 min avant unhealthy,
+      # aligne sur le wait_for_postgres cote install.sh.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-wasteless} -d ${DB_NAME:-wasteless}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 30
+      start_period: 15s
 
   metabase:
     image: metabase/metabase:v0.48.0
