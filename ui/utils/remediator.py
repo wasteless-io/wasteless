@@ -217,6 +217,10 @@ class RemediatorProxy:
             List of execution results with status and details
         """
         results = []
+        # Instances stopped so far this batch — passed to stop_instance so the
+        # max_instances_per_run safeguard is enforced across the whole request,
+        # not reset to 0 on every recommendation.
+        stopped_count = 0
 
         for rec_id in recommendation_ids:
             try:
@@ -264,8 +268,13 @@ class RemediatorProxy:
                 if rec_type in ["stop_instance", "terminate_instance"]:
                     # EC2 path (stop works for both stop and terminate intent)
                     result = self._get_remediator().stop_instance(
-                        instance_id=instance_id, recommendation_id=rec_id, reason=action
+                        instance_id=instance_id,
+                        recommendation_id=rec_id,
+                        reason=action,
+                        current_count=stopped_count,
                     )
+                    if result.get("success"):
+                        stopped_count += 1
                 else:
                     resource_remediator = self._get_resource_remediator(rec_type)
                     if resource_remediator is None:
