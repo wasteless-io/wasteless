@@ -370,6 +370,7 @@ wait_for_postgres() {
 AUTO_INSTALL_DEPS=0
 ASSUME_YES=0
 DOCTOR_ONLY=0
+SETUP_SCHEDULE=1  # installe la collecte automatique au niveau OS; --no-schedule pour couper
 
 for arg in "$@"; do
     case "$arg" in
@@ -378,6 +379,7 @@ for arg in "$@"; do
         --install-system-deps) AUTO_INSTALL_DEPS=1 ;;
         -y|--yes) ASSUME_YES=1 ;;
         --doctor) DOCTOR_ONLY=1 ;;
+        --no-schedule) SETUP_SCHEDULE=0 ;;
         -h|--help)
             echo "Usage: ./install.sh [OPTIONS]"
             echo ""
@@ -385,6 +387,7 @@ for arg in "$@"; do
             echo "  -q, --quiet              Masque la sortie detaillee des commandes"
             echo "  --doctor                 Diagnostic uniquement, aucune modification systeme"
             echo "  --install-system-deps    Installe les prerequis systeme manquants (Docker)"
+            echo "  --no-schedule            N'installe pas la collecte automatique (OS scheduler)"
             echo "  -y, --yes                Mode non-interactif (valide les modifs systeme)"
             echo "  -h, --help               Affiche cette aide"
             exit 0
@@ -1140,6 +1143,19 @@ echo -e "${YELLOW}${BOLD}Important:${NC}"
 echo "  L'auto-remediation est DESACTIVEE par defaut."
 echo "  Pour l'activer, modifiez config/remediation.yaml"
 echo ""
+
+# Collecte automatique au niveau OS (survit au reboot). launchd (macOS) /
+# systemd user timer (Linux) / cron (fallback). Sans ca, la collecte ne tourne
+# que tant que l'UI est lancee via `wasteless start` (loop en process).
+# Coupe avec --no-schedule.
+if [ "$SETUP_SCHEDULE" -eq 1 ]; then
+    print_header "Collecte automatique"
+    if confirm_system_change "Installer la collecte automatique toutes les 5 min (survit au reboot) ?"; then
+        ./wasteless.sh schedule || print_warning "Installation du scheduler echouee — activez-la plus tard: wasteless schedule"
+    else
+        print_info "Collecte automatique non installee. Activez-la quand vous voulez: wasteless schedule"
+    fi
+fi
 
 # Demarrage automatique — pas besoin de sourcer le shell
 print_header "Demarrage de l'interface"
