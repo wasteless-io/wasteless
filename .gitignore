@@ -22,7 +22,11 @@ Brewfile.lock.json
 *.env
 
 # Local remediation policy (copied from config/remediation.yaml.template)
+# and any local backup of it — a backup can hold live destructive settings
+# (auto_remediation.enabled: true, terminate/delete actions) and must never
+# be published in the repo
 config/remediation.yaml
+config/*.backup
 
 # Logs
 *.log
