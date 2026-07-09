@@ -41,7 +41,47 @@ COLLECTOR_PID_FILE="$HOME/.wasteless-collector.pid"
 # concurrent collects, 2 got through instead of 1).
 COLLECT_LOCK_DIR="$HOME/.wasteless-collect.lock.d"
 
+# Auto-collection scheduling (voir _schedule). Un seul intervalle, reutilise par
+# les trois backends (launchd / systemd / cron).
+COLLECT_INTERVAL_SEC=300
+LAUNCHD_LABEL="io.wasteless.collect"
+LAUNCHD_PLIST="$HOME/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
+SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+SYSTEMD_UNIT="wasteless-collect"
+CRON_MARKER="# wasteless-collect"
+
 CMD="${1:-start}"
+
+# ---------------------------------------------------------------------------
+# Detection de plateforme pour le scheduler d'auto-collecte
+# ---------------------------------------------------------------------------
+_is_wsl() { grep -qi microsoft /proc/version 2>/dev/null; }
+
+_has_systemd() {
+    [ "$(ps -p 1 -o comm= 2>/dev/null | tr -d ' ')" = "systemd" ] \
+        && command -v systemctl >/dev/null 2>&1
+}
+
+# Choisit le meilleur backend disponible et le place dans $PLATFORM :
+#   macos   -> launchd LaunchAgent
+#   systemd -> systemd user timer (Linux natif ou WSL2 avec systemd=true)
+#   cron    -> crontab (Linux/WSL sans systemd)
+_detect_platform() {
+    if [ "$(uname -s)" = "Darwin" ]; then
+        PLATFORM="macos"
+    elif _has_systemd; then
+        PLATFORM="systemd"
+    else
+        PLATFORM="cron"
+    fi
+}
+
+# Un scheduler OS est-il deja pose ? (evite que le loop bash fasse doublon)
+_scheduler_installed() {
+    [ -f "$LAUNCHD_PLIST" ] \
+        || [ -f "$SYSTEMD_USER_DIR/${SYSTEMD_UNIT}.timer" ] \
+        || crontab -l 2>/dev/null | grep -qF "$CRON_MARKER"
+}
 
 # ---------------------------------------------------------------------------
 # start
@@ -294,7 +334,17 @@ execute_query(
 # ensure_collector  (called automatically on start)
 # ---------------------------------------------------------------------------
 _ensure_cron() {
-    # Already running?
+    # Un scheduler OS (launchd/systemd/cron) prend le relais et survit au reboot
+    # comme a l'arret de l'UI : dans ce cas le loop bash ne sert a rien et ferait
+    # doublon. On lui laisse la main.
+    if _scheduler_installed; then
+        echo -e "  ${CYAN}Auto-collection: scheduler OS actif (survit au reboot)${NC}"
+        return
+    fi
+
+    # Fallback : ni launchd ni systemd ni cron installes (ex: 'wasteless start'
+    # sans avoir lance 'wasteless schedule'). Loop en process, lie a cette
+    # session -- ne survit ni au reboot ni a 'wasteless stop'.
     if [ -f "$COLLECTOR_PID_FILE" ] && kill -0 "$(cat "$COLLECTOR_PID_FILE")" 2>/dev/null; then
         return
     fi
@@ -303,12 +353,163 @@ _ensure_cron() {
         SELF="$SCRIPT_DIR/wasteless.sh"
         while true; do
             "$SELF" collect >> "$LOG_FILE" 2>&1
-            sleep 300
+            sleep "$COLLECT_INTERVAL_SEC"
         done
     ) &
     echo $! > "$COLLECTOR_PID_FILE"
     disown $!
-    echo -e "  ${CYAN}Auto-collection started (every 5 min)${NC}"
+    echo -e "  ${CYAN}Auto-collection started (in-process, every 5 min)${NC}"
+    echo -e "  ${YELLOW}Tip:${NC} 'wasteless schedule' pour une collecte qui survit au reboot"
+}
+
+# ---------------------------------------------------------------------------
+# schedule / unschedule  — collecte automatique au niveau OS (survit au reboot)
+# ---------------------------------------------------------------------------
+_schedule_macos() {
+    mkdir -p "$(dirname "$LAUNCHD_PLIST")"
+    cat > "$LAUNCHD_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>${LAUNCHD_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${SCRIPT_DIR}/wasteless.sh</string>
+        <string>collect</string>
+    </array>
+    <key>StartInterval</key><integer>${COLLECT_INTERVAL_SEC}</integer>
+    <key>RunAtLoad</key><true/>
+    <key>StandardOutPath</key><string>${LOG_FILE}</string>
+    <key>StandardErrorPath</key><string>${LOG_FILE}</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>
+PLIST
+    launchctl unload "$LAUNCHD_PLIST" 2>/dev/null || true
+    launchctl load -w "$LAUNCHD_PLIST"
+    echo -e "  ${GREEN}[OK]${NC} LaunchAgent installe: $LAUNCHD_PLIST (toutes les 5 min, RunAtLoad)"
+}
+
+_schedule_systemd() {
+    mkdir -p "$SYSTEMD_USER_DIR"
+    cat > "$SYSTEMD_USER_DIR/${SYSTEMD_UNIT}.service" <<UNIT
+[Unit]
+Description=WasteLess AWS collection & waste detection
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=${SCRIPT_DIR}/wasteless.sh collect
+UNIT
+    cat > "$SYSTEMD_USER_DIR/${SYSTEMD_UNIT}.timer" <<UNIT
+[Unit]
+Description=Run WasteLess collection every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=${COLLECT_INTERVAL_SEC}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+    systemctl --user daemon-reload
+    systemctl --user enable --now "${SYSTEMD_UNIT}.timer"
+    # enable-linger : le user manager demarre au boot sans login interactif
+    # (indispensable sur un VPS headless accede en SSH ponctuel).
+    if ! loginctl enable-linger "$USER" 2>/dev/null; then
+        sudo loginctl enable-linger "$USER" 2>/dev/null \
+            || echo -e "  ${YELLOW}[WARN]${NC} enable-linger a echoue — la collecte peut s'arreter a la deconnexion. Lancez: sudo loginctl enable-linger $USER"
+    fi
+    echo -e "  ${GREEN}[OK]${NC} systemd user timer actif: ${SYSTEMD_UNIT}.timer (toutes les 5 min, persistant)"
+}
+
+_schedule_cron() {
+    local self="$SCRIPT_DIR/wasteless.sh"
+    local entry="*/5 * * * * $self collect >> $LOG_FILE 2>&1 $CRON_MARKER"
+    ( crontab -l 2>/dev/null | grep -vF "$CRON_MARKER"; echo "$entry" ) | crontab -
+    echo -e "  ${GREEN}[OK]${NC} entree crontab ajoutee (toutes les 5 min)"
+    if _is_wsl && ! _has_systemd; then
+        echo -e "  ${YELLOW}[WARN]${NC} WSL sans systemd : cron ne tourne que si la distro est active."
+        echo "  Pour une collecte fiable, activez systemd dans /etc/wsl.conf :"
+        echo "    [boot]"
+        echo "    systemd=true"
+        echo "  (puis 'wsl --shutdown' cote Windows et relancez 'wasteless schedule')"
+        echo "  Alternative cote Windows (Task Scheduler, toutes les 5 min) :"
+        echo "    schtasks /Create /SC MINUTE /MO 5 /TN WasteLessCollect \\"
+        echo "      /TR \"wsl.exe -e $self collect\""
+    fi
+}
+
+_schedule() {
+    _detect_platform
+    echo -e "${BOLD}Installation de la collecte automatique (${PLATFORM})${NC}"
+    case "$PLATFORM" in
+        macos)   _schedule_macos ;;
+        systemd) _schedule_systemd ;;
+        cron)    _schedule_cron ;;
+    esac
+    # Le loop bash en process n'a plus lieu d'etre : on le coupe s'il tournait.
+    if [ -f "$COLLECTOR_PID_FILE" ]; then
+        kill "$(cat "$COLLECTOR_PID_FILE")" 2>/dev/null || true
+        rm -f "$COLLECTOR_PID_FILE"
+    fi
+    echo -e "  Desactivation : ${CYAN}wasteless unschedule${NC}"
+}
+
+_unschedule() {
+    _detect_platform
+    case "$PLATFORM" in
+        macos)
+            launchctl unload "$LAUNCHD_PLIST" 2>/dev/null || true
+            rm -f "$LAUNCHD_PLIST"
+            echo -e "  ${GREEN}[OK]${NC} LaunchAgent supprime"
+            ;;
+        systemd)
+            systemctl --user disable --now "${SYSTEMD_UNIT}.timer" 2>/dev/null || true
+            rm -f "$SYSTEMD_USER_DIR/${SYSTEMD_UNIT}.timer" "$SYSTEMD_USER_DIR/${SYSTEMD_UNIT}.service"
+            systemctl --user daemon-reload 2>/dev/null || true
+            echo -e "  ${GREEN}[OK]${NC} systemd timer supprime"
+            ;;
+        cron)
+            crontab -l 2>/dev/null | grep -vF "$CRON_MARKER" | crontab - 2>/dev/null || true
+            echo -e "  ${GREEN}[OK]${NC} entree crontab supprimee"
+            ;;
+    esac
+}
+
+_schedule_status() {
+    _detect_platform
+    echo -e "${BOLD}Auto-collection (${PLATFORM})${NC}"
+    case "$PLATFORM" in
+        macos)
+            if [ -f "$LAUNCHD_PLIST" ]; then
+                echo -e "  ${GREEN}Active${NC} — $LAUNCHD_PLIST"
+                launchctl list 2>/dev/null | grep -F "$LAUNCHD_LABEL" || true
+            else
+                echo "  Inactive (lancez 'wasteless schedule')"
+            fi
+            ;;
+        systemd)
+            if [ -f "$SYSTEMD_USER_DIR/${SYSTEMD_UNIT}.timer" ]; then
+                systemctl --user list-timers "${SYSTEMD_UNIT}.timer" --no-pager 2>/dev/null || true
+            else
+                echo "  Inactive (lancez 'wasteless schedule')"
+            fi
+            ;;
+        cron)
+            if crontab -l 2>/dev/null | grep -qF "$CRON_MARKER"; then
+                echo -e "  ${GREEN}Active${NC} —"
+                crontab -l 2>/dev/null | grep -F "$CRON_MARKER"
+            else
+                echo "  Inactive (lancez 'wasteless schedule')"
+            fi
+            ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
@@ -318,17 +519,21 @@ case "$CMD" in
     "" | start)   _start   ;;
     stop)         _stop    ;;
     logs)         _logs    ;;
-    status)       _status  ;;
+    status)       _status; echo ""; _schedule_status ;;
     collect)      _collect ;;
+    schedule)     _schedule ;;
+    unschedule)   _unschedule ;;
     *)
         echo -e "${BOLD}Usage:${NC} wasteless [command]"
         echo ""
         echo "Commands:"
-        echo "  start     Start the web UI in background (default)"
-        echo "  stop      Stop the web UI"
-        echo "  logs      View server logs (tail -f)"
-        echo "  status    Check if server is running"
-        echo "  collect   Collect AWS metrics and detect idle instances"
+        echo "  start        Start the web UI in background (default)"
+        echo "  stop         Stop the web UI"
+        echo "  logs         View server logs (tail -f)"
+        echo "  status       Check if server + auto-collection are running"
+        echo "  collect      Collect AWS metrics and detect idle instances (once)"
+        echo "  schedule     Install OS-level auto-collection every 5 min (survives reboot)"
+        echo "  unschedule   Remove the OS-level auto-collection"
         echo ""
         exit 1
         ;;
