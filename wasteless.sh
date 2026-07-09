@@ -12,6 +12,17 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Robustesse PATH. La boucle d'auto-collecte (_ensure_cron) reexecute ce script
+# toutes les 5 min en heritant du PATH du shell qui a lance `wasteless start`.
+# Lance depuis un contexte GUI / IDE / launchd, ce PATH n'inclut pas Homebrew,
+# et `command -v steampipe` echoue alors que le binaire est installe -> les
+# detecteurs 7-10 (elb/nat/vpc/gp2) sont faussement "skipped" et le dashboard
+# affiche une collecte partielle. On prepend les emplacements standards pour
+# que la detection ne depende pas du shell appelant. Prepend inoffensif si
+# deja present. Comme la boucle re-source ce script a chaque tick, le prochain
+# cycle s'auto-repare sans redemarrage.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
