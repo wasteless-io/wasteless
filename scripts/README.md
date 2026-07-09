@@ -1,8 +1,7 @@
 # scripts/
 
-Operational scripts: cron wrappers around the `src/` pipeline, one-off data
-backfills, and a standalone multi-cloud cleanup CLI unrelated to the
-detect/recommend/approve product flow.
+Operational scripts: cron wrappers around the `src/` pipeline and one-off
+data backfills.
 
 ## Cron wrappers (installed by `install_automation.sh`)
 
@@ -25,23 +24,8 @@ failed silently.
 | `store_aws_real_monthly_cost.py` | Pulls AWS Cost Explorer billing data (multi-account via Organizations, falls back to current account) into `cloud_costs_raw` — the "real spend" counterpart to the detectors' estimated waste. |
 | `github_users.sh` | Manages GitHub repo collaborators via `gh` CLI (requires `gh auth login`). Unrelated to the AWS pipeline — a repo-admin convenience script. |
 
-## finops.sh
-
-A standalone multi-cloud (AWS / Scaleway / GCP) resource cleanup CLI —
-**not** the wasteless detection/recommendation/safeguards flow, and not
-gated by `config/remediation.yaml`. It deletes resources directly when
-invoked, with `--dry-run` as the only safety net. Subcommands:
-
-```
-finops.sh volume  {scw|aws|gcp}   # delete available/unattached volumes
-finops.sh ami     {scw|aws|gcp}   # delete unused AMIs/images
-finops.sh lb      {scw|aws|gcp}   # delete unused load balancers
-finops.sh ghost   {scw|aws|gcp}   # delete "ghost" resources (see script for exact criteria)
-finops.sh env     {list-standby|list-ready|list-all}
-finops.sh all                     # run everything
-finops.sh report                  # summarize what would be/was cleaned
-finops.sh help
-```
-
-Treat it as a separate, more aggressive tool than the rest of the repo —
-always run with `--dry-run` first.
+Scripts here must go through the product flow (detect → recommend →
+safeguards → act). A standalone multi-cloud cleanup CLI (`finops.sh`) used
+to live here; it was removed because it deleted resources directly,
+bypassing every safeguard the product exists to provide, and was tied to
+infrastructure unrelated to this repo.
