@@ -21,10 +21,11 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Load environment variables
-if [ -f "$PROJECT_ROOT/.env" ]; then
-    source "$PROJECT_ROOT/.env"
-else
+# Ensure .env exists — the Python entrypoint loads it itself (load_dotenv),
+# so the shell must NOT `source` it: a password containing $, ` or a space
+# would break the run or execute arbitrary shell (same reasoning as
+# get_env_var in install.sh).
+if [ ! -f "$PROJECT_ROOT/.env" ]; then
     echo "ERROR: .env file not found at $PROJECT_ROOT/.env"
     exit 1
 fi

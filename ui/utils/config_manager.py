@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 import logging
 import threading
 import fcntl
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import time
 
 logger = logging.getLogger(__name__)
@@ -74,14 +74,11 @@ def _file_lock(filepath: str, mode: str = "r", exclusive: bool = False):
     finally:
         # Release file lock if file was opened
         if file_obj is not None:
-            try:
+            # Ignore unlock/close errors — the lock dies with the fd anyway
+            with suppress(Exception):
                 fcntl.flock(file_obj.fileno(), fcntl.LOCK_UN)
-            except Exception:
-                pass  # Ignore unlock errors
-            try:
+            with suppress(Exception):
                 file_obj.close()
-            except Exception:
-                pass  # Ignore close errors
 
         # Release thread lock
         _config_lock.release()

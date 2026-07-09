@@ -19,6 +19,7 @@ Usage:
 """
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -285,10 +286,8 @@ def get_or_create_briefing(conn, refresh: bool = False) -> Optional[Dict[str, An
         return {"content": content, "model": model, "created_at": created_at, "cached": False}
 
     except Exception as e:
-        try:
+        with contextlib.suppress(Exception):
             conn.rollback()
-        except Exception:
-            pass
         logger.warning(f"Daily briefing failed (continuing without): {e}")
         return None
     finally:

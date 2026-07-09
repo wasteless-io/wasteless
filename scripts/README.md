@@ -12,9 +12,10 @@ data backfills.
 | `run_detector.sh` | Runs `src/detectors/ec2_idle.py`, logs output. |
 | `run_cleanup.sh` | Runs `src/utils/cleanup_orphaned_recommendations.py` (marks recommendations `obsolete` when the AWS resource is gone). |
 
-All three source `.env`, `cd` to the project root, and append to their own
-log file — check those logs first when a cron run is suspected to have
-failed silently.
+All three check that `.env` exists (the Python entrypoints load it
+themselves via `load_dotenv` — the shell never `source`s it), `cd` to the
+project root, and append to their own log file — check those logs first
+when a cron run is suspected to have failed silently.
 
 ## One-off / maintenance
 

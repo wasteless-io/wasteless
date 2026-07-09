@@ -16,6 +16,7 @@ detection metadata; it never decides anything — approval stays human and
 behind the safeguards.
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -127,10 +128,8 @@ def record_usage(conn, feature: str, response: Any) -> None:
         finally:
             cursor.close()
     except Exception as e:
-        try:
+        with contextlib.suppress(Exception):
             conn.rollback()
-        except Exception:
-            pass
         logger.warning(f"LLM usage tracking failed (continuing without): {e}")
 
 
