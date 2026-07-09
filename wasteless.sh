@@ -128,7 +128,11 @@ _start() {
     echo ""
 
     export PYTHONUNBUFFERED=1
-    nohup uvicorn main:app --host 0.0.0.0 --port "$PORT" >> "$LOG_FILE" 2>&1 &
+    # Loopback by default: the API has no authentication and its POST
+    # endpoints execute real AWS actions. To expose it on the network,
+    # set WASTELESS_HOST=0.0.0.0 explicitly (at your own risk).
+    HOST="${WASTELESS_HOST:-127.0.0.1}"
+    nohup uvicorn main:app --host "$HOST" --port "$PORT" >> "$LOG_FILE" 2>&1 &
     UVICORN_PID=$!
     echo "$UVICORN_PID" > "$PID_FILE"
     disown "$UVICORN_PID"

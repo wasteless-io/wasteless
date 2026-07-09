@@ -108,7 +108,10 @@ docker compose up -d postgres
 cd ui && ./install.sh && ./start.sh
 ```
 
-The UI listens on `localhost:8888`.
+The UI listens on `127.0.0.1:8888` by default (`WASTELESS_HOST` overrides
+the bind address). Keep it on loopback: the API has no authentication and
+its POST endpoints execute real AWS actions — only expose it through the
+authenticated reverse proxy below, never by binding `0.0.0.0` directly.
 
 ### 4. Reverse proxy + TLS
 

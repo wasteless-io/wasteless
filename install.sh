@@ -989,6 +989,10 @@ DB_PASSWORD=${DB_PASSWORD}
 WASTELESS_BACKEND_PATH=$CURRENT_PATH
 STREAMLIT_SERVER_PORT=8888
 STREAMLIT_SERVER_ADDRESS=localhost
+# Adresse d'ecoute de l'UI. 127.0.0.1 par defaut : l'API n'a pas
+# d'authentification et ses endpoints POST executent de vraies actions AWS.
+# Ne passer a 0.0.0.0 que derriere un reverse proxy authentifie.
+WASTELESS_HOST=127.0.0.1
 LOG_LEVEL=INFO
 AWS_REGION=${AWS_REGION:-eu-west-1}
 UIENV
