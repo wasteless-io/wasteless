@@ -1,6 +1,7 @@
 """Settings page: config editing, whitelist, policy-as-code export/import."""
 
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse
@@ -116,8 +117,13 @@ def api_policies_import(payload: PolicyImport):
 
 
 @router.post("/api/whitelist")
-def api_whitelist(instance_id: str, action: str = "add"):
-    """Add or remove instance from whitelist."""
+def api_whitelist(instance_id: str, action: Literal["add", "remove"] = "add"):
+    """Add or remove instance from whitelist.
+
+    `action` is a closed set: the whitelist is what protects an instance
+    from remediation, so an unknown value must be a 422, not a silent
+    fall-through to removal (fail-open).
+    """
     from utils.config_manager import ConfigManager
 
     config_manager = ConfigManager()

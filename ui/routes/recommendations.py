@@ -75,7 +75,7 @@ def recommendations(
         JOIN waste_detected w ON r.waste_id = w.id
         {where_clause}
         ORDER BY r.estimated_monthly_savings_eur DESC LIMIT 500
-    """,
+    """,  # noqa: S608 — where_clause is constant fragments; values are %s params
         params if params else None,
     )
     recommendations = cursor.fetchall()
@@ -90,7 +90,7 @@ def recommendations(
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         {where_clause}
-    """,
+    """,  # noqa: S608 — where_clause is constant fragments; values are %s params
         params if params else None,
     )
     totals = cursor.fetchone()

@@ -12,6 +12,7 @@ WITH COMPREHENSIVE SAFEGUARDS
 Author: Wasteless
 """
 
+import contextlib
 import os
 import json
 from datetime import datetime, timedelta, date
@@ -599,11 +600,9 @@ class EC2Remediator:
     def __del__(self):
         """Close database connection and release lock."""
         if hasattr(self, "conn"):
-            # Try to release lock if held
-            try:
+            # Try to release lock if held; ignore errors during cleanup
+            with contextlib.suppress(Exception):
                 self.release_lock()
-            except Exception:
-                pass  # Ignore errors during cleanup
 
             self.conn.close()
 

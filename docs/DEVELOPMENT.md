@@ -113,8 +113,8 @@ Commit messages follow `type: description` (`feat:`, `fix:`, `docs:`, `refactor:
 Before pushing:
 
 ```bash
-black src/ ui/
-ruff check src/ ui/
+black src/ ui/ tests/
+ruff check src/ ui/ tests/   # includes the bandit security rules (S)
 pytest
 ```
 
