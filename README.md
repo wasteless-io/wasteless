@@ -58,6 +58,28 @@ python3 src/collectors/aws_cloudwatch.py   # Collect metrics
 python3 src/detectors/ec2_idle.py          # Detect waste
 ```
 
+### Automated collection
+
+`install.sh` sets up **OS-level scheduled collection** (every 5 minutes,
+survives reboot) so no one has to run `wasteless collect` by hand. The backend
+picks the right mechanism per platform:
+
+| Plateforme | Mécanisme |
+|---|---|
+| macOS | launchd LaunchAgent (`~/Library/LaunchAgents/io.wasteless.collect.plist`) |
+| Linux (natif / VPS / WSL2 avec systemd) | systemd **user** timer + `enable-linger` (headless, sans login) |
+| Linux/WSL sans systemd | crontab (`*/5`) — WSL sans systemd : voir la note affichée (Task Scheduler / `wsl.conf`) |
+
+```bash
+wasteless schedule      # (re)installe la collecte automatique
+wasteless unschedule    # la retire
+wasteless status        # état du serveur + de l'auto-collecte
+```
+
+Pass `./install.sh --no-schedule` to skip this. Without a scheduler, collection
+only runs while the UI is up (`wasteless start` spawns an in-process loop that
+does **not** survive reboot).
+
 ---
 
 ## Architecture
