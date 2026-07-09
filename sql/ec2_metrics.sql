@@ -41,21 +41,16 @@ COMMENT ON COLUMN ec2_metrics.cpu_p95 IS 'P95 CPU utilization - Reserved for fut
 COMMENT ON COLUMN ec2_metrics.network_in_mb IS 'Average network inbound traffic in MB';
 COMMENT ON COLUMN ec2_metrics.network_out_mb IS 'Average network outbound traffic in MB';
 
--- Create update trigger
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- CREATE OR REPLACE TRIGGER : idempotent sous ON_ERROR_STOP=1 (PostgreSQL 14+,
--- l'image est postgres:16-alpine). Un CREATE TRIGGER nu echouait au 2e run.
-CREATE OR REPLACE TRIGGER update_ec2_metrics_updated_at
-    BEFORE UPDATE ON ec2_metrics
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+-- Nettoyage d'un trigger mort. update_ec2_metrics_updated_at ecrivait
+-- NEW.updated_at, une colonne qui n'existe pas sur ec2_metrics (la table n'a
+-- que created_at). Comme ec2_metrics est insert-only (les deux writers font
+-- INSERT ... ON CONFLICT DO NOTHING, jamais d'UPDATE), le trigger BEFORE UPDATE
+-- ne s'est jamais declenche -- mais le premier UPDATE aurait plante. On le
+-- supprime, ainsi que sa fonction (utilisee par ce seul trigger). Les DROP
+-- IF EXISTS sont idempotents et nettoient aussi les bases deja installees au
+-- re-run de cette migration.
+DROP TRIGGER IF EXISTS update_ec2_metrics_updated_at ON ec2_metrics;
+DROP FUNCTION IF EXISTS update_updated_at_column();
 
 -- Success message
 DO $$
@@ -67,5 +62,4 @@ BEGIN
     RAISE NOTICE '   - Columns: cpu_avg, cpu_max, cpu_p95 (not avg_cpu_percent)';
     RAISE NOTICE '   - Columns: network_in_mb, network_out_mb (DECIMAL(12,2))';
     RAISE NOTICE '   - 4 indexes created (including unique constraint)';
-    RAISE NOTICE '   - Update trigger created';
 END $$;
