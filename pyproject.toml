@@ -29,7 +29,19 @@ target-version = "py311"
 extend-exclude = ["venv", "venv.nosync", ".venv", "ui/venv", "ui/venv.nosync"]
 
 [tool.ruff.lint]
+# S (flake8-bandit): security rules, same coverage as standalone bandit
+# without adding a tool to the chain.
+extend-select = ["S"]
 # E402: this codebase relies on sys.path.insert()/load_dotenv() before local
 # imports in scripts and detectors (see CLAUDE.md) -- not fixable without a
 # packaging change, tracked separately.
-ignore = ["E402"]
+# S603/S607: subprocess without shell=True and CLI names resolved via PATH
+# (steampipe, terraform, git) are this codebase's *safe* invocation pattern;
+# both rules flag the pattern itself, not a misuse.
+ignore = ["E402", "S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests: asserts are the point (S101), and fixture credentials/SQL built
+# from literals (S105/S106/S608) are not attack surface.
+"tests/**" = ["S101", "S105", "S106", "S608"]
+"ui/tests/**" = ["S101", "S105", "S106", "S608"]

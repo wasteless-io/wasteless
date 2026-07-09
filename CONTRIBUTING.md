@@ -75,8 +75,9 @@ Format: `type: description`
 
 ## Code standards
 
-- Format with **Black**: `black src/ ui/`
-- Lint with **Ruff**: `ruff check src/ ui/`
+- Format with **Black**: `black src/ ui/ tests/`
+- Lint with **Ruff**: `ruff check src/ ui/ tests/` (includes the bandit
+  security rules; CI also runs `pip-audit` on both `.lock` files)
 - No hardcoded credentials or secrets
 - Error handling on all AWS/DB calls
 

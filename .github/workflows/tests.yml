@@ -36,6 +36,27 @@ jobs:
       - name: mypy (src/core + AWS-action UI files)
         run: mypy src/core/ ui/utils/remediator.py ui/jobs.py ui/utils/aws_clients.py --ignore-missing-imports --follow-imports=silent
 
+  security-audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pip-audit
+        run: pip install pip-audit
+      # The .lock files are complete resolutions (uv pip compile --universal),
+      # so --no-deps audits exactly the set that gets installed — no need to
+      # re-resolve. Blocking on purpose: the baseline is clean, and because
+      # the locks pin everything, a CVE stays until a human regenerates them.
+      # If one lands in a transitive pin, bump it in requirements.txt and
+      # re-run `uv pip compile` (see CLAUDE.md).
+      - name: Audit backend lock (requirements.lock)
+        run: pip-audit -r requirements.lock --disable-pip --no-deps
+      - name: Audit UI lock (ui/requirements.lock)
+        run: pip-audit -r ui/requirements.lock --disable-pip --no-deps
+
   backend:
     name: Backend (pytest)
     runs-on: ubuntu-latest

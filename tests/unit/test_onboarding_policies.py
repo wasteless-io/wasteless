@@ -41,7 +41,9 @@ CfnLoader.add_multi_constructor("!", _cfn_tag)
 
 def load_cfn():
     with open(CFN_TEMPLATE) as f:
-        return yaml.load(f, Loader=CfnLoader)
+        # CfnLoader extends yaml.SafeLoader — only adds CloudFormation
+        # short-form tag support, no arbitrary object instantiation.
+        return yaml.load(f, Loader=CfnLoader)  # noqa: S506
 
 
 def statements_by_sid(policy_doc):

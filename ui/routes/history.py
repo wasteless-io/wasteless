@@ -33,7 +33,12 @@ def history(
     # Total matching the same filters, uncapped — the table itself stays
     # capped at 100 rows below, but the header must say so honestly rather
     # than silently implying those 100 are everything.
-    cursor.execute(f"SELECT COUNT(*) AS n FROM actions_log a {where_clause}", tuple(params))
+    # S608: where_clause is built from constant fragments only — every
+    # user-supplied value goes through %s params.
+    cursor.execute(
+        f"SELECT COUNT(*) AS n FROM actions_log a {where_clause}",  # noqa: S608
+        tuple(params),
+    )
     total_count = cursor.fetchone()["n"]
 
     cursor.execute(
@@ -51,7 +56,7 @@ def history(
         FROM actions_log a
         {where_clause}
         ORDER BY a.action_date DESC LIMIT 100
-    """,
+    """,  # noqa: S608 — where_clause is constant fragments; values are %s params
         tuple(params),
     )
     actions = cursor.fetchall()
