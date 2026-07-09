@@ -130,4 +130,8 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("STREAMLIT_SERVER_PORT", "8888"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    # Loopback by default: the API has no authentication and its POST
+    # endpoints execute real AWS actions. Exposing it beyond localhost
+    # (WASTELESS_HOST=0.0.0.0) is an explicit operator decision.
+    host = os.getenv("WASTELESS_HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=port)

@@ -3,7 +3,7 @@ approve/reject/dismiss/cancel/execute action endpoint."""
 
 import json
 
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from psycopg2.extras import Json
 
@@ -206,7 +206,7 @@ def api_recommendations(
     type_filter: str = "All",
     min_savings: int = 0,
     min_confidence: float = 0.0,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=500),
 ):
     """Get recommendations as JSON."""
     cursor = conn.cursor()
@@ -240,9 +240,10 @@ def api_recommendations(
         query += " AND w.confidence_score >= %s"
         params.append(min_confidence)
 
-    query += f" ORDER BY r.estimated_monthly_savings_eur DESC LIMIT {limit}"
+    query += " ORDER BY r.estimated_monthly_savings_eur DESC LIMIT %s"
+    params.append(limit)
 
-    cursor.execute(query, params if params else None)
+    cursor.execute(query, params)
     results = cursor.fetchall()
     cursor.close()
 

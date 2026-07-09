@@ -21,9 +21,9 @@ test: ## Tests backend (pytest, venv racine)
 test-ui: ## Tests UI
 	cd ui && venv/bin/python3 run_tests.py
 
-lint: ## black + ruff (à installer: pip install black ruff)
-	./venv/bin/black --check src/ ui/ || true
-	./venv/bin/ruff check src/ ui/
+lint: ## black + ruff, même périmètre que la CI (à installer: pip install black ruff)
+	./venv/bin/black --check src/ ui/ tests/
+	./venv/bin/ruff check src/ ui/ tests/
 
 doctor: ## Diagnostique les problèmes d'environnement macOS courants
 	@echo "— Python —"
