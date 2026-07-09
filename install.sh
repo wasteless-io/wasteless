@@ -279,9 +279,22 @@ start_docker() {
     # Daemon up mais l'utilisateur courant n'est pas dans le groupe docker
     if sudo docker info >/dev/null 2>&1; then
         print_warning "Docker fonctionne avec sudo mais pas pour l'utilisateur courant"
-        if confirm_system_change "Ajouter '$USER' au groupe docker (necessite une relance de shell)"; then
+        if confirm_system_change "Ajouter '$USER' au groupe docker"; then
             sudo_cmd usermod -aG docker "$USER"
             print_warning "Utilisateur ajoute au groupe docker."
+            # Le shell courant ne recoit le nouveau groupe qu'a la prochaine
+            # connexion, mais `sg docker` lit /etc/group immediatement : si ca
+            # marche, on relance l'installation nous-memes plutot que de
+            # demander a l'utilisateur de le faire (le garde-fou env evite
+            # toute boucle si la relance ne suffit pas).
+            if [ -z "${WASTELESS_SG_RELAUNCHED:-}" ] \
+                && command -v sg >/dev/null 2>&1 \
+                && sg docker -c "docker info" >/dev/null 2>&1; then
+                print_info "Docker operationnel via le nouveau groupe — relance automatique de l'installation..."
+                export WASTELESS_SG_RELAUNCHED=1
+                exec sg docker -c "$(printf '%q' "$0")$INSTALL_ARGS"
+            fi
+            DOCKER_GROUP_PENDING=1
             print_info "Ouvrez un nouveau shell (ou 'newgrp docker') puis relancez ./install.sh"
         fi
         return 1
@@ -294,7 +307,12 @@ ensure_docker() {
         install_docker || return 1
     fi
     if ! start_docker; then
-        print_error "Docker installe mais non fonctionnel"
+        # Ne pas dire "non fonctionnel" quand le daemon tourne et que seul le
+        # groupe docker manque au shell courant — le message final du bloc
+        # MISSING_DEPS donne alors la vraie marche a suivre.
+        if [ "$DOCKER_GROUP_PENDING" -eq 0 ]; then
+            print_error "Docker installe mais non fonctionnel"
+        fi
         return 1
     fi
     print_step "Docker detecte et fonctionnel"
@@ -371,6 +389,13 @@ AUTO_INSTALL_DEPS=0
 ASSUME_YES=0
 DOCTOR_ONLY=0
 SETUP_SCHEDULE=1  # installe la collecte automatique au niveau OS; --no-schedule pour couper
+DOCKER_GROUP_PENDING=0  # utilisateur ajoute au groupe docker mais shell pas encore relance
+
+# Arguments originaux, shell-quotes, pour la relance automatique via
+# `sg docker` (voir start_docker) — les flags sont simples mais on quote
+# quand meme par principe.
+INSTALL_ARGS=""
+for arg in "$@"; do INSTALL_ARGS="$INSTALL_ARGS $(printf '%q' "$arg")"; done
 
 for arg in "$@"; do
     case "$arg" in
@@ -506,6 +531,15 @@ fi
 # Verifier si des dependances manquent
 if [ $MISSING_DEPS -eq 1 ]; then
     echo ""
+    # Cas particulier : tout est installe, seul le groupe docker n'est pas
+    # encore actif dans ce shell. Le conseil generique "apt install python3"
+    # serait hors sujet et a deja perdu des utilisateurs — donner uniquement
+    # la vraie action.
+    if [ "$DOCKER_GROUP_PENDING" -eq 1 ]; then
+        print_error "Docker est installe et demarre, mais ce shell n'a pas encore le groupe docker."
+        print_info "Ouvrez un nouveau terminal (ou lancez: newgrp docker), puis relancez ./install.sh"
+        exit 1
+    fi
     print_error "Certains prerequis sont manquants. Installez-les et reexecutez ce script."
     if [ "$(uname)" = "Darwin" ]; then
         if check_command brew; then
