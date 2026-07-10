@@ -346,8 +346,14 @@ check_docker_store() {
 restart_docker_daemon() {
     local i
     has_systemd || return 1
-    confirm_system_change "Le script peut redemarrer le demon Docker pour recreer ses repertoires de travail." || return 1
-    print_info "Redemarrage du demon Docker..."
+    confirm_system_change "Le script peut redemarrer les demons Docker et containerd pour recreer leurs repertoires de travail." || return 1
+    print_info "Redemarrage des demons containerd et Docker..."
+    # C'est containerd (service separe avec Docker CE) qui recree le
+    # repertoire des snapshots a son demarrage — redemarrer docker seul ne
+    # suffit pas. Unite absente (Docker Desktop, docker.io ancien) : tolere.
+    if systemctl list-unit-files containerd.service >/dev/null 2>&1; then
+        sudo_cmd systemctl restart containerd || return 1
+    fi
     sudo_cmd systemctl restart docker || return 1
     for i in $(seq 1 30); do
         docker info >/dev/null 2>&1 && return 0
