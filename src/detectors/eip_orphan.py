@@ -22,7 +22,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 from dotenv import load_dotenv
-import psycopg2
+
+from core.database import get_db_connection, release_connection
 
 from core.pricing import stamp_pricing
 
@@ -71,14 +72,10 @@ class EIPOrphanDetector:
         if missing:
             raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
 
-        self.conn = psycopg2.connect(
-            host=os.getenv("DB_HOST"),
-            port=int(os.getenv("DB_PORT")),
-            database=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            connect_timeout=10,
-        )
+        # Central pool from core.database: config, timeouts and validation
+        # live in ONE place instead of a copy per detector. Release with
+        # release_connection(), not close() -- the connection is pooled.
+        self.conn = get_db_connection()
 
     def detect(self) -> List[Dict[str, Any]]:
         logger.info("Scanning for unassociated Elastic IPs across regions...")
@@ -242,7 +239,7 @@ class EIPOrphanDetector:
 
     def close(self):
         if hasattr(self, "conn") and self.conn:
-            self.conn.close()
+            release_connection(self.conn)
 
     def __del__(self):
         self.close()

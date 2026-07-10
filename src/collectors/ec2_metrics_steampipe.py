@@ -20,7 +20,8 @@ import sys
 from typing import Any, Dict, List, Tuple
 
 from dotenv import load_dotenv
-import psycopg2
+
+from core.database import get_db_connection, release_connection
 from psycopg2.extras import execute_values
 
 
@@ -58,14 +59,10 @@ class SteampipeEC2MetricsCollector:
         if missing:
             raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
 
-        self.conn = psycopg2.connect(
-            host=os.getenv("DB_HOST"),
-            port=int(os.getenv("DB_PORT")),
-            database=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            connect_timeout=10,
-        )
+        # Central pool from core.database: config, timeouts and validation
+        # live in ONE place instead of a copy per detector. Release with
+        # release_connection(), not close() -- the connection is pooled.
+        self.conn = get_db_connection()
 
     def collect(self) -> List[Tuple]:
         logger.info("Collecting EC2 CPU metrics via Steampipe (last 7 days)...")
@@ -128,7 +125,7 @@ class SteampipeEC2MetricsCollector:
 
     def close(self):
         if hasattr(self, "conn") and self.conn:
-            self.conn.close()
+            release_connection(self.conn)
 
     def __del__(self):
         self.close()

@@ -23,6 +23,9 @@ from dotenv import load_dotenv
 import psycopg2
 from psycopg2 import DatabaseError, OperationalError
 
+from core.database import get_db_connection, release_connection
+from core.database import DatabaseError as CoreDatabaseError
+
 from core.pricing import stamp_pricing
 
 # Load environment variables
@@ -134,18 +137,13 @@ class EC2IdleDetector:
             logger.error(f"Missing database variables: {', '.join(missing)}")
             raise DetectorError(f"Missing required environment variables: {', '.join(missing)}")
 
-        # Initialize database connection
+        # Central pool from core.database: config, timeouts and validation
+        # live in ONE place instead of a copy per detector. Release with
+        # release_connection(), not close() -- the connection is pooled.
         try:
-            self.conn = psycopg2.connect(
-                host=os.getenv("DB_HOST"),
-                port=int(os.getenv("DB_PORT")),
-                database=os.getenv("DB_NAME"),
-                user=os.getenv("DB_USER"),
-                password=os.getenv("DB_PASSWORD"),
-                connect_timeout=10,
-            )
+            self.conn = get_db_connection()
             logger.info("Database connection established")
-        except OperationalError as e:
+        except CoreDatabaseError as e:
             logger.error(f"Failed to connect to database: {e}")
             raise DetectorError(f"Database connection failed: {e}") from e
 
@@ -559,7 +557,7 @@ class EC2IdleDetector:
     def close(self) -> None:
         """Close database connection."""
         if hasattr(self, "conn") and self.conn:
-            self.conn.close()
+            release_connection(self.conn)
             logger.info("Database connection closed")
 
     def __del__(self) -> None:
