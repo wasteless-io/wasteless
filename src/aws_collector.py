@@ -18,7 +18,6 @@ Pré-requis:
 """
 
 import pandas as pd
-import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -26,6 +25,7 @@ import os
 import sys
 
 from core.aws_clients import get_client
+from core.database import get_db_connection, release_connection
 
 
 class AWSCostCollector:
@@ -187,14 +187,9 @@ class AWSCostCollector:
             return
 
         try:
-            # Établir la connexion PostgreSQL
-            connection = psycopg2.connect(
-                host=os.getenv("DB_HOST", "localhost"),
-                port=int(os.getenv("DB_PORT", 5432)),
-                database=os.getenv("DB_NAME", "wasteless"),
-                user=os.getenv("DB_USER", "wasteless"),
-                password=os.getenv("DB_PASSWORD"),
-            )
+            # Pool central de core.database (config et timeouts au meme
+            # endroit) ; liberation via release_connection(), pas close().
+            connection = get_db_connection()
             cursor = connection.cursor()
 
             # Récupérer les métadonnées AWS
@@ -237,9 +232,9 @@ class AWSCostCollector:
 
             print(f"\n💾 {rows_inserted} enregistrements insérés dans PostgreSQL")
 
-            # Fermer les connexions
+            # Rendre la connexion au pool
             cursor.close()
-            connection.close()
+            release_connection(connection)
 
         except Exception as e:
             print(f"❌ Erreur lors de la sauvegarde PostgreSQL: {e}")

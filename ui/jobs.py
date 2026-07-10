@@ -7,6 +7,10 @@ see main.py's lifespan) plus the AWS execution helpers they share with the
 from contextlib import closing
 from typing import Any, Dict, List, Optional, Tuple
 
+# Deliberate direct psycopg2.connect() here (not state.get_db's pool): a
+# scheduler job can hold its connection for the length of an AWS sweep, and
+# parking long-lived work in the request pool would starve page loads. One
+# short-lived connection per 5-min tick is cheap and self-cleaning.
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
