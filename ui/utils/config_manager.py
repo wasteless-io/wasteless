@@ -66,7 +66,7 @@ def _file_lock(filepath: str, mode: str = "r", exclusive: bool = False):
                 if time.time() - start_time > _LOCK_TIMEOUT:
                     raise TimeoutError(
                         f"Could not acquire file lock on {filepath} within {_LOCK_TIMEOUT}s"
-                    )
+                    ) from None
                 time.sleep(0.1)  # Wait before retrying
 
         yield file_obj

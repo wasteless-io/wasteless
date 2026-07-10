@@ -133,7 +133,7 @@ def parse_policy_yaml(text: str) -> Dict[str, Any]:
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as e:
-        raise ConfigValidationError(f"invalid YAML: {e}")
+        raise ConfigValidationError(f"invalid YAML: {e}") from e
     if data is None:
         raise ConfigValidationError("policy document is empty")
     return validate_policy(data)
