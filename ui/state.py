@@ -8,6 +8,7 @@ of importing each other — avoids circular imports between routers.
 """
 
 import os
+import threading
 from pathlib import Path
 from datetime import datetime
 
@@ -54,9 +55,26 @@ DB_CONFIG = {
 # pairing it with a second blocking primitive across the same worker
 # threads froze all of them. Don't reintroduce that pattern without
 # testing it under concurrency again.
-_pool = pg_pool.ThreadedConnectionPool(
-    minconn=2, maxconn=40, cursor_factory=RealDictCursor, **DB_CONFIG
-)
+#
+# Created lazily on first use, NOT at import: importing state/jobs/main
+# must not require a live Postgres (test modules skip cleanly instead of
+# erroring at collection; /setup can render before the DB exists). The
+# operational fail-fast lives in main.py's lifespan, which pings the DB
+# at startup. The lock only guards creation; getconn() stays lock-free
+# afterwards (see the deadlock note above).
+_pool = None
+_pool_lock = threading.Lock()
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                _pool = pg_pool.ThreadedConnectionPool(
+                    minconn=2, maxconn=40, cursor_factory=RealDictCursor, **DB_CONFIG
+                )
+    return _pool
 
 # Fixed USD→EUR rate, same convention as the detectors' AWS pricing and
 # src/constants.py — used for LLM costs and the Waste Rate denominator
@@ -70,7 +88,8 @@ DAYS_PER_MONTH = 365 / 12
 
 def get_db():
     """Get a pooled database connection."""
-    conn = _pool.getconn()
+    pool = _get_pool()
+    conn = pool.getconn()
     try:
         yield conn
     finally:
@@ -80,7 +99,7 @@ def get_db():
         # to grab it inherits an open transaction. No-op if there's
         # nothing to roll back.
         conn.rollback()
-        _pool.putconn(conn)
+        pool.putconn(conn)
 
 
 # Statuses whose resource might still vanish out from under us and needs
