@@ -1,0 +1,11 @@
+# Outils de qualite de code (lint, format, typage) — memes versions en local
+# (venv racine, installes par install.sh) et en CI (job lint), pour que
+# `make lint` et la CI soient d'accord a la version pres. Ce qui est
+# REELLEMENT installe est requirements-dev.lock. Apres toute edition ici :
+#   uv pip compile requirements-dev.txt --universal --python-version 3.11 --output-file requirements-dev.lock
+ruff>=0.14
+black>=25.0
+mypy>=1.14
+# shellcheck empaquete en wheel — installe le vrai binaire, permet a
+# `make lint` de couvrir aussi install.sh/wasteless.sh comme la CI.
+shellcheck-py>=0.10

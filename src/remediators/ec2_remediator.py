@@ -17,7 +17,7 @@ import os
 import json
 import zlib
 from datetime import datetime, timedelta, date
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 
 
@@ -222,12 +222,13 @@ class EC2Remediator:
 
     def log_action(
         self,
-        recommendation_id: int,
+        # Optional: a rollback (start_instance) has no recommendation behind it
+        recommendation_id: Optional[int],
         resource_id: str,
         action_type: str,
         status: str,
-        metadata: Dict = None,
-        error_message: str = None,
+        metadata: Optional[Dict] = None,
+        error_message: Optional[str] = None,
     ) -> int:
         """
         Log remediation action to database.
@@ -297,7 +298,7 @@ class EC2Remediator:
         """
         logger.info(f"🎯 Attempting to stop instance: {instance_id}")
 
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "instance_id": instance_id,
             "action": "stop",
@@ -494,7 +495,9 @@ class EC2Remediator:
 
         return result
 
-    def _update_action_status(self, action_log_id: int, status: str, error_message: str = None):
+    def _update_action_status(
+        self, action_log_id: int, status: str, error_message: Optional[str] = None
+    ):
         """Update action log status."""
         cursor = self.conn.cursor()
         cursor.execute(
