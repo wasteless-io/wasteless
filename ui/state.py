@@ -76,6 +76,7 @@ def _get_pool():
                 )
     return _pool
 
+
 # Fixed USD→EUR rate, same convention as the detectors' AWS pricing and
 # src/constants.py — used for LLM costs and the Waste Rate denominator
 USD_TO_EUR = float(os.getenv("USD_TO_EUR", "0.92"))

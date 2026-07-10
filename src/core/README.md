@@ -6,7 +6,7 @@ Nothing here talks to AWS for detection logic itself — that lives in
 
 | File | Purpose |
 |---|---|
-| `database.py` | Connection pool (`init_connection_pool`, `get_db_connection`, `get_cursor`), `health_check()`. Everything in `src/` and `ui/` goes through this rather than opening raw psycopg2 connections. |
+| `database.py` | Connection pool (`init_connection_pool`, `get_db_connection`/`release_connection`, `get_cursor`), `health_check()`. Everything in `src/` goes through this rather than opening raw psycopg2 connections. The UI keeps its own pool (`ui/state.py`, ADR 0001) and its scheduler jobs open deliberate one-shot connections (`ui/jobs.py`). |
 | `config.py` | `RemediationConfig.from_yaml()` loads `config/remediation.yaml` into typed dataclasses (`AWSConfig`, `DatabaseConfig`, `DetectorConfig`, `TerraformPRConfig`). `get_config()` / `validate_environment()` are the entry points scripts call at startup. |
 | `safeguards.py` | `Safeguards` — the 7 sequential checks run before any AWS write action (auto-remediation enabled, not whitelisted, age ≥ 30d, confidence ≥ 0.80, idle ≥ 14d, in schedule window, under the per-run instance cap). Raises `SafeguardException` on the first failed check; see the [Safeguards section of the root README](../../README.md#safeguards). |
 | `aws_clients.py` | Central boto3 client factory (`get_client`) with cross-account `AssumeRole` support (`AWS_ROLE_ARN` / `AWS_WRITE_ROLE_ARN` / `AWS_EXTERNAL_ID`). `reset_cache()` is for tests. `ui/utils/aws_clients.py` re-exports this rather than duplicating it. |

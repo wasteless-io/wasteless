@@ -17,8 +17,9 @@ from core.aws_clients import get_client
 
 from datetime import datetime, timedelta, date
 from dotenv import load_dotenv
-import psycopg2
 from psycopg2.extras import execute_values
+
+from core.database import get_db_connection, release_connection
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Optional
 
@@ -262,14 +263,9 @@ class AWSCloudWatchCollector:
             return 0
 
         try:
-            # Connect to PostgreSQL
-            conn = psycopg2.connect(
-                host=os.getenv("DB_HOST"),
-                port=int(os.getenv("DB_PORT")),
-                database=os.getenv("DB_NAME"),
-                user=os.getenv("DB_USER"),
-                password=os.getenv("DB_PASSWORD"),
-            )
+            # Central pool from core.database (config and timeouts in one
+            # place); released via release_connection(), not close().
+            conn = get_db_connection()
             cursor = conn.cursor()
 
             # Prepare data for batch insert
@@ -315,7 +311,7 @@ class AWSCloudWatchCollector:
             logger.info(f"✅ Inserted/updated {rows_inserted} rows in PostgreSQL")
 
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
             return rows_inserted
 
