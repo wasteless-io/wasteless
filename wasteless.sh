@@ -316,7 +316,11 @@ _collect() {
     else
         echo -e "${YELLOW}[WARN]${NC} steampipe CLI not found — skipping steps 7-10"
         echo "  (unused load balancers, NAT gateways, VPCs, gp2 migration)."
-        echo "  Install with: brew install turbot/tap/steampipe && steampipe plugin install aws"
+        if [ "$(uname)" = "Darwin" ]; then
+            echo "  Install with: brew install turbot/tap/steampipe && steampipe plugin install aws"
+        else
+            echo "  Install with: sudo /bin/sh -c \"\$(curl -fsSL https://steampipe.io/install/steampipe.sh)\" && steampipe plugin install aws"
+        fi
         echo ""
         _SKIPPED_STEPS="elb_unused,nat_gateway_unused,vpc_unused,ebs_gp2_migration"
     fi
