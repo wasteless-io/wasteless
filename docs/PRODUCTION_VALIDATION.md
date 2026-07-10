@@ -4,9 +4,8 @@
 > AWS** — end to end against a real (throwaway) account, with real detection,
 > a real `stop_instances` call, real audit rows, and a real rollback.
 >
-> This closes item #1 of [MATURITY_TODO.md](MATURITY_TODO.md): moving from
-> "dry-run by default, never exercised live" to "demonstrated on a sandbox with
-> captured evidence".
+> This moves the project from "dry-run by default, never exercised live" to
+> "demonstrated on a sandbox with captured evidence".
 
 **Run this only against a dedicated sandbox AWS account you own.** It stops a
 real instance and incurs (tiny) real cost. Never point it at an account with

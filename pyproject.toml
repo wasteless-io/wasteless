@@ -35,8 +35,8 @@ extend-exclude = ["venv", "venv.nosync", ".venv", "ui/venv", "ui/venv.nosync"]
 # otherwise the original traceback is lost.
 extend-select = ["S", "B904"]
 # E402: this codebase relies on sys.path.insert()/load_dotenv() before local
-# imports in scripts and detectors (see CLAUDE.md) -- not fixable without a
-# packaging change, tracked separately.
+# imports in scripts and detectors (see docs/adr/0004-two-python-environments.md)
+# -- not fixable without a packaging change, tracked separately.
 # S603/S607: subprocess without shell=True and CLI names resolved via PATH
 # (steampipe, terraform, git) are this codebase's *safe* invocation pattern;
 # both rules flag the pattern itself, not a misuse.

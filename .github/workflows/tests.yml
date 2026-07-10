@@ -61,7 +61,7 @@ jobs:
       # re-resolve. Blocking on purpose: the baseline is clean, and because
       # the locks pin everything, a CVE stays until a human regenerates them.
       # If one lands in a transitive pin, bump it in requirements.txt and
-      # re-run `uv pip compile` (see CLAUDE.md).
+      # re-run `uv pip compile` (the exact command is in each lock's header).
       - name: Audit backend lock (requirements.lock)
         run: pip-audit -r requirements.lock --disable-pip --no-deps
       - name: Audit UI lock (ui/requirements.lock)
