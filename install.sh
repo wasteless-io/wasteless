@@ -104,13 +104,11 @@ detect_host() {
         . /etc/os-release
         OS_ID="${ID:-unknown}"
         OS_ID_LIKE="${ID_LIKE:-}"
-        OS_VERSION="${VERSION_ID:-unknown}"
         OS_CODENAME="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
         OS_PRETTY="${PRETTY_NAME:-$OS_ID}"
     else
         OS_ID="$( [ "$OS_NAME" = "Darwin" ] && echo macos || echo unknown )"
         OS_ID_LIKE=""
-        OS_VERSION="unknown"
         OS_CODENAME=""
         OS_PRETTY="$OS_NAME"
     fi
@@ -302,6 +300,62 @@ start_docker() {
     return 1
 }
 
+# ---------------------------------------------------------------------------
+# Store d'images corrompu : typiquement une migration docker.io -> docker-ce
+# (apt purge) qui supprime les donnees de /var/lib/containerd en laissant la
+# base de metadonnees. Deux signatures observees :
+#   - "blob not found" : les metadonnees referencent des blobs disparus ;
+#     `docker rmi -f <sha>` purge chaque entree orpheline (sans risque, les
+#     donnees de ces images sont deja perdues) — le sha signale est l'ID de
+#     l'image cassee.
+#   - "failed to create prepare snapshot dir" : le repertoire de travail des
+#     snapshots a ete efface ; le demon le recree a son demarrage.
+# ---------------------------------------------------------------------------
+docker_store_healthy() {
+    docker images >/dev/null 2>&1
+}
+
+check_docker_store() {
+    local out blob i
+    out="$(docker images 2>&1)" && return 0
+    if ! echo "$out" | grep -q 'blob not found'; then
+        # Autre echec (daemon arrete, droits) : deja gere par start_docker.
+        return 0
+    fi
+    print_warning "Store d'images Docker corrompu (blob manquant dans /var/lib/containerd)"
+    if ! confirm_system_change "Le script peut purger les metadonnees des images orphelines (leurs donnees sont deja perdues)."; then
+        print_info "Reparation manuelle : docker rmi -f <sha256 signale par 'docker images'>, puis relancez ./install.sh"
+        return 1
+    fi
+    for i in $(seq 1 20); do
+        if out="$(docker images 2>&1)"; then
+            print_step "Store d'images Docker repare ($((i - 1)) image(s) orpheline(s) purgee(s))"
+            return 0
+        fi
+        echo "$out" | grep -q 'blob not found' || break
+        blob="$(echo "$out" | grep -oE 'sha256:[a-f0-9]{64}' | head -n1)"
+        [ -n "$blob" ] || break
+        print_info "Purge des metadonnees orphelines : $blob"
+        silence docker rmi -f "$blob" || break
+    done
+    print_error "Store Docker toujours corrompu apres purge"
+    print_info "Redemarrez le demon (sudo systemctl restart docker) puis relancez ./install.sh"
+    return 1
+}
+
+restart_docker_daemon() {
+    local i
+    has_systemd || return 1
+    confirm_system_change "Le script peut redemarrer le demon Docker pour recreer ses repertoires de travail." || return 1
+    print_info "Redemarrage du demon Docker..."
+    sudo_cmd systemctl restart docker || return 1
+    for i in $(seq 1 30); do
+        docker info >/dev/null 2>&1 && return 0
+        sleep 1
+    done
+    return 1
+}
+
 ensure_docker() {
     if ! command -v docker >/dev/null 2>&1; then
         install_docker || return 1
@@ -316,6 +370,9 @@ ensure_docker() {
         return 1
     fi
     print_step "Docker detecte et fonctionnel"
+    # Detecter un store corrompu ici, pas a l'etape 4 : l'utilisateur a la
+    # remediation avant d'avoir attendu toute la partie Python/config.
+    check_docker_store || return 1
     if ! compose version >/dev/null 2>&1; then
         print_error "Docker Compose introuvable — installez le plugin docker-compose-plugin"
         return 1
@@ -489,6 +546,8 @@ fi
 if [ "$DOCTOR_ONLY" -eq 1 ]; then
     if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
         print_step "Docker detecte et fonctionnel"
+        docker_store_healthy \
+            || { print_warning "Store d'images Docker corrompu (relancez sans --doctor pour le reparer)"; MISSING_DEPS=1; }
         compose version >/dev/null 2>&1 && print_step "Docker Compose detecte" \
             || { print_warning "Docker Compose introuvable (plugin docker-compose-plugin)"; MISSING_DEPS=1; }
     elif command -v docker >/dev/null 2>&1; then
@@ -612,7 +671,8 @@ create_venv() {
 install_deps() {
     local venv_path="$1"
     local req_file="$2"
-    local quiet_opt=$([ $VERBOSE -eq 0 ] && echo "-q" || echo "")
+    local quiet_opt
+    quiet_opt=$([ $VERBOSE -eq 0 ] && echo "-q" || echo "")
     if [ $USE_UV -eq 1 ]; then
         uv pip install --python "$venv_path/bin/python3" -r "$req_file" $quiet_opt
     else
@@ -875,6 +935,26 @@ check_port_conflict
 
 print_info "Demarrage de PostgreSQL via Docker Compose..."
 
+# Un `compose up` peut echouer sur un /var/lib/containerd partiellement
+# efface (voir check_docker_store) : le repertoire des snapshots manque et
+# seul un redemarrage du demon le recree. Detecter cette signature et
+# reessayer une fois plutot que de laisser l'erreur brute a l'utilisateur.
+start_postgres_container() {
+    local out
+    if out="$(compose up -d postgres 2>&1)"; then
+        return 0
+    fi
+    if echo "$out" | grep -q 'failed to create prepare snapshot dir'; then
+        print_warning "Repertoire de travail containerd manquant (store partiellement efface)"
+        if restart_docker_daemon && out="$(compose up -d postgres 2>&1)"; then
+            return 0
+        fi
+    fi
+    print_error "Echec du demarrage de PostgreSQL :"
+    echo "$out" >&2
+    return 1
+}
+
 if docker ps --format '{{.Names}}' | grep -q '^wasteless-postgres$'; then
     print_warning "PostgreSQL deja en cours d'execution"
 elif docker ps -a --format '{{.Names}}' | grep -q '^wasteless-postgres$'; then
@@ -882,13 +962,13 @@ elif docker ps -a --format '{{.Names}}' | grep -q '^wasteless-postgres$'; then
     if ! silence docker start wasteless-postgres; then
         print_warning "Redemarrage echoue (volumes invalides) — suppression et recreation du conteneur..."
         silence docker rm wasteless-postgres
-        compose up -d postgres
+        start_postgres_container || exit 1
         print_step "PostgreSQL recree et demarre"
     else
         print_step "PostgreSQL redemarre"
     fi
 else
-    compose up -d postgres
+    start_postgres_container || exit 1
     print_step "PostgreSQL demarre"
 fi
 
