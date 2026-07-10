@@ -30,13 +30,14 @@ jobs:
       - name: black --check
         run: black --check src ui tests
       # Covers all of src/core/ (config, safeguards, the finops_invariants
-      # that gate claim wording, the aws client factory, pricing) plus the
-      # UI files that execute real AWS actions: ui/jobs.py runs the scheduled
+      # that gate claim wording, the aws client factory, pricing), all of
+      # src/remediators/ (the code that WRITES to AWS), plus the UI files
+      # that execute real AWS actions: ui/jobs.py runs the scheduled
       # executions (grace executor, sync), remediator/aws_clients are the
-      # client-factory bridges. Extending mypy past src/core/ (detectors,
-      # ui/routes) is tracked separately, not yet a blocking gate.
-      - name: mypy (src/core + AWS-action UI files)
-        run: mypy src/core/ ui/utils/remediator.py ui/jobs.py ui/utils/aws_clients.py --ignore-missing-imports --follow-imports=silent
+      # client-factory bridges. The ratchet plan (what widens next) lives
+      # in docs/adr/0005-scoped-mypy-and-coverage-gates.md.
+      - name: mypy (src/core + src/remediators + AWS-action UI files)
+        run: mypy src/core/ src/remediators/ ui/utils/remediator.py ui/jobs.py ui/utils/aws_clients.py --ignore-missing-imports --follow-imports=silent
 
   shellcheck:
     name: Lint shell (shellcheck)

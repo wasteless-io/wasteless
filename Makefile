@@ -34,7 +34,7 @@ test-ui: db-wait ## Tests UI — démarre PostgreSQL si possible
 lint: ## black + ruff + mypy + shellcheck — mêmes versions que la CI (requirements-dev.lock)
 	./venv/bin/black --check src/ ui/ tests/
 	./venv/bin/ruff check src/ ui/ tests/
-	./venv/bin/mypy src/core/ ui/utils/remediator.py ui/jobs.py ui/utils/aws_clients.py --ignore-missing-imports --follow-imports=silent
+	./venv/bin/mypy src/core/ src/remediators/ ui/utils/remediator.py ui/jobs.py ui/utils/aws_clients.py --ignore-missing-imports --follow-imports=silent
 	./venv/bin/shellcheck -S warning install.sh wasteless.sh uninstall.sh scripts/*.sh ui/*.sh
 
 doctor: ## Diagnostique les problèmes d'environnement macOS courants
