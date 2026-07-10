@@ -137,6 +137,20 @@ Detectors can also be validated against **real AWS resources** using the Terrafo
 test fixtures — see [terraform/test-fixtures/README.md](../terraform/test-fixtures/README.md).
 Always `terraform destroy` afterwards.
 
+### What runs where
+
+Skips are intentional, not failures — `pytest -rs` (on by default) tells you
+what was skipped and why. The map:
+
+| Test layer | Needs | Locally | Per-PR CI | Nightly |
+|---|---|---|---|---|
+| Unit (backend + UI) | nothing | ✅ always | ✅ | ✅ |
+| DB integration | PostgreSQL | ✅ (`make test` starts it) | ✅ (service container) | ✅ |
+| AWS write path | nothing (moto, in-process) | ✅ | ✅ | ✅ |
+| backup/restore | docker or psql CLI | if installed | ✅ | ✅ |
+| terraform editor | terraform CLI | if installed | skipped | skipped |
+| Live AWS | sandbox account creds | never | never (credential-free) | gated step |
+
 ---
 
 ## Adding a new detector
@@ -226,3 +240,8 @@ Common issues:
 - [ ] New features have tests
 - [ ] Documentation updated
 - [ ] `.env` not committed, no hardcoded credentials
+- [ ] **Narrow the excepts you touch**: existing broad `except Exception`
+      handlers at I/O boundaries are tolerated, but any handler you edit
+      (and any new one) should catch the concrete exceptions instead
+      (`botocore.exceptions.ClientError`, `psycopg2.Error`, …) and always
+      log what it swallows
