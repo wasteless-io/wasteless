@@ -159,10 +159,15 @@ class ResourceRemediator:
         return float(row[0])
 
     def remediate(
-        self, resource_id: str, recommendation_id: int, reason: str = "", region: str = None
+        self,
+        resource_id: str,
+        recommendation_id: int,
+        reason: str = "",
+        region: Optional[str] = None,
     ) -> Dict:
         """Run the full guarded remediation flow for one resource."""
-        region = region or os.getenv("AWS_REGION", "eu-west-1")
+        if not region:
+            region = os.getenv("AWS_REGION", "eu-west-1")
         logger.info(
             f"Remediating {self.resource_type} {resource_id} "
             f"in {region} (dry_run={self.dry_run})"

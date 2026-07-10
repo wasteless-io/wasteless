@@ -20,7 +20,13 @@ exactly where a type error or an untested branch is most expensive.
   (current ~65%). The floor is meant to be ratcheted **up**, never lowered.
 
 Both gates are meant to widen over time — the scope is a starting line, not the
-target.
+target. Ratchet plan, in order (each step = green locally, then added to the CI
+command and `make lint`):
+
+1. ~~`src/remediators/` — the code that writes to AWS~~ (done)
+2. `src/detectors/steampipe_base.py` + `src/collectors/` — shared plumbing
+3. `src/detectors/` — bulk of untyped AWS dicts, lowest yield, last
+4. `ui/routes/` — after the detectors, same reasoning
 
 ## Consequences
 
