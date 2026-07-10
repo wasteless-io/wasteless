@@ -321,46 +321,6 @@ class RemediatorProxy:
 
         return results
 
-    def reject_recommendations(
-        self, conn, recommendation_ids: List[int], reason: str = "Rejected by user"
-    ) -> Dict:
-        """
-        Reject recommendations (mark as rejected in database).
-
-        Args:
-            conn: PostgreSQL database connection
-            recommendation_ids: List of recommendation IDs to reject
-            reason: Optional reason for rejection
-
-        Returns:
-            Dict with count of rejected recommendations
-        """
-        try:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                UPDATE recommendations
-                SET status = 'rejected',
-                    applied_at = NOW()
-                WHERE id = ANY(%s)
-                RETURNING id
-            """,
-                (recommendation_ids,),
-            )
-
-            rejected_ids = [row[0] for row in cursor.fetchall()]
-            conn.commit()
-            cursor.close()
-
-            return {
-                "success": True,
-                "rejected_count": len(rejected_ids),
-                "rejected_ids": rejected_ids,
-            }
-        except Exception as e:
-            logger.error(f"Error rejecting recommendations: {e}")
-            return {"success": False, "error": str(e), "rejected_count": 0}
-
 
 def check_backend_available() -> bool:
     """

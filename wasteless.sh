@@ -87,7 +87,7 @@ _scheduler_installed() {
 # start
 # ---------------------------------------------------------------------------
 _start() {
-    cd "$SCRIPT_DIR/ui"
+    cd "$SCRIPT_DIR/ui" || exit 1
 
     if [ ! -f .env ]; then
         echo -e "${RED}[ERROR]${NC} ui/.env not found. Run ./install.sh first."
@@ -273,7 +273,7 @@ _collect() {
     echo $$ > "$COLLECT_LOCK_DIR/pid"
     trap 'rm -rf "$COLLECT_LOCK_DIR"' EXIT INT TERM
 
-    cd "$SCRIPT_DIR"
+    cd "$SCRIPT_DIR" || exit 1
 
     if [ ! -d "venv" ]; then
         echo -e "${RED}[ERROR]${NC} Virtual environment not found. Run ./install.sh first."

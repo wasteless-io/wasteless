@@ -36,6 +36,16 @@ jobs:
       - name: mypy (src/core + AWS-action UI files)
         run: mypy src/core/ ui/utils/remediator.py ui/jobs.py ui/utils/aws_clients.py --ignore-missing-imports --follow-imports=silent
 
+  shellcheck:
+    name: Lint shell (shellcheck)
+    runs-on: ubuntu-latest
+    # install.sh/wasteless.sh are the product's install and run surface
+    # (~2000 lines of bash); shellcheck ships preinstalled on the runners.
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck -S warning install.sh wasteless.sh uninstall.sh scripts/*.sh ui/*.sh
+
   security-audit:
     name: Dependency audit (pip-audit)
     runs-on: ubuntu-latest

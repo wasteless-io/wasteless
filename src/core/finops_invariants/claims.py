@@ -121,9 +121,7 @@ FORBIDDEN_WORDS_FOR_POTENTIAL_CLAIMS = FORBIDDEN_WORDS_FOR_POTENTIAL_CLAIMS + (
 )
 
 
-def validate_dashboard_headline(
-    headline: str, realized_savings_monthly: float, executed_actions_count: int
-) -> str:
+def validate_dashboard_headline(headline: str, executed_actions_count: int) -> str:
     """Un headline mentionnant 'realized' sans action exécutée surpromet :
     même règle que validate_claim_wording, appliquée au headline dashboard."""
     lowered = headline.lower()
