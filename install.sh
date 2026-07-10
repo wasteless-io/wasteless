@@ -586,6 +586,26 @@ else
     print_info "Installez AWS CLI: https://aws.amazon.com/cli/"
 fi
 
+# Steampipe (optionnel — 4 detecteurs sur 10 en dependent : ELB, NAT
+# gateways, VPC inutilises, migration gp2->gp3 ; sans lui chaque collecte
+# est marquee partielle sur le dashboard)
+if check_command steampipe; then
+    print_step "Steampipe detecte"
+    # Le CLI seul ne suffit pas : les detecteurs interrogent AWS via le
+    # plugin turbot/aws, installe sous ~/.steampipe.
+    if ! ls "$HOME"/.steampipe/plugins/hub.steampipe.io/plugins/turbot/aws* >/dev/null 2>&1; then
+        print_warning "Plugin AWS de Steampipe absent — les detecteurs Steampipe echoueront"
+        print_info "Installez-le: steampipe plugin install aws"
+    fi
+else
+    print_warning "Steampipe non trouve (optionnel) — detecteurs ELB/NAT/VPC/gp2 ignores (collecte partielle)"
+    if [ "$OS_ID" = "macos" ]; then
+        print_info "Installez-le: brew install turbot/tap/steampipe && steampipe plugin install aws"
+    else
+        print_info "Installez-le: sudo /bin/sh -c \"\$(curl -fsSL https://steampipe.io/install/steampipe.sh)\" && steampipe plugin install aws"
+    fi
+fi
+
 # Git
 if check_command git; then
     print_step "Git detecte"
