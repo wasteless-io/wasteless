@@ -5,8 +5,7 @@ maintainer would otherwise have to reverse-engineer from code comments or, worse
 re-litigate by breaking something. Each ADR is one decision: context, the call,
 and what it costs us.
 
-These reduce the bus factor (MATURITY_TODO.md #4): the *why* lives here, not only
-in inline comments.
+These reduce the bus factor: the *why* lives here, not only in inline comments.
 
 | ADR | Decision |
 |---|---|
