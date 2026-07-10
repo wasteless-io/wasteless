@@ -19,10 +19,12 @@ jobs:
           cache-dependency-path: |
             requirements.lock
             ui/requirements.lock
+            requirements-dev.lock
+      # Lint tools come from the same pinned lock install.sh puts in the
+      # local venv: `make lint` and CI agree to the version — an unpinned
+      # `pip install ruff` used to let a new release break CI codelessly.
       - name: Install dependencies
-        run: |
-          pip install -r requirements.lock -r ui/requirements.lock
-          pip install ruff black mypy
+        run: pip install -r requirements.lock -r ui/requirements.lock -r requirements-dev.lock
       - name: ruff check
         run: ruff check src ui tests
       - name: black --check

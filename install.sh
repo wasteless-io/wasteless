@@ -753,6 +753,12 @@ print_verbose "installation des dependances (requirements.lock)"
 #   --output-file requirements.lock
 install_deps venv requirements.lock
 
+# Outils de qualite (ruff, black, mypy, shellcheck) epingles dans le meme
+# venv : `make lint` fonctionne des l'installation et tourne exactement les
+# versions de la CI (qui installe depuis le meme lock).
+print_verbose "installation des outils de lint (requirements-dev.lock)"
+install_deps venv requirements-dev.lock
+
 # Backend (src/core, src/detectors, ...) installe en editable dans le venv
 # racine (pyproject.toml). Rend `core`, `detectors`, etc. importables partout
 # sans sys.path.insert() en tete de chaque module : `python3 src/detectors/
