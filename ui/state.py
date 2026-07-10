@@ -120,6 +120,12 @@ templates.env.globals["get_dry_run"] = _config_manager.get_dry_run
 # exposed to templates so the conversion is disclosed instead of implicit.
 templates.env.globals["usd_to_eur"] = USD_TO_EUR
 
+# AWS connectivity for the global "connect your account" banner (base.html).
+# Reads the status cached by main.py's startup and the sync job — never
+# calls AWS during a page render. Tri-state: True / False / None (unknown,
+# banner hidden until the first check completes).
+templates.env.globals["aws_reachable"] = lambda: _aws_status.get("reachable")
+
 # Scheduler instance (jobs registered by main.py's lifespan)
 scheduler = AsyncIOScheduler()
 
