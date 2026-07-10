@@ -18,6 +18,10 @@ Open-source cloud cost optimization. Detect idle and orphaned AWS resources. Rem
 
 **Requirements:** Docker, Python 3.11+, AWS credentials (`aws configure`)
 
+> **Non-technical?** Follow [docs/CTO_QUICKSTART.md](docs/CTO_QUICKSTART.md) —
+> install, then connect AWS from the web UI (`/setup`) in ~10 minutes,
+> no terminal AWS knowledge needed.
+
 On macOS, install all prerequisites in one command:
 
 ```bash

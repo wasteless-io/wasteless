@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Connect AWS - Wasteless.io{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Connect your AWS account</h1>
+    <p>About 10 minutes, read-only by default — wasteless cannot modify anything unless you later create the optional remediation role.</p>
+</div>
+
+<!-- Current status -->
+<div class="card mb-2" style="padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.5rem 1.5rem; flex-wrap: wrap; font-size: 0.85rem;">
+    <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+        <span class="text-muted">AWS connection:</span>
+        {% if aws_status %}<span class="badge badge-success">Connected</span>
+        {% elif aws_status is sameas false %}<span class="badge badge-danger">Not connected</span>
+        {% else %}<span class="badge badge-info">Unknown</span>{% endif %}
+    </span>
+    {% if current_role_arn %}
+    <span class="text-muted">Role: {{ current_role_arn }}</span>
+    {% elif has_access_keys %}
+    <span class="text-muted">Using direct access keys</span>
+    {% endif %}
+</div>
+
+<!-- Step 1 -->
+<div class="card mb-2">
+    <h3 style="margin-bottom: 0.5rem;">1 &mdash; Create the wasteless roles in your AWS account</h3>
+    <p class="text-muted" style="margin-bottom: 0.75rem;">
+        One CloudFormation stack (or Terraform module) creates <code>wasteless-readonly</code>
+        &mdash; Describe/Get/List permissions only. It outputs the values you paste in step&nbsp;2.
+        If someone on your team manages AWS, send them this link; it is the only part that
+        happens inside your AWS account.
+    </p>
+    <ul style="margin: 0 0 0.5rem 1.25rem; font-size: 0.875rem;">
+        <li><strong>CloudFormation</strong> (no tooling needed): upload
+            <code>onboarding/cloudformation/</code> in the
+            <a href="https://console.aws.amazon.com/cloudformation/home#/stacks/create" target="_blank" rel="noopener">AWS console &rarr; Create stack</a></li>
+        <li><strong>Terraform</strong>: apply <code>onboarding/terraform/</code></li>
+    </ul>
+    <p class="text-muted" style="font-size: 0.8rem;">
+        Full walkthrough: <code>docs/CTO_QUICKSTART.md</code> (short) or <code>docs/AWS_SETUP.md</code> (detailed, per-permission).
+    </p>
+</div>
+
+<!-- Step 2: the form -->
+<div class="card mb-2">
+    <h3 style="margin-bottom: 0.5rem;">2 &mdash; Paste the values, test, save</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
+        <label style="font-size: 0.85rem;">AWS region
+            <input class="form-input" id="setup-region" value="{{ current_region }}" placeholder="eu-west-1">
+        </label>
+        <label style="font-size: 0.85rem;">Read-only role ARN <span class="text-muted">(from the stack outputs)</span>
+            <input class="form-input" id="setup-role-arn" value="{{ current_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-readonly">
+        </label>
+        <label style="font-size: 0.85rem;">Remediation role ARN <span class="text-muted">(optional)</span>
+            <input class="form-input" id="setup-write-role-arn" value="{{ current_write_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-remediation">
+        </label>
+        <label style="font-size: 0.85rem;">External ID <span class="text-muted">(optional)</span>
+            <input class="form-input" id="setup-external-id" placeholder="">
+        </label>
+        <label style="font-size: 0.85rem;">Access key ID <span class="text-muted">(source credentials; empty = use ~/.aws)</span>
+            <input class="form-input" id="setup-access-key" autocomplete="off" placeholder="AKIA...">
+        </label>
+        <label style="font-size: 0.85rem;">Secret access key
+            <input class="form-input" id="setup-secret-key" type="password" autocomplete="off" placeholder="{{ 'saved — leave empty to keep' if has_access_keys else '' }}">
+        </label>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <button class="btn btn-outline" onclick="setupTest()">Test connection</button>
+        <button class="btn btn-primary" onclick="setupSave()">Test &amp; save</button>
+        <span id="setup-result" style="font-size: 0.85rem;"></span>
+    </div>
+</div>
+
+<!-- Step 3 -->
+<div class="card mb-2">
+    <h3 style="margin-bottom: 0.5rem;">3 &mdash; Collect</h3>
+    <p class="text-muted" style="font-size: 0.875rem;">
+        Once saved, run <code>wasteless collect</code> (or wait for the scheduled collection)
+        and the dashboard fills up. Nothing in your account is ever modified without an
+        explicit approval in <a href="/recommendations">Recommendations</a>.
+    </p>
+</div>
+
+<script>
+function setupPayload() {
+    return {
+        region: document.getElementById('setup-region').value.trim(),
+        role_arn: document.getElementById('setup-role-arn').value.trim(),
+        write_role_arn: document.getElementById('setup-write-role-arn').value.trim(),
+        external_id: document.getElementById('setup-external-id').value.trim(),
+        access_key_id: document.getElementById('setup-access-key').value.trim(),
+        secret_access_key: document.getElementById('setup-secret-key').value
+    };
+}
+
+async function setupCall(url, pendingLabel) {
+    const out = document.getElementById('setup-result');
+    out.style.color = '';
+    out.textContent = pendingLabel;
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(setupPayload())
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+            out.style.color = '#166534';
+            return data;
+        }
+        out.style.color = '#991b1b';
+        out.textContent = data.error || 'Unexpected error';
+        return null;
+    } catch (e) {
+        out.style.color = '#991b1b';
+        out.textContent = 'Request failed: ' + e;
+        return null;
+    }
+}
+
+async function setupTest() {
+    const data = await setupCall('/api/aws-setup/test', 'Testing…');
+    if (data) {
+        document.getElementById('setup-result').textContent =
+            '✓ Connected as ' + data.identity + (data.role_assumed ? ' — role assumed' : '');
+    }
+}
+
+async function setupSave() {
+    const data = await setupCall('/api/aws-setup', 'Testing and saving…');
+    if (data) {
+        document.getElementById('setup-result').textContent =
+            '✓ Saved — account ' + data.account_id + ' connected. Reloading…';
+        setTimeout(() => window.location.reload(), 1200);
+    }
+}
+</script>
+{% endblock %}
