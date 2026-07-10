@@ -7,6 +7,7 @@ Split out of what used to be a single 2223-line main.py so route modules
 of importing each other — avoids circular imports between routers.
 """
 
+import logging
 import os
 import threading
 from pathlib import Path
@@ -22,13 +23,18 @@ APP_DIR = Path(__file__).parent
 ENV_PATH = APP_DIR / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
 
-# Database configuration
+# Database configuration.
+# connect_timeout: without it, a host that DROPS packets (VPN down,
+# container half-up) makes psycopg2.connect wait for the OS TCP timeout
+# (~2 min) — the app or a test run just hangs in silence. 10s matches the
+# backend pool (src/core/database.py).
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "port": os.getenv("DB_PORT", "5432"),
     "database": os.getenv("DB_NAME", "wasteless"),
     "user": os.getenv("DB_USER", "wasteless"),
     "password": os.getenv("DB_PASSWORD", ""),
+    "connect_timeout": 10,
 }
 
 # Route handlers are sync `def`s (FastAPI runs them in a threadpool so
@@ -163,5 +169,9 @@ def check_aws_reachable() -> bool:
         cfg = Config(connect_timeout=3, read_timeout=3, retries={"max_attempts": 1})
         get_client("sts", config=cfg).get_caller_identity()
         return True
-    except Exception:
+    except Exception as e:
+        # debug, not warning: this check runs every 5 minutes and "AWS not
+        # configured yet" is a normal state — but the exact reason
+        # (AccessDenied vs missing credentials) must stay diagnosable.
+        logging.getLogger("wasteless_ui.state").debug(f"AWS unreachable: {e}")
         return False

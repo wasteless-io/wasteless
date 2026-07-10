@@ -105,7 +105,10 @@ def record_usage(conn, feature: str, response: Any) -> None:
         usage = getattr(response, "usage", None)
         try:
             cost_usd = litellm.completion_cost(completion_response=response)
-        except Exception:
+        except Exception as e:
+            # Local/custom models have no pricing table — expected, but say so
+            # instead of silently recording NULL costs forever.
+            logger.debug(f"No pricing for this model, cost recorded as NULL: {e}")
             cost_usd = None
 
         cursor = conn.cursor()

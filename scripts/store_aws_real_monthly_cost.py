@@ -10,6 +10,7 @@ Env vars:
     FINOPS_MONTHS        Number of past months to retrieve (default: 3)
     SKIP_INSERT_INTO_DB  Set to 'True' to dry-run without writing to DB
 """
+import logging
 import os
 import sys
 import datetime
@@ -40,8 +41,10 @@ def get_accounts():
                     accounts[acct['Id']] = acct['Name']
         if accounts:
             return accounts
-    except Exception:
-        pass
+    except Exception as e:
+        # Expected outside the management account (AccessDenied) — but log
+        # it: a typo'd permission would otherwise silently halve coverage.
+        logging.getLogger(__name__).debug(f"organizations:ListAccounts unavailable: {e}")
     # fallback: current account only
     sts = get_client('sts')
     identity = sts.get_caller_identity()

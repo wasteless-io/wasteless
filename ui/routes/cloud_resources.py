@@ -167,7 +167,10 @@ def cloud_resources(
                 try:
                     loc = s3.get_bucket_location(Bucket=bucket["Name"])
                     region = loc.get("LocationConstraint") or "us-east-1"
-                except Exception:
+                except Exception as e:
+                    # Cross-account buckets deny GetBucketLocation; show the
+                    # bucket anyway, but keep the reason diagnosable.
+                    logger.debug(f"get_bucket_location {bucket['Name']}: {e}")
                     region = "-"
                 result.append(
                     {
