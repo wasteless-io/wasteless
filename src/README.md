@@ -3,7 +3,7 @@
 Backend pipeline: collect AWS data, detect waste, remediate, verify savings.
 Runs in its own virtualenv (root `venv/`), separate from `ui/`. See the
 [root README](../README.md) for the full data flow diagram and
-[CLAUDE.md](../CLAUDE.md) for the exact commands.
+[docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md) for the exact commands.
 
 ```
 collectors/   →  write to ec2_metrics / cloud_costs_raw

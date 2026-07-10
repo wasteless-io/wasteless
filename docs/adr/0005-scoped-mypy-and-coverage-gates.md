@@ -20,7 +20,7 @@ exactly where a type error or an untested branch is most expensive.
   (current ~65%). The floor is meant to be ratcheted **up**, never lowered.
 
 Both gates are meant to widen over time — the scope is a starting line, not the
-target. Extending them is tracked in [MATURITY_TODO.md](../MATURITY_TODO.md) #2.
+target.
 
 ## Consequences
 

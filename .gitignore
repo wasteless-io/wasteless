@@ -39,6 +39,10 @@ Thumbs.db
 CLAUDE.md
 .claude/
 
+# Documents de travail internes (roadmap d'equipe, notes) — jamais publies
+docs/MATURITY_TODO.md
+docs/CODEBASE_MAP.md
+
 # Local tooling
 .bg-shell/
 .gsd/

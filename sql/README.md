@@ -1,8 +1,8 @@
 # sql/
 
-Database schema for the PostgreSQL instance started by `docker-compose up -d
-postgres`. See [CLAUDE.md](../CLAUDE.md#database-schema) for the table
-summary and how `install.sh` applies these files (in order, on first run).
+Database schema for the PostgreSQL instance started by `docker compose up -d
+postgres`. `install.sh` (and CI) apply these files in order on first run:
+`init.sql`, then `ec2_metrics.sql`, then every `migrations/*.sql`.
 
 | Path | Purpose |
 |---|---|

@@ -1,9 +1,8 @@
 # ui/utils/
 
 Shared helpers imported by `ui/routes/*.py` and `ui/jobs.py` (see
-[CLAUDE.md](../../CLAUDE.md#ui-backend-uimainpy--uiroutes) for how the app
-is assembled). Distinct from `src/core/`: this layer is UI-specific
-plumbing, not pipeline logic.
+[ui/README.md](../README.md) for how the app is assembled). Distinct from
+`src/core/`: this layer is UI-specific plumbing, not pipeline logic.
 
 | File | Purpose |
 |---|---|
