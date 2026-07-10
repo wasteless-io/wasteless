@@ -1,10 +1,10 @@
 # ui/routes/
 
 One FastAPI `APIRouter` per page/domain, included into the app by
-`ui/main.py`. Extracted from what used to be a single 2223-line `main.py` —
-see [CLAUDE.md](../../CLAUDE.md#ui-backend-uimainpy--uiroutes) for the
-rationale and the shared-state modules (`ui/state.py`, `ui/jobs.py`,
-`ui/schemas.py`) these all depend on.
+`ui/main.py`. Extracted from what used to be a single 2223-line `main.py`;
+every router depends on the shared-state modules (`ui/state.py`,
+`ui/jobs.py`, `ui/schemas.py`) — see [ui/README.md](../README.md) for how
+the app is assembled.
 
 | Module | Routes | Notes |
 |---|---|---|

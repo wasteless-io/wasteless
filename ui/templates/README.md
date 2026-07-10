@@ -1,8 +1,7 @@
 # ui/templates/
 
-Jinja2 templates rendered by `ui/main.py` (no per-page Python modules — see
-[CLAUDE.md](../../CLAUDE.md#ui-backend-uimainpy)). All extend `base.html`
-except `landing.html`.
+Jinja2 templates rendered by the routers in [`ui/routes/`](../routes/README.md)
+(no per-page Python modules). All extend `base.html` except `landing.html`.
 
 | Template | Route | Purpose |
 |---|---|---|

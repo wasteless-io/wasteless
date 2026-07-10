@@ -2,8 +2,7 @@ name: Nightly integration
 
 # Scheduled regression run for the integration suite (tests/integration/):
 # moto-mocked AWS write path, Postgres-backed DB coherence, backup/restore.
-# This is also the designated home for LIVE AWS sandbox validation — the
-# "job réel planifié" of the maturity roadmap (docs/MATURITY_TODO.md #1/#3):
+# This is also the designated home for LIVE AWS sandbox validation:
 # once a sandbox account exists, its live tests plug into the gated step below
 # without touching the per-PR pipeline (which stays credential-free).
 
