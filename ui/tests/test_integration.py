@@ -400,6 +400,10 @@ class TestDatabaseIntegration(unittest.TestCase):
                 database=os.getenv("DB_NAME", "wasteless"),
                 user=os.getenv("DB_USER", "wasteless"),
                 password=self.db_password,
+                # Sans timeout, un hote qui DROP les paquets bloque la suite
+                # ~2 min ici au lieu de skipper — meme regle que les _connect()
+                # des autres fichiers de test.
+                connect_timeout=5,
             )
             cursor = conn.cursor()
             cursor.execute("SELECT 1")
@@ -422,6 +426,7 @@ class TestDatabaseIntegration(unittest.TestCase):
                 database=os.getenv("DB_NAME", "wasteless"),
                 user=os.getenv("DB_USER", "wasteless"),
                 password=self.db_password,
+                connect_timeout=5,
             )
             cursor = conn.cursor()
             cursor.execute("""
