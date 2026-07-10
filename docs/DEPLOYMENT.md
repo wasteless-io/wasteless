@@ -13,9 +13,9 @@
 | **Client AWS account** | Compliance-sensitive clients | client pays | Medium (planned) |
 
 The supported production path today is a **single VPS running Docker Compose
-(PostgreSQL) + the FastAPI UI + cron automation**. Terraform-based deployment
-into a client AWS account is on the roadmap; `terraform/` currently only
-contains detector test fixtures.
+(PostgreSQL) + the FastAPI UI + the bundled scheduler (`wasteless schedule`)**.
+Terraform-based deployment into a client AWS account is on the roadmap;
+`terraform/` currently only contains detector test fixtures.
 
 ---
 
@@ -113,19 +113,25 @@ the bind address). Keep it on loopback: the API has no authentication and
 its POST endpoints execute real AWS actions — only expose it through the
 authenticated reverse proxy below, never by binding `0.0.0.0` directly.
 
-### 4. Reverse proxy + TLS
+### 4. Reverse proxy + TLS + auth
 
-Put the UI behind a reverse proxy. Example with Caddy (auto-TLS via
-Let's Encrypt):
+Put the UI behind a reverse proxy **with authentication**: the UI has no
+built-in auth yet, and its POST endpoints execute real AWS actions. Example
+with Caddy (auto-TLS via Let's Encrypt, basic auth included):
 
 ```bash
 apt install -y caddy
+caddy hash-password    # prompts for a password, prints the bcrypt hash
 ```
 
 `/etc/caddy/Caddyfile`:
 
 ```
 wasteless.yourdomain.com {
+    basic_auth {
+        # paste the hash printed by `caddy hash-password`
+        admin $2a$14$REPLACE_WITH_HASH
+    }
     reverse_proxy localhost:8888
 }
 ```
@@ -134,24 +140,33 @@ wasteless.yourdomain.com {
 systemctl reload caddy
 ```
 
-Point a DNS A record at the VPS IP. Nginx + certbot works equally well.
+Point a DNS A record at the VPS IP. Nginx + certbot works equally well
+(`auth_basic` + `htpasswd`). An IP allowlist or a VPN (Tailscale,
+WireGuard) instead of — or on top of — basic auth is even better. Never
+deploy the proxy without one of these.
 
-**Note**: the UI has no built-in authentication yet — restrict access at the
-proxy level (basic auth, IP allowlist, or VPN) before exposing it.
+### 5. Automation
 
-### 5. Automation (cron)
-
-Use the provided installer rather than hand-written crontab entries:
+Collection and detection are scheduled by the bundled CLI — no hand-written
+crontab entries:
 
 ```bash
-./scripts/install_automation.sh install    # interactive schedule choice
-./scripts/install_automation.sh status
+./wasteless.sh schedule    # OS-level schedule, every 5 min, survives reboot
+./wasteless.sh status      # UI + schedule state
 ```
 
-This schedules collection, detection, and orphaned-recommendation cleanup with
-proper offsets, logging to `logs/`, and 30-day log rotation. See
-[AUTOMATION_GUIDE.md](AUTOMATION_GUIDE.md) for schedules, monitoring, and
-troubleshooting.
+`wasteless schedule` picks the right backend for the host (launchd on
+macOS, a systemd user timer on Linux — with `loginctl enable-linger` so it
+runs without an open SSH session — or crontab as fallback) and runs the
+full pipeline (`wasteless collect`: CloudWatch collection + all detectors)
+every 5 minutes. Output goes to `~/.wasteless.log`; partial runs (e.g.
+Steampipe not installed) are recorded in `collection_runs` and flagged in
+the UI. Remove with `./wasteless.sh unschedule`. See
+[AUTOMATION_GUIDE.md](AUTOMATION_GUIDE.md).
+
+Stale-recommendation cleanup needs no extra job: the UI's built-in
+`sync_aws_job` marks recommendations `obsolete` every 5 minutes when the
+underlying resource is gone (see [CLEANUP_GUIDE.md](CLEANUP_GUIDE.md)).
 
 ### 6. Backups
 
@@ -202,7 +217,7 @@ gunzip -c backups/wasteless_backup_YYYYMMDD.sql.gz | \
 
 ### Reliability
 - [ ] Daily DB backups + tested restore
-- [ ] Cron automation installed (`install_automation.sh status`)
+- [ ] Auto-collection scheduled (`./wasteless.sh status` shows it active)
 - [ ] Container restart policy (`restart: unless-stopped`)
 - [ ] Uptime check on the UI (UptimeRobot or similar)
 - [ ] Weekly look at `logs/` for ERROR lines
@@ -237,7 +252,7 @@ enough:
    real consumers).
 2. **Database**: move PostgreSQL to a managed instance (RDS) and point both
    `.env` files at it.
-3. **Multi-account**: one clone + `.env` + cron set per account (see FAQ in
+3. **Multi-account**: one clone + `.env` + schedule per account (see FAQ in
    [AUTOMATION_GUIDE.md](AUTOMATION_GUIDE.md)); native multi-account support
    is on the roadmap.
 
@@ -249,7 +264,7 @@ enough:
 |---------|-------|
 | Containers won't start | `docker compose logs`, `df -h`, `free -h` |
 | DB connection errors | `docker exec wasteless-postgres pg_isready -U wasteless`, credentials in both `.env` files |
-| UI up but empty | Did collection/detection run? `ls -lt logs/`, run `./scripts/run_collector.sh` manually |
+| UI up but empty | Did collection/detection run? `tail ~/.wasteless.log`, run `./wasteless.sh collect` manually |
 | Stale recommendations | Run cleanup: `python src/utils/cleanup_orphaned_recommendations.py --dry-run` |
 | TLS not issued | DNS record propagated? `journalctl -u caddy` |
 | High memory | `docker stats`; `VACUUM` the database if it has grown large |

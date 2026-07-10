@@ -1,21 +1,12 @@
 # scripts/
 
-Operational scripts: cron wrappers around the `src/` pipeline and one-off
-data backfills.
+One-off data backfills and maintenance scripts.
 
-## Cron wrappers (installed by `install_automation.sh`)
-
-| File | Purpose |
-|---|---|
-| `install_automation.sh` | Installs all cron jobs below in one step — the "full automation" setup. |
-| `run_collector.sh` | Runs `src/collectors/aws_cloudwatch.py`, logs output. Cron example: daily at 2 AM. |
-| `run_detector.sh` | Runs `src/detectors/ec2_idle.py`, logs output. |
-| `run_cleanup.sh` | Runs `src/utils/cleanup_orphaned_recommendations.py` (marks recommendations `obsolete` when the AWS resource is gone). |
-
-All three check that `.env` exists (the Python entrypoints load it
-themselves via `load_dotenv` — the shell never `source`s it), `cd` to the
-project root, and append to their own log file — check those logs first
-when a cron run is suspected to have failed silently.
+Scheduling lives in `wasteless.sh` (`wasteless schedule` / `collect`), not
+here. A set of cron wrappers (`install_automation.sh`, `run_collector.sh`,
+`run_detector.sh`, `run_cleanup.sh`) used to live in this directory; they
+were removed because they only ran 2 of the pipeline's 10 steps and drifted
+as detectors were added — see [AUTOMATION_GUIDE.md](../docs/AUTOMATION_GUIDE.md).
 
 ## One-off / maintenance
 
