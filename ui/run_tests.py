@@ -11,12 +11,18 @@ Note: For full test coverage, run within the virtual environment:
     python run_tests.py
 """
 
+import faulthandler
 import unittest
 import sys
 from pathlib import Path
 
 # Add current directory to path
 sys.path.insert(0, str(Path(__file__).parent))
+
+# If anything hangs (unreachable DB, network call without timeout), dump
+# every thread's stack after 90s instead of blocking in silence — the
+# hang becomes self-diagnosing. repeat=True keeps dumping every 90s.
+faulthandler.dump_traceback_later(90, repeat=True)
 
 
 def check_dependencies():
