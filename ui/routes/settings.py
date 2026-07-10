@@ -82,7 +82,7 @@ def api_update_config(update: ConfigUpdate):
 
         return {"success": success}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/api/policies/export")
@@ -109,7 +109,7 @@ def api_policies_import(payload: PolicyImport):
     try:
         config = parse_policy_yaml(payload.yaml_text)
     except ConfigValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     if not ConfigManager().save_config(config):
         raise HTTPException(status_code=500, detail="failed to write the policy file")
@@ -136,4 +136,4 @@ def api_whitelist(instance_id: str, action: Literal["add", "remove"] = "add"):
 
         return {"success": success}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e

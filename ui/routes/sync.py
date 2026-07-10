@@ -4,8 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from state import get_db, SYNCABLE_STATUSES
 from jobs import _sync_ec2_instance_states
+from utils.logger import get_logger
 
 router = APIRouter()
+
+logger = get_logger("sync")
 
 
 @router.post("/api/sync-aws")
@@ -16,7 +19,7 @@ def api_sync_aws(conn=Depends(get_db)):
     try:
         import boto3  # noqa: F401 -- availability check
     except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"boto3 not installed: {e}")
+        raise HTTPException(status_code=500, detail=f"boto3 not installed: {e}") from e
 
     try:
         cursor = conn.cursor()
@@ -82,5 +85,5 @@ def api_sync_aws(conn=Depends(get_db)):
 
     except Exception as e:
         error_detail = traceback.format_exc()
-        print(f"Sync AWS error: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        logger.error(f"Sync AWS error: {error_detail}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}") from e

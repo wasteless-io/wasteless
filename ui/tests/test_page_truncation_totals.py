@@ -61,7 +61,7 @@ class TestPageTruncationTotals(unittest.TestCase):
         try:
             cls.conn = _connect()
         except Exception as e:
-            raise unittest.SkipTest(f"Postgres indisponible ({e})")
+            raise unittest.SkipTest(f"Postgres indisponible ({e})") from e
 
         from main import app
         from state import get_db

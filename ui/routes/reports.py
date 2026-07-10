@@ -18,7 +18,7 @@ def _resolve_report_period(month, start, end, days):
     try:
         return resolve_period(month=month, start=start, end=end, days=days)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/reports", response_class=HTMLResponse)

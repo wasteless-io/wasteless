@@ -15,6 +15,7 @@ Author: Wasteless
 import contextlib
 import os
 import json
+import zlib
 from datetime import datetime, timedelta, date
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
@@ -68,19 +69,19 @@ class EC2Remediator:
         # Database connection
         self.conn = get_db_connection()
 
-        # Advisory lock ID for remediator (unique per account)
-        # Using hash of account_id to get consistent integer
-        self.lock_id = hash(self.account_id) % (2**31)
+        # Advisory lock ID for remediator (unique per account).
+        # crc32, not hash(): str hashing is salted per process
+        # (PYTHONHASHSEED), so hash() would give each process a different
+        # lock ID and the lock would never exclude anything.
+        self.lock_id = zlib.crc32(str(self.account_id).encode()) % (2**31)
 
         logger.info(f"✅ EC2 Remediator initialized (dry_run={dry_run})")
 
-    def acquire_lock(self, timeout_seconds: int = 5) -> bool:
+    def acquire_lock(self) -> bool:
         """
         Acquire distributed lock using PostgreSQL advisory lock.
-        Prevents concurrent remediation runs.
-
-        Args:
-            timeout_seconds: How long to wait for lock
+        Prevents concurrent remediation runs. Non-blocking
+        (pg_try_advisory_lock): returns immediately, never waits.
 
         Returns:
             True if lock acquired, False if another process holds it

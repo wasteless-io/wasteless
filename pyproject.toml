@@ -31,7 +31,9 @@ extend-exclude = ["venv", "venv.nosync", ".venv", "ui/venv", "ui/venv.nosync"]
 [tool.ruff.lint]
 # S (flake8-bandit): security rules, same coverage as standalone bandit
 # without adding a tool to the chain.
-extend-select = ["S"]
+# B904: re-raises inside except must chain the cause (`raise ... from e`),
+# otherwise the original traceback is lost.
+extend-select = ["S", "B904"]
 # E402: this codebase relies on sys.path.insert()/load_dotenv() before local
 # imports in scripts and detectors (see CLAUDE.md) -- not fixable without a
 # packaging change, tracked separately.
