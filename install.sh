@@ -83,6 +83,17 @@ sed_inplace() {
     fi
 }
 
+# Pose KEY=VALUE dans un fichier .env : remplace la ligne si la cle existe,
+# l'ajoute sinon. Delimiteur sed `|` : absent des ARN et des cles AWS.
+set_env_kv() {
+    local file="$1" key="$2" value="$3"
+    if grep -q "^${key}=" "$file" 2>/dev/null; then
+        sed_inplace "s|^${key}=.*|${key}=${value}|" "$file"
+    else
+        echo "${key}=${value}" >> "$file"
+    fi
+}
+
 print_verbose() {
     if [ $VERBOSE -eq 1 ]; then
         echo -e "  ${CYAN}»${NC} $1"
@@ -810,25 +821,106 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
         read -p "AWS Account ID (12 chiffres): " AWS_ACCOUNT_ID
     done
 
-    # Roles AssumeRole (recommande — voir docs/AWS_SETUP.md)
+    # Connexion AWS : choix ferme plutot que 4 questions ouvertes. Avant,
+    # tout laisser vide etait accepte sans un mot ("optionnel") et donnait
+    # un dashboard vide + une collecte en echec silencieux — le report est
+    # maintenant un choix explicite dont la consequence est annoncee.
     echo ""
-    print_info "Roles wasteless (recommande, crees via onboarding/cloudformation ou onboarding/terraform)"
-    read -p "ARN du role read-only (optionnel): " AWS_ROLE_ARN
+    echo "  Connexion du compte AWS — comment souhaitez-vous proceder ?"
+    echo "    1) J'ai deja les ARN des roles wasteless (onboarding/ applique) — recommande"
+    echo "    2) Pas encore — continuer sans AWS. Le dashboard restera vide ;"
+    echo "       guide de 10 min : docs/CTO_QUICKSTART.md ou la page /setup de l'interface."
+    echo "    3) Cles d'acces AWS directes (deconseille : acces non restreint aux roles read-only)"
+    AWS_ROLE_ARN=""
     AWS_WRITE_ROLE_ARN=""
     AWS_EXTERNAL_ID=""
-    if [ -n "$AWS_ROLE_ARN" ]; then
-        read -p "ARN du role remediation (optionnel): " AWS_WRITE_ROLE_ARN
-        read -p "ExternalId (optionnel): " AWS_EXTERNAL_ID
-    fi
+    AWS_ACCESS_KEY_ID=""
+    AWS_SECRET_ACCESS_KEY=""
+    AWS_CONFIGURED=0
 
-    # Credentials AWS statiques (legacy)
-    echo ""
-    print_info "Credentials AWS statiques (laissez vide pour utiliser ~/.aws ou un IAM role)"
-    read -p "AWS Access Key ID (optionnel): " AWS_ACCESS_KEY_ID
-    if [ -n "$AWS_ACCESS_KEY_ID" ]; then
-        read -sp "AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
-        echo ""
-    fi
+    while true; do
+        read -p "  Votre choix [1/2/3, defaut 2]: " AWS_SETUP_CHOICE
+        case "$AWS_SETUP_CHOICE" in
+            1)
+                read -p "ARN du role read-only (arn:aws:iam::${AWS_ACCOUNT_ID}:role/wasteless-readonly): " AWS_ROLE_ARN
+                while [[ ! "$AWS_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/.+$ ]]; do
+                    print_error "Format attendu: arn:aws:iam::<12 chiffres>:role/<nom>"
+                    read -p "ARN du role read-only: " AWS_ROLE_ARN
+                done
+                read -p "ARN du role remediation (optionnel, Entree pour passer): " AWS_WRITE_ROLE_ARN
+                read -p "ExternalId (optionnel): " AWS_EXTERNAL_ID
+                echo ""
+                print_info "Credentials source pour assumer le role (laissez vide si ~/.aws est deja configure)"
+                read -p "AWS Access Key ID: " AWS_ACCESS_KEY_ID
+                if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+                    read -sp "AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
+                    echo ""
+                fi
+                AWS_CONFIGURED=1
+                ;;
+            3)
+                read -p "AWS Access Key ID: " AWS_ACCESS_KEY_ID
+                while [ -z "$AWS_ACCESS_KEY_ID" ]; do
+                    read -p "AWS Access Key ID (requis pour ce choix): " AWS_ACCESS_KEY_ID
+                done
+                read -sp "AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
+                echo ""
+                AWS_CONFIGURED=1
+                ;;
+            *)
+                print_step "Connexion AWS reportee — les instructions seront rappelees en fin d'installation"
+                break
+                ;;
+        esac
+
+        # Validation immediate (STS + AssumeRole si role fourni) : le seul
+        # moment ou corriger une faute de frappe est facile, c'est pendant
+        # que l'utilisateur est encore devant son terminal. Les credentials
+        # passent par des variables WL_CHECK_* dediees pour ne pas polluer
+        # la chaine boto3 par defaut (~/.aws) quand ils sont vides.
+        print_info "Validation de la connexion AWS..."
+        if AWS_VALIDATION_OUTPUT=$(WL_CHECK_KEY="$AWS_ACCESS_KEY_ID" \
+            WL_CHECK_SECRET="$AWS_SECRET_ACCESS_KEY" \
+            WL_CHECK_REGION="$AWS_REGION" \
+            WL_CHECK_ROLE_ARN="$AWS_ROLE_ARN" \
+            WL_CHECK_EXTERNAL_ID="$AWS_EXTERNAL_ID" \
+            venv/bin/python3 - 2>&1 <<'PYCHECK'
+import os
+import boto3
+
+session = boto3.Session(
+    aws_access_key_id=os.environ.get("WL_CHECK_KEY") or None,
+    aws_secret_access_key=os.environ.get("WL_CHECK_SECRET") or None,
+    region_name=os.environ.get("WL_CHECK_REGION") or "eu-west-1",
+)
+sts = session.client("sts")
+ident = sts.get_caller_identity()
+print(f"identite source : {ident['Arn']}")
+role = os.environ.get("WL_CHECK_ROLE_ARN")
+if role:
+    kwargs = {"RoleArn": role, "RoleSessionName": "wasteless-install-check"}
+    if os.environ.get("WL_CHECK_EXTERNAL_ID"):
+        kwargs["ExternalId"] = os.environ["WL_CHECK_EXTERNAL_ID"]
+    sts.assume_role(**kwargs)
+    print(f"assume-role : OK ({role})")
+PYCHECK
+        ); then
+            print_step "Connexion AWS verifiee"
+            echo "$AWS_VALIDATION_OUTPUT" | sed 's/^/    /'
+            break
+        else
+            print_error "Validation AWS echouee :"
+            echo "$AWS_VALIDATION_OUTPUT" | tail -n 2 | sed 's/^/    /'
+            read -p "Ressaisir les valeurs ? (o/N): " AWS_RETRY
+            if [[ ! "$AWS_RETRY" =~ ^[OoYy]$ ]]; then
+                print_warning "Valeurs enregistrees telles quelles — corrigez-les via la page /setup de l'interface (ou dans .env et ui/.env)"
+                break
+            fi
+            AWS_ROLE_ARN=""; AWS_WRITE_ROLE_ARN=""; AWS_EXTERNAL_ID=""
+            AWS_ACCESS_KEY_ID=""; AWS_SECRET_ACCESS_KEY=""
+            AWS_CONFIGURED=0
+        fi
+    done
 
     # Insights IA (optionnel, opt-in explicite — saute en mode quiet)
     LLM_MODEL=""
@@ -1113,6 +1205,17 @@ if [ -f "ui/.env" ]; then
         sed_inplace "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" ui/.env
         UPDATED=1
     fi
+    # Si l'utilisateur vient de (re)configurer AWS a l'etape 3, refleter les
+    # valeurs dans ui/.env existant — le miroir manuel etait un piege.
+    if [ -z "${SKIP_ENV_CONFIG:-}" ] && [ "${AWS_CONFIGURED:-0}" -eq 1 ]; then
+        set_env_kv ui/.env AWS_REGION "$AWS_REGION"
+        [ -n "$AWS_ROLE_ARN" ] && set_env_kv ui/.env AWS_ROLE_ARN "$AWS_ROLE_ARN"
+        [ -n "$AWS_WRITE_ROLE_ARN" ] && set_env_kv ui/.env AWS_WRITE_ROLE_ARN "$AWS_WRITE_ROLE_ARN"
+        [ -n "$AWS_EXTERNAL_ID" ] && set_env_kv ui/.env AWS_EXTERNAL_ID "$AWS_EXTERNAL_ID"
+        [ -n "$AWS_ACCESS_KEY_ID" ] && set_env_kv ui/.env AWS_ACCESS_KEY_ID "$AWS_ACCESS_KEY_ID"
+        [ -n "$AWS_SECRET_ACCESS_KEY" ] && set_env_kv ui/.env AWS_SECRET_ACCESS_KEY "$AWS_SECRET_ACCESS_KEY"
+        UPDATED=1
+    fi
     if [ $UPDATED -eq 1 ]; then
         print_step "ui/.env synchronise avec la configuration courante"
     else
@@ -1140,6 +1243,13 @@ UIENV
         echo "AWS_ROLE_ARN=$AWS_ROLE_ARN" >> ui/.env
         [ -n "${AWS_WRITE_ROLE_ARN:-}" ] && echo "AWS_WRITE_ROLE_ARN=$AWS_WRITE_ROLE_ARN" >> ui/.env
         [ -n "${AWS_EXTERNAL_ID:-}" ] && echo "AWS_EXTERNAL_ID=$AWS_EXTERNAL_ID" >> ui/.env
+    fi
+    # Les cles statiques aussi : l'UI interroge AWS en direct (page
+    # cloud-resources, sync) et ne lit que ui/.env — sans ce miroir, une
+    # installation "cles directes" donnait une UI sans credentials.
+    if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
+        echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" >> ui/.env
+        echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" >> ui/.env
     fi
     chmod 600 ui/.env
     print_step "Configuration UI creee (ui/.env)"
@@ -1206,22 +1316,27 @@ else
     print_error "Erreur lors du chargement des modules"
 fi
 
-# Test credentials AWS
+# Test credentials AWS. load_dotenv est indispensable : boto3 ne lit pas
+# .env tout seul, et sans ca le test annoncait "invalides" meme quand les
+# cles venaient d'etre ecrites dans .env (seul ~/.aws etait vu).
 print_info "Verification des credentials AWS..."
+AWS_CHECK_OK=0
 if silence python3 -c "
-import boto3, sys, os
-try:
-    sts = boto3.client('sts', region_name=os.getenv('AWS_REGION', 'eu-west-1'))
-    identity = sts.get_caller_identity()
-    sys.exit(0)
-except Exception as e:
-    sys.exit(1)
+import os
+from dotenv import load_dotenv
+load_dotenv()
+import boto3
+sts = boto3.client('sts', region_name=os.getenv('AWS_REGION') or 'eu-west-1')
+sts.get_caller_identity()
 "; then
+    AWS_CHECK_OK=1
     print_step "Credentials AWS valides"
-else
+elif grep -qE '^(AWS_ACCESS_KEY_ID|AWS_ROLE_ARN)=' .env 2>/dev/null; then
     print_warning "Credentials AWS invalides ou inaccessibles"
-    print_info "Verifiez AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY dans .env"
-    print_info "Ou configurez vos credentials avec: aws configure"
+    print_info "Corrigez-les via http://localhost:8888/setup (ou dans .env et ui/.env)"
+else
+    print_warning "AWS non configure — le dashboard restera vide"
+    print_info "Connexion guidee: http://localhost:8888/setup ou docs/CTO_QUICKSTART.md (10 min)"
 fi
 
 # Tests unitaires
@@ -1239,6 +1354,16 @@ fi
 print_header "Installation terminee"
 
 echo -e "${GREEN}${BOLD}WasteLess est installe et pret!${NC}"
+echo ""
+# Etat de la connexion AWS en tete du resume : c'est LE prerequis pour que
+# le produit montre quelque chose, il ne doit pas se perdre dans le defilement.
+if [ "$AWS_CHECK_OK" -eq 1 ]; then
+    echo -e "  ${GREEN}AWS : connecte et verifie${NC}"
+else
+    echo -e "  ${YELLOW}AWS : non connecte — le dashboard restera vide tant que ce n'est pas fait.${NC}"
+    echo "        Guide de 10 min : http://localhost:8888/setup (une fois l'interface lancee)"
+    echo "        ou docs/CTO_QUICKSTART.md"
+fi
 echo ""
 echo -e "${BOLD}Pour demarrer:${NC}"
 echo ""
