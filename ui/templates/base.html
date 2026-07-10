@@ -458,6 +458,14 @@
         </aside>
 
         <main class="main">
+            {# Global onboarding banner: distinct from the "partial collection"
+               banner (steampipe) — this one means NO AWS data at all. #}
+            {% if aws_reachable() is sameas false and request.url.path != '/setup' %}
+            <div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.25rem;">
+                <span>AWS account not connected — there is no data to collect or display yet.</span>
+                <a href="/setup" style="white-space:nowrap;font-weight:600;">Connect AWS (~10 min) &rarr;</a>
+            </div>
+            {% endif %}
             {% block content %}{% endblock %}
         </main>
     </div>
