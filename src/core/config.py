@@ -199,7 +199,7 @@ class RemediationConfig:
             logger.warning(f"Config file {config_path} not found, using defaults")
             return cls()
         except yaml.YAMLError as e:
-            raise ConfigurationError(f"Invalid YAML in {config_path}: {e}")
+            raise ConfigurationError(f"Invalid YAML in {config_path}: {e}") from e
 
         if config is None:
             return cls()

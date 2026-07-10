@@ -85,7 +85,7 @@ class TestSyncEc2InstanceStates(unittest.TestCase):
         try:
             cls.conn = _connect()
         except Exception as e:
-            raise unittest.SkipTest(f"Postgres indisponible ({e})")
+            raise unittest.SkipTest(f"Postgres indisponible ({e})") from e
 
     @classmethod
     def tearDownClass(cls):

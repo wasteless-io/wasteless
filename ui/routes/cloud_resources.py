@@ -6,8 +6,11 @@ from fastapi import APIRouter, Request, Query, HTTPException
 from fastapi.responses import HTMLResponse
 
 from state import templates, CLOUD_REGIONS
+from utils.logger import get_logger
 
 router = APIRouter()
+
+logger = get_logger("cloud_resources")
 
 
 @router.get("/cloud-resources", response_class=HTMLResponse)
@@ -20,8 +23,8 @@ def cloud_resources(
     """Cloud resources inventory page - EC2, Volumes, Elastic IPs, VPCs."""
     try:
         import boto3  # noqa: F401 - fail fast if the AWS SDK is missing
-    except ImportError:
-        raise HTTPException(status_code=500, detail="boto3 not installed")
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail="boto3 not installed") from e
     from utils.aws_clients import get_client
 
     def _tag_name(tags):
@@ -53,7 +56,7 @@ def cloud_resources(
                         )
             return result
         except Exception as e:
-            print(f"EC2 error {region}: {e}")
+            logger.error(f"EC2 error {region}: {e}")
             return []
 
     def _fetch_volumes(region):
@@ -81,7 +84,7 @@ def cloud_resources(
                     )
             return result
         except Exception as e:
-            print(f"Volumes error {region}: {e}")
+            logger.error(f"Volumes error {region}: {e}")
             return []
 
     def _fetch_ips(region):
@@ -104,7 +107,7 @@ def cloud_resources(
                 )
             return result
         except Exception as e:
-            print(f"IPs error {region}: {e}")
+            logger.error(f"IPs error {region}: {e}")
             return []
 
     def _fetch_vpcs(region):
@@ -124,7 +127,7 @@ def cloud_resources(
                 )
             return result
         except Exception as e:
-            print(f"VPCs error {region}: {e}")
+            logger.error(f"VPCs error {region}: {e}")
             return []
 
     def _fetch_snapshots(region):
@@ -152,7 +155,7 @@ def cloud_resources(
                     )
             return result
         except Exception as e:
-            print(f"Snapshots error {region}: {e}")
+            logger.error(f"Snapshots error {region}: {e}")
             return []
 
     def _fetch_s3():
@@ -175,7 +178,7 @@ def cloud_resources(
                 )
             return result
         except Exception as e:
-            print(f"S3 error: {e}")
+            logger.error(f"S3 error: {e}")
             return []
 
     # Fetch all resource types in parallel (snapshots per region + S3 global)

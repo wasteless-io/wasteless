@@ -73,7 +73,7 @@ class TerraformMapper:
             with open(path, "r") as f:
                 return cls(json.load(f))
         except (OSError, json.JSONDecodeError) as e:
-            raise TerraformMappingError(f"Cannot read state file {path}: {e}")
+            raise TerraformMappingError(f"Cannot read state file {path}: {e}") from e
 
     @classmethod
     def from_terraform_dir(cls, terraform_dir: str) -> "TerraformMapper":
@@ -87,7 +87,7 @@ class TerraformMapper:
                 timeout=120,
             )
         except (OSError, subprocess.TimeoutExpired) as e:
-            raise TerraformMappingError(f"terraform show failed in {terraform_dir}: {e}")
+            raise TerraformMappingError(f"terraform show failed in {terraform_dir}: {e}") from e
 
         if result.returncode != 0:
             raise TerraformMappingError(
@@ -97,7 +97,7 @@ class TerraformMapper:
         try:
             return cls(json.loads(result.stdout))
         except json.JSONDecodeError as e:
-            raise TerraformMappingError(f"Invalid terraform show output: {e}")
+            raise TerraformMappingError(f"Invalid terraform show output: {e}") from e
 
     def _index_module(self, module: Dict, module_path: str) -> None:
         for res in module.get("resources") or []:
