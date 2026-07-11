@@ -27,14 +27,44 @@ connect through the web page in step 4, which is easier than the terminal.
 This is the only step that happens inside AWS. If someone on your team
 manages your AWS account, forward them this section.
 
-**Console path (no tooling):** open
-[CloudFormation → Create stack](https://console.aws.amazon.com/cloudformation/home#/stacks/create),
-upload the template from [`onboarding/cloudformation/`](../onboarding/cloudformation/),
-and create the stack. The **Outputs** tab then shows three values:
-`RoleArn`, `WriteRoleArn` (optional), `ExternalId`.
+**Console path (no tooling):**
+
+1. Get the template file
+   [`wasteless-onboarding.yaml`](../onboarding/cloudformation/wasteless-onboarding.yaml)
+   on your machine (it is in the folder you installed WasteLess into, under
+   `onboarding/cloudformation/`, or download it from GitHub with the link above).
+2. Sign in to the AWS console with an account that can create IAM roles
+   (an administrator), then open
+   [CloudFormation → Create stack](https://console.aws.amazon.com/cloudformation/home#/stacks/create).
+3. Select **Upload a template file**, choose `wasteless-onboarding.yaml`,
+   click **Next**.
+4. Stack name: `wasteless-onboarding`. The default parameters are right for
+   the standard setup (WasteLess analyzing the account it is connected to):
+   - `TrustedPrincipalArn` — leave empty.
+   - `ExternalId` — leave empty, or type a secret phrase of your choice for
+     extra protection; you will paste the **same value** into WasteLess at
+     step 4. Recommended if WasteLess runs from a different AWS account.
+   - `CreateRemediationRole` — keep `true`. Set `false` for detection-only:
+     WasteLess can then never modify anything in the account.
+
+   Click **Next**.
+5. Leave the stack options as they are. Tick the checkbox
+   **"I acknowledge that AWS CloudFormation might create IAM resources with
+   custom names"** when it appears (the template creates two roles named
+   `wasteless-readonly` and `wasteless-remediation` — that is all it does),
+   then **Next** and **Submit**.
+6. Wait about a minute until the stack status shows **CREATE_COMPLETE**
+   (refresh if needed), then open the **Outputs** tab and copy:
+   - `ReadOnlyRoleArn` → the *read-only role ARN* field in WasteLess;
+   - `RemediationRoleArn` → the *remediation role ARN* field (this output
+     only exists if you kept `CreateRemediationRole` to `true`).
+
+   If you typed an `ExternalId` at step 4 of the wizard, keep it at hand:
+   WasteLess asks for the same value.
 
 **Terraform path:** apply [`onboarding/terraform/`](../onboarding/terraform/) —
-same outputs.
+the outputs `readonly_role_arn` and `remediation_role_arn` are the same two
+ARNs as above.
 
 ## 3. Start the interface (30 s)
 
