@@ -62,7 +62,9 @@ manages your AWS account, forward them this section.
    If you typed an `ExternalId` at step 4 of the wizard, keep it at hand:
    WasteLess asks for the same value.
 
-**Terraform path:** apply [`onboarding/terraform/`](../onboarding/terraform/) —
+**Terraform path** *(optional — only if your team already manages its
+infrastructure with Terraform; Terraform is never required to install or run
+WasteLess)*: apply [`onboarding/terraform/`](../onboarding/terraform/) —
 the outputs `readonly_role_arn` and `remediation_role_arn` are the same two
 ARNs as above.
 
