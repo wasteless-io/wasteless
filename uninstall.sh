@@ -45,6 +45,14 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
+# Connexion AWS lue AVANT la suppression des .env (etape 3) : l'etape 6 en a
+# besoin pour retrouver la stack d'onboarding. Lecture par grep, jamais par
+# `source` (un mot de passe contenant $ ou ` executerait du shell).
+get_env_var() { grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -n1 | cut -d= -f2-; }
+ENV_AWS_ROLE_ARN="$(get_env_var AWS_ROLE_ARN)"
+ENV_AWS_REGION="${AWS_REGION:-$(get_env_var AWS_REGION)}"
+ENV_AWS_REGION="${ENV_AWS_REGION:-eu-west-1}"
+
 # =============================================================================
 # BANNIERE
 # =============================================================================
@@ -74,7 +82,7 @@ read -r
 # =============================================================================
 # 1. ARRETER LE PROCESSUS WASTELESS
 # =============================================================================
-print_header "1/5 - Arret de WasteLess"
+print_header "1/6 - Arret de WasteLess"
 
 PID_FILE="$HOME/.wasteless.pid"
 COLLECTOR_PID_FILE="$HOME/.wasteless-collector.pid"
@@ -130,7 +138,7 @@ fi
 # =============================================================================
 # 2. ARRETER ET SUPPRIMER LES CONTENEURS DOCKER
 # =============================================================================
-print_header "2/5 - Arret des services Docker"
+print_header "2/6 - Arret des services Docker"
 
 if command -v docker &>/dev/null && [ -f "$SCRIPT_DIR/docker-compose.yml" ] || [ -f "$SCRIPT_DIR/compose.yml" ]; then
     if docker ps | grep -q wasteless 2>/dev/null; then
@@ -156,7 +164,7 @@ fi
 # =============================================================================
 # 3. SUPPRIMER LES ENVIRONNEMENTS VIRTUELS ET FICHIERS DE CONFIG
 # =============================================================================
-print_header "3/5 - Suppression des fichiers locaux"
+print_header "3/6 - Suppression des fichiers locaux"
 
 # Environnement virtuel backend
 if [ -d "$SCRIPT_DIR/venv" ]; then
@@ -190,9 +198,18 @@ find "$SCRIPT_DIR" -name "*.pyc" -delete 2>/dev/null || true
 print_step "Caches Python supprimes"
 
 # =============================================================================
-# 4. SUPPRIMER LES CRON JOBS
+# 4. SUPPRIMER LES TACHES AUTOMATIQUES (launchd / systemd / cron)
 # =============================================================================
-print_header "4/5 - Suppression des taches automatiques (cron)"
+print_header "4/6 - Suppression des taches automatiques"
+
+# wasteless.sh unschedule retire le backend reellement utilise sur cette
+# plateforme (LaunchAgent macOS, timer systemd ou crontab) — le nettoyage
+# crontab ci-dessous ne couvre que les anciens marqueurs et ne suffit pas
+# seul : sans cet appel, un LaunchAgent/timer survivrait a la
+# desinstallation et relancerait la collecte toutes les 5 minutes.
+if [ -x "$SCRIPT_DIR/wasteless.sh" ]; then
+    "$SCRIPT_DIR/wasteless.sh" unschedule || print_warning "wasteless.sh unschedule a echoue — verifiez avec: wasteless status"
+fi
 
 CRON_MARKERS=(
     "# Wasteless: Automated CloudWatch metrics collection"
@@ -231,7 +248,7 @@ fi
 # =============================================================================
 # 5. SUPPRIMER L'ALIAS DU SHELL
 # =============================================================================
-print_header "5/5 - Suppression de l'alias 'wasteless'"
+print_header "5/6 - Suppression de l'alias 'wasteless'"
 
 SHELL_RCS=("$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc")
 ALIAS_REMOVED=0
@@ -251,6 +268,65 @@ if [ "$ALIAS_REMOVED" -eq 0 ]; then
 fi
 
 # =============================================================================
+# 6. ROLES IAM CREES DANS AWS (stack d'onboarding)
+# =============================================================================
+print_header "6/6 - Roles IAM wasteless dans AWS"
+
+# Les seules ressources AWS creees par wasteless pour lui-meme sont les roles
+# IAM d'onboarding (wasteless-readonly / wasteless-remediation), poses par la
+# stack CloudFormation ou le module Terraform. Leur suppression exige des
+# droits IAM que les roles wasteless n'ont pas : on passe par les credentials
+# ambiants (aws configure). Un echec ici ne fait jamais echouer la
+# desinstallation locale.
+STACK_NAME="${WASTELESS_ONBOARDING_STACK:-wasteless-onboarding}"
+AWS_ROLES_DELETED=0
+
+print_manual_teardown() {
+    echo "    Console : CloudFormation -> stack '$STACK_NAME' -> Delete"
+    echo "    Ou      : terraform destroy dans votre module onboarding/terraform"
+}
+
+if [ -z "$ENV_AWS_ROLE_ARN" ]; then
+    print_skip "Aucun role IAM wasteless configure (AWS_ROLE_ARN absent du .env) — rien a supprimer cote AWS"
+else
+    echo "  WasteLess utilisait ce role IAM dans votre compte AWS :"
+    echo "    - $ENV_AWS_ROLE_ARN"
+    echo "    (+ le role remediation s'il avait ete cree)"
+    echo ""
+    read -rp "  Supprimer ces roles maintenant (stack '$STACK_NAME', region $ENV_AWS_REGION) ? [o/N]: " DELETE_AWS_ROLES
+    case "$DELETE_AWS_ROLES" in
+        [oOyY]*)
+            if ! command -v aws &>/dev/null; then
+                print_warning "AWS CLI absent — supprimez les roles manuellement :"
+                print_manual_teardown
+            elif aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$ENV_AWS_REGION" &>/dev/null; then
+                if aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$ENV_AWS_REGION"; then
+                    print_info "Suppression lancee, attente de la confirmation (moins d'une minute en general)..."
+                    if aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$ENV_AWS_REGION" 2>/dev/null; then
+                        print_step "Stack '$STACK_NAME' supprimee — les roles IAM wasteless n'existent plus"
+                        AWS_ROLES_DELETED=1
+                    else
+                        print_warning "Suppression non confirmee — verifiez l'etat de la stack dans la console CloudFormation"
+                    fi
+                else
+                    print_warning "Echec de la suppression (droits IAM insuffisants ?) — faites-le avec un compte admin :"
+                    print_manual_teardown
+                fi
+            else
+                print_warning "Stack '$STACK_NAME' introuvable dans la region $ENV_AWS_REGION"
+                echo "    - Onboarding fait via Terraform : terraform destroy dans onboarding/terraform"
+                echo "    - Autre nom ou autre region     : relancez avec"
+                echo "      WASTELESS_ONBOARDING_STACK=<nom> AWS_REGION=<region> ./uninstall.sh"
+            fi
+            ;;
+        *)
+            print_skip "Roles IAM conserves. Pour les supprimer plus tard :"
+            print_manual_teardown
+            ;;
+    esac
+fi
+
+# =============================================================================
 # RESUME
 # =============================================================================
 print_header "Desinstallation terminee"
@@ -263,8 +339,11 @@ echo "  - Conteneurs Docker"
 echo "  - Environnements virtuels Python (venv/, ui/venv/)"
 echo "  - Fichiers de configuration (.env, ui/.env)"
 echo "  - Caches Python (__pycache__/, *.pyc)"
-echo "  - Taches cron automatiques"
+echo "  - Taches automatiques (launchd / systemd / cron)"
 echo "  - Alias 'wasteless' du shell"
+if [ "$AWS_ROLES_DELETED" -eq 1 ]; then
+    echo "  - Roles IAM wasteless dans AWS (stack '$STACK_NAME')"
+fi
 echo ""
 
 if [ "$FULL_UNINSTALL" -eq 1 ]; then
@@ -275,6 +354,9 @@ else
     echo -e "${YELLOW}${BOLD}Conserve:${NC}"
     echo "  - Volumes Docker (base de donnees PostgreSQL)"
     echo "  - Code source du projet"
+    if [ "$AWS_ROLES_DELETED" -eq 0 ] && [ -n "$ENV_AWS_ROLE_ARN" ]; then
+        echo "  - Roles IAM wasteless dans AWS (voir etape 6 pour les supprimer)"
+    fi
     echo ""
     echo -e "  Pour supprimer aussi les donnees: ${BOLD}./uninstall.sh --full${NC}"
 fi
