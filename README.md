@@ -30,9 +30,27 @@ brew bundle           # Installs Python, Docker Desktop, uv, AWS CLI (see Brewfi
 
 On Windows, use WSL2 — the native path is not supported (see [Windows setup](#windows-wsl2) below).
 
+**Option 1 — Download a release** (no git needed, latest version on the
+[Releases page](https://github.com/wasteless-io/wasteless/releases)):
+
+```bash
+curl -fsSLO https://github.com/wasteless-io/wasteless/releases/download/v0.1.0/wasteless-0.1.0.tar.gz
+curl -fsSLO https://github.com/wasteless-io/wasteless/releases/download/v0.1.0/SHA256SUMS
+shasum -a 256 -c SHA256SUMS          # Linux: sha256sum -c SHA256SUMS
+tar xzf wasteless-0.1.0.tar.gz
+cd wasteless-0.1.0
+```
+
+**Option 2 — Clone from git:**
+
 ```bash
 git clone https://github.com/wasteless-io/wasteless.git
 cd wasteless
+```
+
+Then install and start:
+
+```bash
 ./install.sh          # Installs everything (backend + UI + DB)
 
 source ~/.zshrc
