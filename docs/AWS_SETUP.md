@@ -276,6 +276,8 @@ false`), every action passes the safeguards, and without the
 **How do I revoke wasteless's access instantly?**
 Delete the CloudFormation stack (or `terraform destroy` the module).
 Both roles disappear and every wasteless call fails immediately.
+`./uninstall.sh` also offers this cleanup as its last step, using your
+own AWS credentials (the wasteless roles cannot delete themselves).
 
 ---
 
