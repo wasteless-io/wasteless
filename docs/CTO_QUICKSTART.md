@@ -42,11 +42,12 @@ same outputs.
 wasteless
 ```
 
-Open <http://localhost:8888>. A banner tells you AWS is not connected yet.
+Your browser opens on the setup guide (<http://localhost:8888/setup>)
+automatically as long as AWS is not connected yet.
 
 ## 4. Paste, test, save (1 min)
 
-Follow the banner to <http://localhost:8888/setup>, paste the values from
+On the setup page (also reachable from the banner on any page), paste the values from
 step 2, click **Test connection** (you get an immediate ✓ or the exact
 error), then **Test & save**. Both configuration files are written for
 you; no restart needed.
