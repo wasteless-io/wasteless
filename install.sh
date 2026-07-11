@@ -1367,8 +1367,8 @@ if [ "$AWS_CHECK_OK" -eq 1 ]; then
     echo -e "  ${GREEN}AWS : connecte et verifie${NC}"
 else
     echo -e "  ${YELLOW}AWS : non connecte — le dashboard restera vide tant que ce n'est pas fait.${NC}"
-    echo "        Guide de 10 min : http://localhost:8888/setup (une fois l'interface lancee)"
-    echo "        ou docs/CTO_QUICKSTART.md"
+    echo "        Le navigateur va s'ouvrir sur le guide de connexion (http://localhost:8888/setup)"
+    echo "        Guide detaille : docs/CTO_QUICKSTART.md"
 fi
 echo ""
 echo -e "${BOLD}Pour demarrer:${NC}"

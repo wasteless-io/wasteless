@@ -83,6 +83,15 @@ _scheduler_installed() {
         || crontab -l 2>/dev/null | grep -qF "$CRON_MARKER"
 }
 
+# Ouvre l'URL dans le navigateur par defaut, sans bruit terminal.
+_open_browser() {
+    if command -v open &>/dev/null; then
+        open "$1"
+    elif command -v xdg-open &>/dev/null; then
+        xdg-open "$1" &>/dev/null
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # start
 # ---------------------------------------------------------------------------
@@ -110,6 +119,18 @@ _start() {
 
     PORT="${WASTELESS_PORT:-$(_env_var STREAMLIT_SERVER_PORT)}"
     PORT="${PORT:-8888}"
+
+    # Page d'atterrissage : le wizard /setup tant qu'aucune connexion AWS
+    # n'est configuree (ARNs/cles dans ui/.env — ecrits par install.sh et
+    # /setup —, variables d'environnement, ou credentials partages crees par
+    # `aws configure`). Dans le doute on ouvre la home : mieux vaut manquer
+    # /setup que d'y renvoyer un compte deja connecte.
+    LANDING_URL="http://localhost:$PORT"
+    if [ -z "$(_env_var AWS_ROLE_ARN)$(_env_var AWS_ACCESS_KEY_ID)" ] \
+        && [ -z "${AWS_ROLE_ARN:-}${AWS_ACCESS_KEY_ID:-}" ] \
+        && [ ! -f "$HOME/.aws/credentials" ]; then
+        LANDING_URL="http://localhost:$PORT/setup"
+    fi
 
     # Already running?
     if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
@@ -155,8 +176,11 @@ _start() {
             echo -e "  ${CYAN}wasteless logs${NC}     View server logs"
             echo -e "  ${CYAN}wasteless stop${NC}     Stop the server"
             echo ""
-            command -v open &>/dev/null && open "http://localhost:$PORT"
-            command -v xdg-open &>/dev/null && xdg-open "http://localhost:$PORT" &>/dev/null
+            if [ "$LANDING_URL" != "http://localhost:$PORT" ]; then
+                echo -e "  ${YELLOW}AWS not connected yet — opening the setup guide (/setup)${NC}"
+                echo ""
+            fi
+            _open_browser "$LANDING_URL"
             return 0
         fi
         printf "\r  %s  Starting up... (%ds)" "${SPIN[$((i % SLEN))]}" "$i"
@@ -178,8 +202,7 @@ _start() {
         while [ $j -lt 120 ]; do
             sleep 1
             if curl -s -o /dev/null "http://localhost:$PORT/" 2>/dev/null; then
-                command -v open &>/dev/null && open "http://localhost:$PORT"
-                command -v xdg-open &>/dev/null && xdg-open "http://localhost:$PORT" &>/dev/null
+                _open_browser "$LANDING_URL"
                 exit 0
             fi
             j=$((j + 1))
