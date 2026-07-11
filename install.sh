@@ -832,11 +832,17 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
     # un dashboard vide + une collecte en echec silencieux — le report est
     # maintenant un choix explicite dont la consequence est annoncee.
     echo ""
-    echo "  Connexion du compte AWS — comment souhaitez-vous proceder ?"
-    echo "    1) J'ai deja les ARN des roles wasteless (onboarding/ applique) — recommande"
-    echo "    2) Pas encore — continuer sans AWS. Le dashboard restera vide ;"
-    echo "       guide de 10 min : docs/CTO_QUICKSTART.md ou la page /setup de l'interface."
-    echo "    3) Cles d'acces AWS directes (deconseille : acces non restreint aux roles read-only)"
+    echo "  Connexion du compte AWS"
+    echo "  Wasteless lit votre compte via un role IAM read-only, a creer en une etape"
+    echo "  avec le template fourni (dossier onboarding/, CloudFormation ou Terraform)."
+    echo ""
+    echo "    1) Les roles sont crees, j'ai leurs ARN sous la main -> je les colle maintenant"
+    echo "       (recommande si vous avez deja suivi docs/CTO_QUICKSTART.md)"
+    echo "    2) Pas encore -> terminer l'installation d'abord. Le navigateur s'ouvrira"
+    echo "       sur le guide de connexion (/setup) : tout se fait ensuite en quelques clics,"
+    echo "       sans revenir au terminal. C'est le choix par defaut."
+    echo "    3) Coller des cles d'acces IAM directes (deconseille : wasteless obtient"
+    echo "       alors tous les droits de ces cles, au lieu d'etre limite au role read-only)"
     AWS_ROLE_ARN=""
     AWS_WRITE_ROLE_ARN=""
     AWS_EXTERNAL_ID=""
@@ -874,7 +880,7 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
                 AWS_CONFIGURED=1
                 ;;
             *)
-                print_step "Connexion AWS reportee — les instructions seront rappelees en fin d'installation"
+                print_step "Connexion AWS reportee — elle se fera dans le navigateur en fin d'installation (/setup)"
                 break
                 ;;
         esac
