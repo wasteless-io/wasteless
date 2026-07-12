@@ -140,7 +140,7 @@
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
         <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="Savings verified via AWS Cost Explorer after applied actions — measured, not estimated"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></span></span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">
-            {% if (metrics.savings_realized or 0) > 0 %}verified via Cost Explorer{% else %}appears after your first applied action{% endif %}
+            {% if (metrics.savings_realized or 0) > 0 %}verified via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a>{% else %}appears after your first applied action{% endif %}
         </div>
     </div>
 

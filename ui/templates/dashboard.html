@@ -277,7 +277,7 @@
             {% if (kpis.cumulative_savings or 0) > 0 %}
             <div class="kpi-value text-success"><span class="kpi-hover" tabindex="0" data-tip="Cumulative savings since launch, verified via AWS Cost Explorer — measured, not estimated"><span class="kpi-zoom">{{ eur(kpis.cumulative_savings) }}</span></span></div>
             <div class="kpi-label">Savings Realized</div>
-            <div class="kpi-sub">Since launch · verified via Cost Explorer</div>
+            <div class="kpi-sub">Since launch · verified via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a></div>
             {% else %}
             <div class="kpi-value is-muted">—</div>
             <div class="kpi-label">Savings Realized</div>
