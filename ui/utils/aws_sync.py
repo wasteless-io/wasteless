@@ -46,6 +46,11 @@ def _existing_snapshots(ec2, ids: List[str]) -> Set[str]:
     return {s["SnapshotId"] for s in response.get("Snapshots", [])}
 
 
+def _existing_vpcs(ec2, ids: List[str]) -> Set[str]:
+    response = ec2.describe_vpcs(Filters=[{"Name": "vpc-id", "Values": ids}])
+    return {v["VpcId"] for v in response.get("Vpcs", [])}
+
+
 def _existing_nat_gateways(ec2, ids: List[str]) -> Set[str]:
     """NAT gateway IDs that exist and are not deleted/deleting.
 
@@ -76,6 +81,23 @@ def _existing_load_balancers(elbv2, elb) -> Set[str]:
     return found
 
 
+# EC2-family checkers by resource_type; load_balancer is special-cased in
+# find_vanished_resources (two clients). Every resource_type a detector can
+# write to waste_detected must appear in SYNCABLE_RESOURCE_TYPES, or its
+# recommendations survive the resource forever — the guard test in
+# test_aws_sync.py fails when one is missing.
+CHECKERS = {
+    "ec2_instance": _existing_instances,
+    "ebs_volume": _existing_volumes,
+    "elastic_ip": _existing_eips,
+    "ebs_snapshot": _existing_snapshots,
+    "nat_gateway": _existing_nat_gateways,
+    "vpc": _existing_vpcs,
+}
+
+SYNCABLE_RESOURCE_TYPES = frozenset(CHECKERS) | {"load_balancer"}
+
+
 def find_vanished_resources(
     pending: Dict[str, List[str]],
     regions: List[str] = SYNC_REGIONS,
@@ -98,21 +120,13 @@ def find_vanished_resources(
         def client_factory(service, region_name=None):
             return get_client(service, region=region_name)
 
-    checkers = {
-        "ec2_instance": _existing_instances,
-        "ebs_volume": _existing_volumes,
-        "elastic_ip": _existing_eips,
-        "ebs_snapshot": _existing_snapshots,
-        "nat_gateway": _existing_nat_gateways,
-    }
-
     vanished: Dict[str, List[str]] = {}
 
     for resource_type, ids in pending.items():
         if not ids:
             continue
 
-        if resource_type != "load_balancer" and resource_type not in checkers:
+        if resource_type not in SYNCABLE_RESOURCE_TYPES:
             # Unknown type: skip rather than wrongly obsolete
             logger.warning(f"No sync checker for resource type " f"'{resource_type}', skipping")
             continue
@@ -128,7 +142,7 @@ def find_vanished_resources(
                         client_factory("elb", region_name=region),
                     )
                 else:
-                    existing |= checkers[resource_type](
+                    existing |= CHECKERS[resource_type](
                         client_factory("ec2", region_name=region), ids
                     )
                 regions_checked += 1
