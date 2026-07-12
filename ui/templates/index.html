@@ -49,54 +49,8 @@
     @keyframes shimmer {
         to { background-position: -200% 0; }
     }
-    {# fade-up / .fade-in / .main cascade / .fill-bar / count-up: shared,
-       defined in base.html #}
-
-    /* KPI values: the characters swell on hover/focus and a small ink
-       tooltip (data-tip) opens above. The scale lives on the inner
-       .kpi-zoom so the tooltip itself does not inflate with the number. */
-    .kpi-hover {
-        position: relative;
-        display: inline-block;
-        cursor: default;
-        outline: none;
-    }
-    .kpi-zoom {
-        display: inline-block;
-        transition: transform 0.18s ease;
-    }
-    .kpi-hover:hover .kpi-zoom,
-    .kpi-hover:focus-visible .kpi-zoom {
-        transform: scale(1.12);
-    }
-    .kpi-hover::after {
-        content: attr(data-tip);
-        position: absolute;
-        bottom: calc(100% + 8px);
-        left: 50%;
-        transform: translateX(-50%) scale(0.95);
-        background: #1d1d1f;
-        color: white;
-        font-size: 0.72rem;
-        font-weight: 400;
-        letter-spacing: 0;
-        line-height: 1.45;
-        text-align: center;
-        width: max-content;
-        max-width: 250px;
-        white-space: normal;
-        padding: 0.45rem 0.65rem;
-        border-radius: 8px;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.15s ease, transform 0.15s ease;
-        z-index: 10;
-    }
-    .kpi-hover:hover::after,
-    .kpi-hover:focus-visible::after {
-        opacity: 1;
-        transform: translateX(-50%) scale(1);
-    }
+    {# fade-up / .fade-in / .main cascade / .fill-bar / count-up /
+       .kpi-hover tooltips: shared, defined in base.html #}
 </style>
 {% endblock %}
 
