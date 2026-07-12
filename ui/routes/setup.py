@@ -34,9 +34,36 @@ ENV_FILES = [ROOT_DIR / ".env", APP_DIR / ".env"]
 
 ROLE_ARN_RE = re.compile(r"^arn:aws:iam::\d{12}:role/.+$")
 REGION_RE = re.compile(r"^[a-z]{2}(-[a-z]+)+-\d$")
+ACCOUNT_ID_RE = re.compile(r"^\d{12}$")
+
+# Default role names of the onboarding template (RoleNamePrefix=wasteless):
+# with the account ID they make the ARNs fully predictable, so the form can
+# be pre-filled and the user never copies stack outputs by hand.
+ROLE_NAME_PREFIX = "wasteless"
+
+# Template served to the CloudFormation quick-create link. Published by
+# scripts/publish_onboarding_template.sh; override for a fork or a private
+# mirror. Must be an S3 HTTPS URL (console requirement for templateURL).
+ONBOARDING_TEMPLATE_URL_DEFAULT = (
+    "https://wasteless-io-onboarding.s3.eu-west-1.amazonaws.com" "/latest/wasteless-onboarding.yaml"
+)
 
 # Short timeouts: these endpoints run while the user waits on the page.
 _STS_CONFIG = Config(connect_timeout=5, read_timeout=5, retries={"max_attempts": 1})
+
+
+def _account_id() -> str:
+    """AWS_ACCOUNT_ID from the environment (ui/.env), falling back to the
+    root .env — installs made before the mirror wrote it only there.
+    Returns '' unless it looks like a real 12-digit account ID."""
+    acct = os.getenv("AWS_ACCOUNT_ID", "")
+    if not acct:
+        root_env = ROOT_DIR / ".env"
+        if root_env.exists():
+            for line in root_env.read_text().splitlines():
+                if line.startswith("AWS_ACCOUNT_ID="):
+                    acct = line.split("=", 1)[1].strip()
+    return acct if ACCOUNT_ID_RE.match(acct) else ""
 
 
 def _validation_error(payload: AwsSetupRequest) -> str | None:
@@ -75,6 +102,19 @@ def _test_connection(payload: AwsSetupRequest) -> dict:
         # The account that matters downstream is the one the role lives in
         # (cross-account setups), not the source identity's.
         result["account_id"] = payload.role_arn.split(":")[4]
+    if payload.write_role_arn:
+        # The form pre-fills this ARN from the account ID; if the stack was
+        # created with CreateRemediationRole=false the role doesn't exist,
+        # and saving it silently would break remediation much later. Fail
+        # here instead, while the user can still clear the field.
+        kwargs = {
+            "RoleArn": payload.write_role_arn,
+            "RoleSessionName": "wasteless-setup-check",
+        }
+        if payload.external_id:
+            kwargs["ExternalId"] = payload.external_id
+        sts.assume_role(**kwargs)
+        result["write_role_assumed"] = payload.write_role_arn
     return result
 
 
@@ -113,6 +153,8 @@ def _apply_to_process(values: dict) -> None:
 @router.get("/setup", response_class=HTMLResponse)
 def setup_page(request: Request):
     """AWS onboarding page: status, instructions, connection form."""
+    account_id = _account_id()
+    suggested_arn = f"arn:aws:iam::{account_id}:role/{ROLE_NAME_PREFIX}" if account_id else ""
     return templates.TemplateResponse(
         request,
         "setup.html",
@@ -124,6 +166,12 @@ def setup_page(request: Request):
             "current_role_arn": os.getenv("AWS_ROLE_ARN", ""),
             "current_write_role_arn": os.getenv("AWS_WRITE_ROLE_ARN", ""),
             "has_access_keys": bool(os.getenv("AWS_ACCESS_KEY_ID")),
+            "account_id": account_id,
+            "suggested_role_arn": f"{suggested_arn}-readonly" if suggested_arn else "",
+            "suggested_write_role_arn": f"{suggested_arn}-remediation" if suggested_arn else "",
+            "onboarding_template_url": os.getenv(
+                "WASTELESS_ONBOARDING_TEMPLATE_URL", ONBOARDING_TEMPLATE_URL_DEFAULT
+            ),
         },
     )
 

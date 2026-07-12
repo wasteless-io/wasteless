@@ -27,17 +27,33 @@
 <div class="card mb-2">
     <h3 style="margin-bottom: 0.5rem;">1 &mdash; Create the wasteless roles in your AWS account</h3>
     <p class="text-muted" style="margin-bottom: 0.75rem;">
-        One CloudFormation stack (or Terraform module) creates <code>wasteless-readonly</code>
-        &mdash; Describe/Get/List permissions only. It outputs the values you paste in step&nbsp;2.
-        If someone on your team manages AWS, send them this link; it is the only part that
-        happens inside your AWS account.
+        One CloudFormation stack creates <code>wasteless-readonly</code>
+        &mdash; Describe/Get/List permissions only. This is the only part that
+        happens inside your AWS account, and the button below pre-fills it all.
     </p>
-    <ul style="margin: 0 0 0.5rem 1.25rem; font-size: 0.875rem;">
-        <li><strong>CloudFormation</strong> (no tooling needed): upload
-            <code>onboarding/cloudformation/</code> in the
-            <a href="https://console.aws.amazon.com/cloudformation/home#/stacks/create" target="_blank" rel="noopener">AWS console &rarr; Create stack</a></li>
-        <li><strong>Terraform</strong>: apply <code>onboarding/terraform/</code></li>
-    </ul>
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem;">
+        <button class="btn btn-primary" onclick="openQuickCreate()">Create the roles in AWS &rarr;</button>
+        <button class="btn btn-outline" onclick="copyQuickCreate()">Copy link</button>
+        <span id="quickcreate-copied" class="text-muted" style="font-size: 0.8rem;"></span>
+    </div>
+    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.5rem;">
+        Opens your AWS console on a pre-filled <em>Create stack</em> review page:
+        sign in as an administrator, tick <em>"I acknowledge that AWS CloudFormation
+        might create IAM resources with custom names"</em>, click <strong>Create stack</strong>,
+        wait for <code>CREATE_COMPLETE</code> (~1 min), then come back here and hit
+        <strong>Test connection</strong> &mdash; the fields in step&nbsp;2 are already filled in.
+        If someone else manages AWS, send them the link with <em>Copy link</em>.
+        Type an External&nbsp;ID in step&nbsp;2 <em>before</em> opening the link to bake it in.
+    </p>
+    <details>
+        <summary class="text-muted" style="font-size: 0.8rem; cursor: pointer;">Manual alternatives (no pre-filled link)</summary>
+        <ul style="margin: 0.5rem 0 0.5rem 1.25rem; font-size: 0.875rem;">
+            <li><strong>CloudFormation</strong> (no tooling needed): upload
+                <code>onboarding/cloudformation/wasteless-onboarding.yaml</code> in the
+                <a href="https://console.aws.amazon.com/cloudformation/home#/stacks/create" target="_blank" rel="noopener">AWS console &rarr; Create stack</a></li>
+            <li><strong>Terraform</strong> (only if your team already uses it): apply <code>onboarding/terraform/</code></li>
+        </ul>
+    </details>
     <p class="text-muted" style="font-size: 0.8rem;">
         Full walkthrough: <code>docs/CTO_QUICKSTART.md</code> (short) or <code>docs/AWS_SETUP.md</code> (detailed, per-permission).
     </p>
@@ -45,16 +61,23 @@
 
 <!-- Step 2: the form -->
 <div class="card mb-2">
-    <h3 style="margin-bottom: 0.5rem;">2 &mdash; Paste the values, test, save</h3>
+    <h3 style="margin-bottom: 0.5rem;">2 &mdash; Test and save</h3>
+    {% if account_id and not current_role_arn %}
+    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
+        Pre-filled from your account ID ({{ account_id }}) and the template's default
+        role names &mdash; once the stack shows <code>CREATE_COMPLETE</code>, just click
+        <strong>Test connection</strong>.
+    </p>
+    {% endif %}
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
         <label style="font-size: 0.85rem;">AWS region
             <input class="form-input" id="setup-region" value="{{ current_region }}" placeholder="eu-west-1">
         </label>
-        <label style="font-size: 0.85rem;">Read-only role ARN <span class="text-muted">(from the stack outputs)</span>
-            <input class="form-input" id="setup-role-arn" value="{{ current_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-readonly">
+        <label style="font-size: 0.85rem;">Read-only role ARN
+            <input class="form-input" id="setup-role-arn" value="{{ current_role_arn or suggested_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-readonly">
         </label>
-        <label style="font-size: 0.85rem;">Remediation role ARN <span class="text-muted">(optional)</span>
-            <input class="form-input" id="setup-write-role-arn" value="{{ current_write_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-remediation">
+        <label style="font-size: 0.85rem;">Remediation role ARN <span class="text-muted">(optional &mdash; clear it if you chose detection-only)</span>
+            <input class="form-input" id="setup-write-role-arn" value="{{ current_write_role_arn or suggested_write_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-remediation">
         </label>
         <label style="font-size: 0.85rem;">External ID <span class="text-muted">(optional)</span>
             <input class="form-input" id="setup-external-id" placeholder="">
@@ -84,6 +107,36 @@
 </div>
 
 <script>
+// CloudFormation quick-create: a console URL that lands directly on the
+// pre-filled "Create stack" review page. templateURL must be a public S3
+// HTTPS URL (published by scripts/publish_onboarding_template.sh).
+const ONBOARDING_TEMPLATE_URL = {{ onboarding_template_url | tojson }};
+
+function quickCreateUrl() {
+    const region = document.getElementById('setup-region').value.trim() || 'eu-west-1';
+    const externalId = document.getElementById('setup-external-id').value.trim();
+    let url = 'https://' + region + '.console.aws.amazon.com/cloudformation/home?region='
+        + region + '#/stacks/create/review?templateURL='
+        + encodeURIComponent(ONBOARDING_TEMPLATE_URL)
+        + '&stackName=wasteless-onboarding';
+    if (externalId) url += '&param_ExternalId=' + encodeURIComponent(externalId);
+    return url;
+}
+
+function openQuickCreate() {
+    window.open(quickCreateUrl(), '_blank', 'noopener');
+}
+
+async function copyQuickCreate() {
+    const note = document.getElementById('quickcreate-copied');
+    try {
+        await navigator.clipboard.writeText(quickCreateUrl());
+        note.textContent = 'Link copied — send it to whoever manages your AWS account.';
+    } catch (e) {
+        note.textContent = quickCreateUrl();
+    }
+}
+
 function setupPayload() {
     return {
         region: document.getElementById('setup-region').value.trim(),

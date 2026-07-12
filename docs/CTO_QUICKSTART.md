@@ -1,7 +1,7 @@
 # Connect AWS in 10 minutes — the non-technical path
 
 This is the short version of [AWS_SETUP.md](AWS_SETUP.md), written for
-someone who runs a company, not a terminal. Five steps, two of which you
+someone who runs a company, not a terminal. Five steps, one of which you
 can delegate.
 
 **What you are granting:** one read-only IAM role (`wasteless-readonly`,
@@ -20,14 +20,48 @@ git clone https://github.com/wasteless-io/wasteless.git && cd wasteless
 ```
 
 When the installer asks about AWS, pick **option 2 (not yet)** — you will
-connect through the web page in step 4, which is easier than the terminal.
+connect through the web page in the next steps, which is easier than the
+terminal.
 
-## 2. Create the roles in your AWS account (3 min — delegable)
+## 2. Open the setup page (30 s)
 
-This is the only step that happens inside AWS. If someone on your team
-manages your AWS account, forward them this section.
+```bash
+wasteless
+```
 
-**Console path (no tooling):**
+Your browser opens on the setup guide (<http://localhost:8888/setup>)
+automatically as long as AWS is not connected yet.
+
+## 3. Create the roles in your AWS account (2 min — delegable)
+
+This is the only step that happens inside AWS.
+
+On the setup page, click **Create the roles in AWS →**. It opens your AWS
+console directly on a pre-filled *Create stack* page. There:
+
+1. Sign in with an account that can create IAM roles (an administrator).
+2. Tick the checkbox **"I acknowledge that AWS CloudFormation might create
+   IAM resources with custom names"** (the stack creates two roles named
+   `wasteless-readonly` and `wasteless-remediation` — that is all it does),
+   then click **Create stack**.
+3. Wait about a minute until the stack status shows **CREATE_COMPLETE**
+   (refresh if needed), then come back to the setup page.
+
+If someone on your team manages your AWS account, use **Copy link** next to
+the button and send them the link instead — it carries everything they need.
+
+Two options worth knowing, both on the setup page *before* you open the link:
+
+- **External ID** — type a secret phrase of your choice in the *External ID*
+  field for extra protection; the link bakes it into the stack, and WasteLess
+  keeps the same value. Recommended if WasteLess runs from a different AWS
+  account.
+- **Detection-only** — on the AWS review page, set `CreateRemediationRole`
+  to `false`: WasteLess can then never modify anything in the account. Clear
+  the *Remediation role ARN* field on the setup page afterwards.
+
+<details>
+<summary>Manual path (if the pre-filled link is unavailable)</summary>
 
 1. Get the template file
    [`wasteless-onboarding.yaml`](../onboarding/cloudformation/wasteless-onboarding.yaml)
@@ -41,48 +75,32 @@ manages your AWS account, forward them this section.
 4. Stack name: `wasteless-onboarding`. The default parameters are right for
    the standard setup (WasteLess analyzing the account it is connected to):
    - `TrustedPrincipalArn` — leave empty.
-   - `ExternalId` — leave empty, or type a secret phrase of your choice for
-     extra protection; you will paste the **same value** into WasteLess at
-     step 4. Recommended if WasteLess runs from a different AWS account.
-   - `CreateRemediationRole` — keep `true`. Set `false` for detection-only:
-     WasteLess can then never modify anything in the account.
+   - `ExternalId` — leave empty, or type a secret phrase of your choice; you
+     will paste the **same value** into WasteLess at step 4.
+   - `CreateRemediationRole` — keep `true`, or `false` for detection-only.
 
    Click **Next**.
-5. Leave the stack options as they are. Tick the checkbox
-   **"I acknowledge that AWS CloudFormation might create IAM resources with
-   custom names"** when it appears (the template creates two roles named
-   `wasteless-readonly` and `wasteless-remediation` — that is all it does),
-   then **Next** and **Submit**.
-6. Wait about a minute until the stack status shows **CREATE_COMPLETE**
-   (refresh if needed), then open the **Outputs** tab and copy:
-   - `ReadOnlyRoleArn` → the *read-only role ARN* field in WasteLess;
-   - `RemediationRoleArn` → the *remediation role ARN* field (this output
-     only exists if you kept `CreateRemediationRole` to `true`).
+5. Leave the stack options as they are, tick the IAM acknowledgement
+   checkbox, then **Next** and **Submit**.
+6. Wait for **CREATE_COMPLETE**, then open the **Outputs** tab and copy
+   `ReadOnlyRoleArn` (and `RemediationRoleArn` if present) into the matching
+   fields of the setup page.
 
-   If you typed an `ExternalId` at step 4 of the wizard, keep it at hand:
-   WasteLess asks for the same value.
+</details>
 
 **Terraform path** *(optional — only if your team already manages its
 infrastructure with Terraform; Terraform is never required to install or run
 WasteLess)*: apply [`onboarding/terraform/`](../onboarding/terraform/) —
 the outputs `readonly_role_arn` and `remediation_role_arn` are the same two
-ARNs as above.
+role ARNs.
 
-## 3. Start the interface (30 s)
+## 4. Test and save (30 s)
 
-```bash
-wasteless
-```
-
-Your browser opens on the setup guide (<http://localhost:8888/setup>)
-automatically as long as AWS is not connected yet.
-
-## 4. Paste, test, save (1 min)
-
-On the setup page (also reachable from the banner on any page), paste the values from
-step 2, click **Test connection** (you get an immediate ✓ or the exact
-error), then **Test & save**. Both configuration files are written for
-you; no restart needed.
+Back on the setup page: the region and both role ARNs are already filled in
+from your account ID and the template's default role names. Click
+**Test connection** (you get an immediate ✓ or the exact error), then
+**Test & save**. Both configuration files are written for you; no restart
+needed.
 
 ## 5. Collect (1 min)
 
@@ -96,5 +114,6 @@ and collection re-runs automatically from then on.
 ---
 
 **Something failed?** The error shown by *Test connection* is the actual
-AWS error — most often a typo in the ARN or the stack created in the wrong
-account. Details and per-permission explanations: [AWS_SETUP.md](AWS_SETUP.md).
+AWS error — most often the stack not finished yet, created in another
+account, or a remediation role that was skipped (clear that field and test
+again). Details and per-permission explanations: [AWS_SETUP.md](AWS_SETUP.md).
