@@ -4,9 +4,10 @@
 
 {# Single money format for the whole page: "<€0.01" under a cent, cents up
    to €100, whole euros (grouped) above — large KPIs don't need cent noise. #}
+{# .countup: re-counted from 0 at load by the shared script in base.html #}
 {% macro eur(v) -%}
 {%- set v = v or 0 -%}
-{%- if v > 0 and v < 0.01 -%}&lt;€0.01{%- elif v < 100 -%}€{{ "%.2f"|format(v) }}{%- else -%}€{{ "{:,.0f}".format(v) }}{%- endif -%}
+<span class="countup">{%- if v > 0 and v < 0.01 -%}&lt;€0.01{%- elif v < 100 -%}€{{ "%.2f"|format(v) }}{%- else -%}€{{ "{:,.0f}".format(v) }}{%- endif -%}</span>
 {%- endmacro %}
 
 {% block extra_css %}
@@ -450,14 +451,14 @@
 
         <!-- Waste Detected -->
         <div class="kpi">
-            <div class="kpi-value">{{ kpis.waste_count or 0 }}</div>
+            <div class="kpi-value"><span class="countup">{{ kpis.waste_count or 0 }}</span></div>
             <div class="kpi-label">Waste Detected</div>
             <div class="kpi-sub">resources identified</div>
         </div>
 
         <!-- Actions Pending -->
         <div class="kpi">
-            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}">{{ kpis.pending_count or 0 }}</div>
+            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}"><span class="countup">{{ kpis.pending_count or 0 }}</span></div>
             <div class="kpi-label">Actions Pending</div>
             <div class="kpi-sub">
                 {% if (kpis.pending_count or 0) > 0 %}

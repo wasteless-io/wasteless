@@ -35,9 +35,9 @@
             </div>
             <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
             <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
-                <span><strong>{{ total_count }}</strong> recommendations</span>
-                <span class="text-success">Savings: <strong>{{ "%.2f"|format(total_savings) }}</strong> €/mo</span>
-                <span><strong>{{ "%.0f"|format(avg_confidence * 100) }}%</strong> conf.</span>
+                <span><strong class="countup">{{ total_count }}</strong> recommendations</span>
+                <span class="text-success">Savings: <strong class="countup">{{ "%.2f"|format(total_savings) }}</strong> €/mo</span>
+                <span><strong class="countup">{{ "%.0f"|format(avg_confidence * 100) }}%</strong> conf.</span>
             </div>
         </div>
     </form>
@@ -270,7 +270,7 @@
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
                                     </div>
                                     <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
                                 </div>
@@ -325,7 +325,7 @@
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
                                     </div>
                                     <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
                                 </div>
@@ -371,7 +371,7 @@
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: var(--success);"></div>
+                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: var(--success);"></div>
                                     </div>
                                     <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
                                 </div>
@@ -426,7 +426,7 @@
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
                                     </div>
                                     <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
                                 </div>
@@ -475,7 +475,7 @@
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
                                     </div>
                                     <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
                                 </div>

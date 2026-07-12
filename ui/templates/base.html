@@ -517,6 +517,35 @@
             50% { opacity: 0.5; }
         }
 
+        /* Load animations, shared by every page.
+           - the page composes itself: top-level blocks fade up in sequence
+           - .fill-bar: data bars draw themselves from the left
+           - .countup targets are animated by the script at the bottom */
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        .fade-in { animation: fade-up 0.4s ease both; }
+
+        .main > * { animation: fade-up 0.45s ease both; }
+        .main > *:nth-child(2) { animation-delay: 70ms; }
+        .main > *:nth-child(3) { animation-delay: 140ms; }
+        .main > *:nth-child(4) { animation-delay: 210ms; }
+        .main > *:nth-child(5) { animation-delay: 280ms; }
+        .main > *:nth-child(6) { animation-delay: 350ms; }
+        .main > *:nth-child(7) { animation-delay: 420ms; }
+        .main > *:nth-child(8) { animation-delay: 490ms; }
+
+        .fill-bar {
+            transform-origin: left;
+            animation: bar-fill 0.5s ease-out both;
+        }
+        @keyframes bar-fill {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
+
         /* OS-level "reduce motion": kill every animation and transition.
            JS-driven effects must check the same media query themselves. */
         @media (prefers-reduced-motion: reduce) {
@@ -671,6 +700,39 @@
         async function refreshData() {
             location.reload();
         }
+
+        // KPI count-up: the server renders the final value; the number is
+        // re-counted from 0 client-side (~700ms, cubic ease-out). Prefix,
+        // suffix, decimals and thousands grouping are inferred from the
+        // rendered text so a plain class="countup" works on '€3.36',
+        // '85%', '1,234' alike. Skipped under prefers-reduced-motion.
+        (function () {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            document.querySelectorAll('.countup').forEach(el => {
+                const raw = el.textContent;
+                const m = raw.match(/-?\d[\d,]*(?:\.\d+)?/);
+                if (!m) return;
+                const numStr = m[0];
+                const target = parseFloat(numStr.replace(/,/g, ''));
+                if (!isFinite(target) || target === 0) return;
+                const decimals = (numStr.split('.')[1] || '').length;
+                const grouped = numStr.includes(',');
+                const prefix = raw.slice(0, m.index);
+                const suffix = raw.slice(m.index + numStr.length);
+                const duration = 700;
+                const t0 = performance.now();
+                const fmt = v => grouped
+                    ? Math.round(v).toLocaleString('en-US')
+                    : v.toFixed(decimals);
+                function frame(t) {
+                    const p = Math.min((t - t0) / duration, 1);
+                    const eased = 1 - Math.pow(1 - p, 3);
+                    el.textContent = prefix + fmt(target * eased) + suffix;
+                    if (p < 1) requestAnimationFrame(frame);
+                }
+                requestAnimationFrame(frame);
+            });
+        })();
     </script>
     {% block extra_js %}{% endblock %}
 </body>
