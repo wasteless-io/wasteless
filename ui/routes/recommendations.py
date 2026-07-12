@@ -250,6 +250,82 @@ def api_recommendations(
     return {"recommendations": results, "count": len(results)}
 
 
+# CloudTrail LookupEvents est limite a ~2 req/s sur tout le compte : cache
+# en memoire par ressource pour que des clics repetes (ou plusieurs onglets)
+# ne consomment pas le quota. TTL court : l'historique bouge peu.
+_HISTORY_CACHE: dict = {}
+_HISTORY_CACHE_TTL_SECONDS = 600
+
+
+@router.get("/api/recommendations/{rec_id}/resource-history")
+def resource_history(rec_id: int, conn=Depends(get_db)):
+    """CloudTrail history of this recommendation's resource: who created or
+    modified it, and when — the context a human wants before approving.
+
+    Uses LookupEvents (90 days of management events, no trail setup needed)
+    in the resource's own region. Degrades gracefully when the readonly
+    role lacks cloudtrail:LookupEvents (older onboarding stacks): the
+    response says how to enable it instead of erroring.
+    """
+    import os
+    import time
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT w.resource_id, w.metadata
+        FROM recommendations r
+        JOIN waste_detected w ON w.id = r.waste_id
+        WHERE r.id = %s
+    """,
+        (rec_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="recommendation not found")
+
+    resource_id = row["resource_id"]
+    cached = _HISTORY_CACHE.get(resource_id)
+    if cached and cached[0] > time.time():
+        return cached[1]
+
+    metadata = row["metadata"] or {}
+    region = metadata.get("region") or os.getenv("AWS_REGION", "eu-west-1")
+
+    from utils.aws_clients import get_client
+
+    try:
+        cloudtrail = get_client("cloudtrail", region=region)
+        response = cloudtrail.lookup_events(
+            LookupAttributes=[{"AttributeKey": "ResourceName", "AttributeValue": resource_id}],
+            MaxResults=20,
+        )
+        events = [
+            {
+                "time": event["EventTime"].isoformat(),
+                "name": event.get("EventName", ""),
+                "username": event.get("Username", ""),
+            }
+            for event in response.get("Events", [])
+        ]
+        payload = {"available": True, "region": region, "events": events}
+    except Exception as e:
+        if "AccessDenied" in str(e):
+            # Stack d'onboarding anterieure a l'ajout de la permission :
+            # message actionnable plutot qu'une 500.
+            payload = {
+                "available": False,
+                "hint": "The wasteless-readonly role lacks cloudtrail:LookupEvents "
+                "— update your onboarding stack (onboarding/cloudformation or "
+                "terraform) to enable resource history.",
+            }
+        else:
+            payload = {"available": False, "hint": str(e)}
+
+    _HISTORY_CACHE[resource_id] = (time.time() + _HISTORY_CACHE_TTL_SECONDS, payload)
+    return payload
+
+
 @router.post("/api/recommendations/{rec_id}/ask")
 def ask_about_recommendation(rec_id: int, body: AskQuestionRequest, conn=Depends(get_db)):
     """One-shot AI answer to a question about a specific recommendation.

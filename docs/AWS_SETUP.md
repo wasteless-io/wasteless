@@ -192,6 +192,7 @@ and [`remediation.json`](../onboarding/policies/remediation.json).
 | Action | Used by | Why |
 |---|---|---|
 | `ce:GetCostAndUsage` | cost collector, savings tracker | Retrieve billed costs and verify realized savings |
+| `cloudtrail:LookupEvents` | resource history (Recommendations page) | Read-only: who created/touched a resource, last 90 days — context before approving. Stacks created before this permission existed still work; the history panel just explains how to enable it |
 | `cloudwatch:GetMetricStatistics` | CloudWatch collector | CPU/network metrics to detect idle instances |
 | `ec2:DescribeInstances` | idle/stopped detectors, UI sync | List instances and their state |
 | `ec2:DescribeVolumes` | EBS orphan detector | Find unattached volumes |
