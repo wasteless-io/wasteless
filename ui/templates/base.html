@@ -38,12 +38,14 @@
         }
 
         :root {
-            /* Brand accent: burnt amber — money burning is the product.
-               #b45309 (not the brighter #d97706 the charts use) so white
-               text on it and it on white both clear WCAG AA for small text. */
-            --primary: #b45309;
-            --primary-dark: #92400e;
-            --accent-bright: #f59e0b; /* accent variant for dark backgrounds */
+            /* Color roles (Apple-style split): blue = interactive (buttons,
+               links, selection), amber = the data itself (charts, waste
+               figures), green/red = status. Chrome stays neutral. */
+            --primary: #0071e3;
+            --primary-dark: #0062c4;
+            --ink: #1d1d1f;
+            --ink-secondary: #86868b;
+            --hairline: rgba(0, 0, 0, 0.08);
             --success: #22c55e;
             --warning: #f59e0b;
             --danger: #ef4444;
@@ -70,16 +72,18 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: var(--gray-100);
-            color: var(--gray-800);
+            background: #f5f5f7;
+            color: var(--ink);
             line-height: 1.6;
             /* Columns of money must align digit-for-digit everywhere */
             font-variant-numeric: tabular-nums;
         }
 
+        /* Hierarchy through size and weight, in the system face (SF on
+           macOS); Space Grotesk is reserved for the wordmark. */
         h1, h2, h3 {
-            font-family: var(--font-display);
-            letter-spacing: -0.01em;
+            letter-spacing: -0.02em;
+            color: var(--ink);
         }
 
         code {
@@ -255,7 +259,7 @@
         .main {
             flex: 1;
             margin-left: 240px;
-            padding: 2rem;
+            padding: 2.5rem 3rem;
         }
 
         .page-header {
@@ -263,39 +267,38 @@
         }
 
         .page-header h1 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            color: var(--gray-800);
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--ink);
         }
 
         .page-header p {
-            color: var(--gray-600);
+            color: var(--ink-secondary);
             margin-top: 0.25rem;
         }
 
-        /* Cards: hairline border, no shadow — data-dense tool, not a
-           marketing site. */
+        /* Cards: white planes on the #f5f5f7 page — separation comes from
+           space, not borders or shadows. */
         .card {
             background: white;
-            border: 1px solid var(--gray-200);
-            border-radius: 6px;
+            border: none;
+            border-radius: 18px;
             padding: 1.5rem;
             margin-bottom: 1.5rem;
         }
 
         .card-title {
-            font-size: 0.875rem;
-            color: var(--gray-600);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--ink-secondary);
             margin-bottom: 0.5rem;
         }
 
         .card-value {
-            font-family: var(--font-mono);
             font-size: 2rem;
             font-weight: 600;
-            color: var(--gray-800);
+            letter-spacing: -0.02em;
+            color: var(--ink);
         }
 
         .card-delta {
@@ -358,13 +361,13 @@
             background: var(--gray-100);
         }
 
-        /* Buttons */
+        /* Buttons: pills; blue = interactive */
         .btn {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
             padding: 0.5rem 1rem;
-            border-radius: 6px;
+            border-radius: 980px;
             font-size: 0.875rem;
             font-weight: 500;
             cursor: pointer;
@@ -393,13 +396,13 @@
 
         .btn-outline {
             background: transparent;
-            border: 1px solid var(--gray-300);
-            color: var(--gray-600);
+            border: 1px solid var(--hairline);
+            color: var(--ink);
         }
 
         .btn-outline:hover {
-            border-color: var(--primary);
-            color: var(--primary);
+            border-color: var(--ink-secondary);
+            color: var(--ink);
         }
 
         /* Badges: outlined, square-ish — status is information, not
@@ -445,7 +448,7 @@
         .form-input:focus, .form-select:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.15);
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
         }
 
         /* Alerts */
