@@ -185,6 +185,7 @@ def home(request: Request, conn=Depends(get_db)):
                                  ELSE cost END), 0) as spend_eur,
                COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost
                                  ELSE 0 END), 0) as spend_usd,
+               COUNT(DISTINCT service) as service_count,
                COUNT(*) as row_count
         FROM cloud_costs_raw
         WHERE usage_date >= CURRENT_DATE - 30
@@ -196,6 +197,7 @@ def home(request: Request, conn=Depends(get_db)):
         float(spend_row["spend_eur"]) if spend_row and spend_row["row_count"] > 0 else None
     )
     aws_spend_30d_usd = float(spend_row["spend_usd"]) if spend_row else 0.0
+    aws_service_count = int(spend_row["service_count"]) if spend_row else 0
 
     # Monthly average over ALL collected history (rows accumulate beyond
     # the 30-day collection window as days pass): daily average scaled to
@@ -252,5 +254,6 @@ def home(request: Request, conn=Depends(get_db)):
             "aws_spend_30d_usd": aws_spend_30d_usd,
             "aws_spend_avg_eur": aws_spend_avg_eur,
             "aws_spend_vs_avg": aws_spend_vs_avg,
+            "aws_service_count": aws_service_count,
         },
     )
