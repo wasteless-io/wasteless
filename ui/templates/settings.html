@@ -32,7 +32,7 @@
 
 {% if not dry_run and auto_enabled %}
 <div class="card mb-2" style="padding: 0.6rem 1rem; border: 1px solid var(--danger); background: rgba(245, 101, 101, 0.06); font-size: 0.85rem;">
-    <strong style="color: var(--danger);">&#9888; Production + Auto Mode:</strong>
+    <strong style="color: var(--danger); display: inline-flex; align-items: center; gap: 0.35rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Production + Auto Mode:</strong>
     approved actions will be executed on AWS without further review. Make sure the whitelist below covers everything critical.
 </div>
 {% endif %}
@@ -45,8 +45,8 @@
         <!-- Dry-Run Mode (Safe) -->
         <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if config.get('dry_run', True) %}var(--success){% else %}var(--gray-200){% endif %}; background: {% if config.get('dry_run', True) %}rgba(72, 187, 120, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(!document.getElementById('dryRunToggle').checked) { document.getElementById('dryRunToggle').checked = true; toggleDryRun(true); }">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                <span style="background: {% if config.get('dry_run', True) %}var(--success){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
-                    {% if config.get('dry_run', True) %}&#10003;{% else %}–{% endif %}
+                <span style="background: {% if config.get('dry_run', True) %}var(--success){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                    {% if config.get('dry_run', True) %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{% else %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>{% endif %}
                 </span>
                 <div>
                     <strong style="font-size: 1rem;">Dry-Run</strong>
@@ -61,8 +61,8 @@
         <!-- Production Mode -->
         <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if not config.get('dry_run', True) %}var(--danger){% else %}var(--gray-200){% endif %}; background: {% if not config.get('dry_run', True) %}rgba(245, 101, 101, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(document.getElementById('dryRunToggle').checked) { toggleDryRun(false); }">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                <span style="background: {% if not config.get('dry_run', True) %}var(--danger){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
-                    {% if not config.get('dry_run', True) %}&#10003;{% else %}–{% endif %}
+                <span style="background: {% if not config.get('dry_run', True) %}var(--danger){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                    {% if not config.get('dry_run', True) %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{% else %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>{% endif %}
                 </span>
                 <div>
                     <strong style="font-size: 1rem;">Production</strong>
@@ -86,8 +86,8 @@
         <!-- Manual Mode -->
         <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if not config.get('auto_remediation', {}).get('enabled', False) %}var(--primary){% else %}var(--gray-200){% endif %}; background: {% if not config.get('auto_remediation', {}).get('enabled', False) %}rgba(102, 126, 234, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(confirm('Switch to Manual mode?')) { document.getElementById('autoRemediationToggle').checked = false; updateConfig('auto_remediation_enabled', false); }">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                <span style="background: {% if not config.get('auto_remediation', {}).get('enabled', False) %}var(--primary){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
-                    {% if not config.get('auto_remediation', {}).get('enabled', False) %}&#10003;{% else %}–{% endif %}
+                <span style="background: {% if not config.get('auto_remediation', {}).get('enabled', False) %}var(--primary){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                    {% if not config.get('auto_remediation', {}).get('enabled', False) %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{% else %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>{% endif %}
                 </span>
                 <div>
                     <strong style="font-size: 1rem;">Manual Mode</strong>
@@ -102,8 +102,8 @@
         <!-- Auto Mode -->
         <div style="padding: 1rem; border-radius: 8px; border: 2px solid {% if config.get('auto_remediation', {}).get('enabled', False) %}var(--danger){% else %}var(--gray-200){% endif %}; background: {% if config.get('auto_remediation', {}).get('enabled', False) %}rgba(245, 101, 101, 0.05){% else %}white{% endif %}; cursor: pointer;" onclick="if(confirm('WARNING: Enable Auto-Remediation? Actions will run automatically without approval.')) { document.getElementById('autoRemediationToggle').checked = true; updateConfig('auto_remediation_enabled', true); }">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                <span style="background: {% if config.get('auto_remediation', {}).get('enabled', False) %}var(--danger){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
-                    {% if config.get('auto_remediation', {}).get('enabled', False) %}&#10003;{% else %}–{% endif %}
+                <span style="background: {% if config.get('auto_remediation', {}).get('enabled', False) %}var(--danger){% else %}var(--gray-300){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                    {% if config.get('auto_remediation', {}).get('enabled', False) %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{% else %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>{% endif %}
                 </span>
                 <div>
                     <strong style="font-size: 1rem;">Auto Mode</strong>
