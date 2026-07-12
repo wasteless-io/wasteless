@@ -4,7 +4,7 @@
 
 {% block content %}
 <!-- Hero Section -->
-<div class="card mb-1" style="padding: 1.25rem 1.5rem; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white;">
+<div class="card mb-1" style="padding: 1.25rem 1.5rem; background: #0a0a0a; border-color: #0a0a0a; color: white;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
             <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: white; font-weight: 700;">Waste Overview</h1>
@@ -33,7 +33,7 @@
     <!-- What leaks: current waste + how it moved -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.2f"|format(monthly_cost) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(monthly_cost) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if savings_trend is none %}
             {# No snapshot from a week ago yet: no trend beats a fake one #}
@@ -53,7 +53,7 @@
     <!-- What awaits a decision -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.pending_eur or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></div>
+        <div style="font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.pending_eur or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if (metrics.pending_count or 0) > 0 %}
             <a href="/recommendations" style="color: var(--warning); font-weight: 600; text-decoration: none;">{{ metrics.pending_count }} action{{ 's' if metrics.pending_count > 1 }} awaiting approval &rarr;</a>
@@ -68,7 +68,7 @@
     <!-- What is proven: the number that justifies the tool -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.savings_realized or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.savings_realized or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">
             {% if (metrics.savings_realized or 0) > 0 %}verified via Cost Explorer{% else %}appears after your first applied action{% endif %}
         </div>
@@ -79,7 +79,7 @@
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Waste Rate</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};">{{ "%.1f"|format(metrics.waste_rate) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
+        <div style="font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};">{{ "%.1f"|format(metrics.waste_rate) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">of last month's spend</div>
     </div>
     {% endif %}
@@ -92,7 +92,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
             Daily Briefing
-            <span style="font-size: 0.65rem; font-weight: 600; color: var(--primary); background: rgba(99,102,241,0.1); border-radius: 8px; padding: 0.1rem 0.45rem; text-transform: uppercase; letter-spacing: 0.05em;">AI</span>
+            <span style="font-size: 0.65rem; font-weight: 600; color: var(--primary); background: rgba(180,83,9,0.08); border-radius: 3px; padding: 0.1rem 0.45rem; text-transform: uppercase; letter-spacing: 0.05em;">AI</span>
         </h3>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
             <span id="briefing-meta" style="font-size: 0.72rem; color: var(--gray-400);"></span>
@@ -193,7 +193,7 @@
                     <code style="font-size: 0.72rem; color: var(--gray-500); margin-left: 0.35rem;">{{ item.resource_id[:18] if item.resource_id else '' }}…</code>
                 </div>
                 {% if item.dry_run %}
-                <span style="font-size: 0.68rem; color: var(--primary); background: rgba(99,102,241,0.1); border-radius: 8px; padding: 0.1rem 0.4rem; font-weight: 600; flex-shrink: 0;">DRY-RUN</span>
+                <span style="font-size: 0.68rem; color: var(--primary); background: rgba(180,83,9,0.08); border-radius: 3px; padding: 0.1rem 0.4rem; font-weight: 600; flex-shrink: 0;">DRY-RUN</span>
                 {% endif %}
                 {% if item.action_status == 'success' %}
                 <span style="font-size: 0.78rem; color: var(--success); font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{% if item.dry_run %}Simulated{% else %}Done{% endif %}</span>

@@ -6,9 +6,44 @@
     <title>{% block title %}Wasteless.io{% endblock %}</title>
     <link rel="icon" href="/static/images/favicon.svg" type="image/svg+xml">
     <style>
+        /* Self-hosted (ui/static/fonts/): the UI must render identically
+           offline/air-gapped, so no CDN fonts. Latin subset only. */
+        @font-face {
+            font-family: 'Space Grotesk';
+            src: url('/static/fonts/space-grotesk-latin-500.woff2') format('woff2');
+            font-weight: 500;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Space Grotesk';
+            src: url('/static/fonts/space-grotesk-latin-700.woff2') format('woff2');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'IBM Plex Mono';
+            src: url('/static/fonts/ibm-plex-mono-latin-400.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'IBM Plex Mono';
+            src: url('/static/fonts/ibm-plex-mono-latin-600.woff2') format('woff2');
+            font-weight: 600;
+            font-style: normal;
+            font-display: swap;
+        }
+
         :root {
-            --primary: #111111;
-            --primary-dark: #000000;
+            /* Brand accent: burnt amber — money burning is the product.
+               #b45309 (not the brighter #d97706 the charts use) so white
+               text on it and it on white both clear WCAG AA for small text. */
+            --primary: #b45309;
+            --primary-dark: #92400e;
+            --accent-bright: #f59e0b; /* accent variant for dark backgrounds */
             --success: #22c55e;
             --warning: #f59e0b;
             --danger: #ef4444;
@@ -23,6 +58,8 @@
             --gray-900: #18181b;
             --white: #ffffff;
             --black: #000000;
+            --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         }
 
         * {
@@ -36,6 +73,17 @@
             background: var(--gray-100);
             color: var(--gray-800);
             line-height: 1.6;
+            /* Columns of money must align digit-for-digit everywhere */
+            font-variant-numeric: tabular-nums;
+        }
+
+        h1, h2, h3 {
+            font-family: var(--font-display);
+            letter-spacing: -0.01em;
+        }
+
+        code {
+            font-family: var(--font-mono);
         }
 
         .layout {
@@ -65,6 +113,7 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            font-family: var(--font-display);
             font-size: 0.8rem;
             font-weight: 700;
             letter-spacing: 0.14em;
@@ -122,7 +171,7 @@
             top: 18%;
             height: 64%;
             width: 2px;
-            background: white;
+            background: var(--accent-bright);
             border-radius: 0 2px 2px 0;
         }
 
@@ -165,12 +214,13 @@
             margin-top: 0.25rem;
         }
 
-        /* Cards */
+        /* Cards: hairline border, no shadow — data-dense tool, not a
+           marketing site. */
         .card {
             background: white;
-            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+            border-radius: 6px;
             padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-bottom: 1.5rem;
         }
 
@@ -183,8 +233,9 @@
         }
 
         .card-value {
+            font-family: var(--font-mono);
             font-size: 2rem;
-            font-weight: 700;
+            font-weight: 600;
             color: var(--gray-800);
         }
 
@@ -263,12 +314,12 @@
         }
 
         .btn-primary {
-            background: var(--black);
+            background: var(--primary);
             color: var(--white);
         }
 
         .btn-primary:hover {
-            background: var(--gray-800);
+            background: var(--primary-dark);
         }
 
         .btn-success {
@@ -288,23 +339,28 @@
         }
 
         .btn-outline:hover {
-            border-color: var(--black);
-            color: var(--black);
+            border-color: var(--primary);
+            color: var(--primary);
         }
 
-        /* Badges */
+        /* Badges: outlined, square-ish — status is information, not
+           decoration (the screen now matches the print styles). */
         .badge {
             display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 500;
+            padding: 0.15rem 0.45rem;
+            border-radius: 3px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            border: 1px solid var(--gray-300);
+            color: var(--gray-600);
+            background: none;
         }
 
-        .badge-success { background: #dcfce7; color: #166534; }
-        .badge-warning { background: #fef3c7; color: #92400e; }
-        .badge-danger { background: #fee2e2; color: #991b1b; }
-        .badge-info { background: var(--gray-200); color: var(--gray-800); }
+        .badge-success { color: #166534; border-color: rgba(22, 101, 52, 0.4); }
+        .badge-warning { color: #92400e; border-color: rgba(146, 64, 14, 0.4); }
+        .badge-danger { color: #991b1b; border-color: rgba(153, 27, 27, 0.4); }
+        .badge-info { color: var(--gray-600); border-color: var(--gray-300); }
 
         /* Forms */
         .form-group {
@@ -329,8 +385,8 @@
 
         .form-input:focus, .form-select:focus {
             outline: none;
-            border-color: var(--black);
-            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.15);
         }
 
         /* Alerts */
@@ -355,7 +411,7 @@
 
         .progress-bar {
             height: 100%;
-            background: var(--black);
+            background: var(--primary);
             transition: width 0.3s;
         }
 
