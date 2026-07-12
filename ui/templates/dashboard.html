@@ -646,14 +646,11 @@
                 labels: labels,
                 datasets: [{
                     data: values,
-                    // Sequential amber — waste is money leaking, green is
-                    // reserved for savings. Intensity follows magnitude,
-                    // the largest cost gets the darkest step.
-                    backgroundColor: values.map(v => {
-                        const max = Math.max(...values, 1e-9);
-                        const steps = ['#fde68a', '#fcd34d', '#fbbf24', '#f59e0b', '#d97706'];
-                        return steps[Math.min(steps.length - 1, Math.floor(v / max * steps.length))];
-                    }),
+                    // One flat hue, no ramp: bar length already encodes the
+                    // amount, so coloring by value would re-encode it — the
+                    // color's only job is "this is waste" (amber = data;
+                    // green stays reserved for savings).
+                    backgroundColor: '#d97706',
                     hoverBackgroundColor: '#b45309',
                     borderWidth: 0,
                     borderRadius: 4,
