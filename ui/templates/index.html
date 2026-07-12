@@ -10,7 +10,10 @@
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
             <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: #1d1d1f; font-weight: 700;">Waste Overview</h1>
-            <p style="margin: 0; color: #52514e; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+            {# Status line: last sync + the system-health indicators that
+               used to live in a separate footer card #}
+            <p style="margin: 0; color: #52514e; font-size: 0.8rem; display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;">
+                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
                 {% if last_sync %}
                     {% set now = now() if now is defined else last_sync %}
                     <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #22c55e;"></span>
@@ -19,6 +22,19 @@
                     <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b;"></span>
                     No data — run <code style="background: rgba(0,0,0,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">wasteless collect</code>
                 {% endif %}
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.db %}#22c55e{% else %}#ef4444{% endif %};"></span>
+                    DB {% if system_health.db %}Connected{% else %}Unreachable{% endif %}
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.aws == true %}#22c55e{% elif system_health.aws == false %}#ef4444{% else %}#d1d5db{% endif %};"></span>
+                    AWS {% if system_health.aws == true %}Reachable{% elif system_health.aws == false %}Unreachable{% else %}Not checked{% endif %}
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.scheduler %}#22c55e{% else %}#ef4444{% endif %};"></span>
+                    Scheduler {% if system_health.scheduler %}Active{% else %}Stopped{% endif %}
+                </span>
             </p>
         </div>
         <a href="/recommendations" class="btn" style="background: white; border: 1px solid rgba(0,0,0,0.08); color: var(--primary); padding: 0.5rem 1.25rem; font-weight: 600;">
@@ -219,28 +235,6 @@
     </div>
 </div>
 
-<!-- System Health -->
-<div class="card mt-1" style="padding: 0.6rem 1.25rem; background: var(--gray-100);">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; gap: 1.75rem; font-size: 0.8rem; color: var(--gray-600);">
-            <span style="display: flex; align-items: center; gap: 0.4rem;">
-                <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.db %}#4ade80{% else %}#f87171{% endif %};"></span>
-                DB {% if system_health.db %}Connected{% else %}Unreachable{% endif %}
-            </span>
-            <span style="display: flex; align-items: center; gap: 0.4rem;">
-                <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.aws == true %}#4ade80{% elif system_health.aws == false %}#f87171{% else %}#d1d5db{% endif %};"></span>
-                AWS {% if system_health.aws == true %}Reachable{% elif system_health.aws == false %}Unreachable{% else %}Not checked{% endif %}
-            </span>
-            <span style="display: flex; align-items: center; gap: 0.4rem;">
-                <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.scheduler %}#4ade80{% else %}#f87171{% endif %};"></span>
-                Scheduler {% if system_health.scheduler %}Active{% else %}Stopped{% endif %}
-            </span>
-        </div>
-        <span style="font-size: 0.78rem; color: var(--gray-400);">
-            Last collect: {% if last_sync %}{{ last_sync.strftime('%d %b, %H:%M') }}{% else %}Never{% endif %}
-        </span>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
