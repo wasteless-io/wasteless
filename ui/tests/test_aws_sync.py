@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from utils.aws_sync import find_vanished_resources
+from utils.aws_sync import SYNCABLE_RESOURCE_TYPES, find_vanished_resources
 
 
 def _paginator(pages):
@@ -25,6 +25,7 @@ def make_client_factory(
     addresses=None,
     snapshots=None,
     nat_gateways=None,
+    vpcs=None,
     elbv2_arns=None,
     classic_names=None,
     fail_regions=None,
@@ -45,6 +46,7 @@ def make_client_factory(
             client.describe_addresses.return_value = {"Addresses": addresses or []}
             client.describe_snapshots.return_value = {"Snapshots": snapshots or []}
             client.describe_nat_gateways.return_value = {"NatGateways": nat_gateways or []}
+            client.describe_vpcs.return_value = {"Vpcs": vpcs or []}
         elif service == "elbv2":
             client.get_paginator.return_value = _paginator(
                 [{"LoadBalancers": [{"LoadBalancerArn": a} for a in (elbv2_arns or [])]}]
@@ -109,6 +111,44 @@ class TestFindVanishedResources(unittest.TestCase):
             client_factory=factory,
         )
         self.assertEqual(vanished, {"ec2_instance": ["i-dead"]})
+
+    def test_existing_vpc_not_vanished(self):
+        factory = make_client_factory(vpcs=[{"VpcId": "vpc-alive"}])
+        vanished = find_vanished_resources(
+            {"vpc": ["vpc-alive"]},
+            regions=REGIONS,
+            client_factory=factory,
+        )
+        self.assertEqual(vanished, {})
+
+    def test_deleted_vpc_vanished(self):
+        """A destroyed VPC must obsolete its unused_vpc recommendation —
+        before the vpc checker existed, it stayed pending forever."""
+        factory = make_client_factory(vpcs=[{"VpcId": "vpc-alive"}])
+        vanished = find_vanished_resources(
+            {"vpc": ["vpc-alive", "vpc-gone"]},
+            regions=REGIONS,
+            client_factory=factory,
+        )
+        self.assertEqual(vanished, {"vpc": ["vpc-gone"]})
+
+    def test_every_detector_resource_type_has_a_checker(self):
+        """Guard: each resource_type the detectors write to waste_detected
+        must be syncable, or its recommendations survive the resource
+        forever (how the missing vpc checker went unnoticed). When adding
+        a detector with a new resource_type, add a checker in aws_sync.py
+        and extend this list."""
+        detector_resource_types = {
+            "ec2_instance",  # ec2_idle, ec2_stopped
+            "ebs_volume",  # ebs_orphan, ebs_gp2_migration
+            "elastic_ip",  # eip_orphan
+            "ebs_snapshot",  # snapshot_orphan
+            "nat_gateway",  # nat_gateway_unused
+            "load_balancer",  # elb_unused
+            "vpc",  # vpc_unused
+        }
+        missing = detector_resource_types - SYNCABLE_RESOURCE_TYPES
+        self.assertEqual(missing, set(), f"resource types without a sync checker: {missing}")
 
     def test_deleted_nat_gateway_vanished(self):
         factory = make_client_factory(
