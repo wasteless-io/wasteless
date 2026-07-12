@@ -175,6 +175,28 @@ def home(request: Request, conn=Depends(get_db)):
         else None
     )
 
+    # Real bill from Cost Explorer (cloud_costs_raw, collected daily by
+    # cost_collector_job): last 30 days rolling — the only window the
+    # 30-day collection guarantees complete (a calendar month can have a
+    # hole if collection started mid-month). USD kept for the tooltip.
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
+                                 ELSE cost END), 0) as spend_eur,
+               COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost
+                                 ELSE 0 END), 0) as spend_usd,
+               COUNT(*) as row_count
+        FROM cloud_costs_raw
+        WHERE usage_date >= CURRENT_DATE - 30
+    """,
+        (USD_TO_EUR,),
+    )
+    spend_row = cursor.fetchone()
+    aws_spend_30d_eur = (
+        float(spend_row["spend_eur"]) if spend_row and spend_row["row_count"] > 0 else None
+    )
+    aws_spend_30d_usd = float(spend_row["spend_usd"]) if spend_row else 0.0
+
     cursor.close()
 
     system_health = {
@@ -199,5 +221,7 @@ def home(request: Request, conn=Depends(get_db)):
             "monthly_cost": monthly_cost,
             "savings_trend": savings_trend,
             "savings_trend_pct": savings_trend_pct,
+            "aws_spend_30d_eur": aws_spend_30d_eur,
+            "aws_spend_30d_usd": aws_spend_30d_usd,
         },
     )
