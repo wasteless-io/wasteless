@@ -2,24 +2,94 @@
 
 {% block title %}Home - Wasteless.io{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Compact scrollable lists (~6 rows visible) with a thin ink
+       scrollbar, invisible track — Claude-style. */
+    .scroll-list {
+        overflow-y: auto;
+        max-height: 13rem;
+        scrollbar-width: thin;               /* Firefox */
+        scrollbar-color: #1d1d1f transparent;
+    }
+    .scroll-list::-webkit-scrollbar { width: 5px; }
+    .scroll-list::-webkit-scrollbar-track { background: transparent; }
+    .scroll-list::-webkit-scrollbar-thumb { background: #1d1d1f; border-radius: 999px; }
+
+    /* Header stays readable while the rows scroll under it */
+    .scroll-list thead th {
+        position: sticky;
+        top: 0;
+        background: var(--gray-100);
+        z-index: 1;
+    }
+
+    /* Daily Briefing: the AI reads as always-on — pulsing dot on the
+       chip, shimmering status line while it writes, prose fades in. */
+    @keyframes ai-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+    .ai-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #d97706;
+        animation: ai-pulse 1.8s ease-in-out infinite;
+        flex-shrink: 0;
+    }
+    .thinking {
+        background: linear-gradient(90deg, #86868b 0%, #1d1d1f 50%, #86868b 100%);
+        background-size: 200% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: shimmer 1.8s linear infinite;
+    }
+    @keyframes shimmer {
+        to { background-position: -200% 0; }
+    }
+    {# fade-up / .fade-in / .main cascade / .fill-bar / count-up: shared,
+       defined in base.html #}
+</style>
+{% endblock %}
+
 {% block content %}
 <!-- Hero Section -->
-<div class="card mb-1" style="padding: 1.25rem 1.5rem; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white;">
+{# Same plane as the sidebar's active pill (#efede8) — the hero belongs
+   to the chrome, not to the data #}
+<div class="card mb-1" style="padding: 1.25rem 1.5rem; background: #efede8; color: #1d1d1f;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: white; font-weight: 700;">Waste Overview</h1>
-            <p style="margin: 0; opacity: 0.7; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+            <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: #1d1d1f; font-weight: 700;">Waste Overview</h1>
+            {# Status line: last sync + the system-health indicators that
+               used to live in a separate footer card #}
+            <p style="margin: 0; color: #52514e; font-size: 0.8rem; display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;">
+                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
                 {% if last_sync %}
                     {% set now = now() if now is defined else last_sync %}
-                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #4ade80;"></span>
+                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #22c55e;"></span>
                     Last sync: {{ last_sync.strftime('%d %b, %H:%M') }}
                 {% else %}
-                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #fbbf24;"></span>
-                    No data — run <code style="background: rgba(255,255,255,0.15); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">wasteless collect</code>
+                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b;"></span>
+                    No data — run <code style="background: rgba(0,0,0,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">wasteless collect</code>
                 {% endif %}
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.db %}#22c55e{% else %}#ef4444{% endif %};"></span>
+                    DB {% if system_health.db %}Connected{% else %}Unreachable{% endif %}
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.aws == true %}#22c55e{% elif system_health.aws == false %}#ef4444{% else %}#d1d5db{% endif %};"></span>
+                    AWS {% if system_health.aws == true %}Reachable{% elif system_health.aws == false %}Unreachable{% else %}Not checked{% endif %}
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.scheduler %}#22c55e{% else %}#ef4444{% endif %};"></span>
+                    Scheduler {% if system_health.scheduler %}Active{% else %}Stopped{% endif %}
+                </span>
             </p>
         </div>
-        <a href="/recommendations" class="btn" style="background: white; color: var(--primary); padding: 0.5rem 1.25rem; font-weight: 600;">
+        <a href="/recommendations" class="btn" style="background: white; border: 1px solid rgba(0,0,0,0.08); color: var(--primary); padding: 0.5rem 1.25rem; font-weight: 600;">
             Review Recommendations {% if (metrics.pending_count or 0) > 0 %}<span style="background: var(--warning); color: white; border-radius: 10px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.4rem;">{{ metrics.pending_count }}</span>{% endif %}
         </a>
     </div>
@@ -33,7 +103,7 @@
     <!-- What leaks: current waste + how it moved -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: var(--gray-800);">{{ "%.2f"|format(monthly_cost) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if savings_trend is none %}
             {# No snapshot from a week ago yet: no trend beats a fake one #}
@@ -53,7 +123,7 @@
     <!-- What awaits a decision -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.pending_eur or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if (metrics.pending_count or 0) > 0 %}
             <a href="/recommendations" style="color: var(--warning); font-weight: 600; text-decoration: none;">{{ metrics.pending_count }} action{{ 's' if metrics.pending_count > 1 }} awaiting approval &rarr;</a>
@@ -68,7 +138,7 @@
     <!-- What is proven: the number that justifies the tool -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.savings_realized or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">
             {% if (metrics.savings_realized or 0) > 0 %}verified via Cost Explorer{% else %}appears after your first applied action{% endif %}
         </div>
@@ -79,7 +149,7 @@
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Waste Rate</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};">{{ "%.1f"|format(metrics.waste_rate) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};"><span class="countup">{{ "%.1f"|format(metrics.waste_rate) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">of last month's spend</div>
     </div>
     {% endif %}
@@ -92,15 +162,15 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
             Daily Briefing
-            <span style="font-size: 0.65rem; font-weight: 600; color: var(--primary); background: rgba(99,102,241,0.1); border-radius: 8px; padding: 0.1rem 0.45rem; text-transform: uppercase; letter-spacing: 0.05em;">AI</span>
+            <span style="font-size: 0.65rem; font-weight: 600; color: #92400e; background: rgba(180,83,9,0.08); border-radius: 3px; padding: 0.1rem 0.45rem; text-transform: uppercase; letter-spacing: 0.05em; display: inline-flex; align-items: center; gap: 0.3rem;"><span class="ai-dot"></span>AI</span>
         </h3>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
             <span id="briefing-meta" style="font-size: 0.72rem; color: var(--gray-400);"></span>
-            <button id="briefing-refresh" onclick="loadBriefing(true)" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.72rem; display: none;">Refresh</button>
+            <button id="briefing-refresh" onclick="loadBriefing(true)" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.72rem; display: none;">Generate</button>
         </div>
     </div>
     <div id="briefing-body" style="font-size: 0.87rem; line-height: 1.55; color: var(--gray-700);">
-        <span style="color: var(--gray-400);">Generating today's briefing…</span>
+        <span class="thinking">Analyzing your infrastructure…</span>
     </div>
     <div style="font-size: 0.72rem; color: var(--gray-400); margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100);">
         The AI comments the numbers — the numbers themselves are always computed from the database. AI can make mistakes: double-check any figure before acting on it.
@@ -118,13 +188,14 @@
         </div>
         {% if waste_by_type %}
         {% set max_eur = waste_by_type[0].total_eur %}
-        <table style="font-size: 0.85rem; width: 100%;">
+        <div class="scroll-list">
+        <table style="font-size: 0.8rem; width: 100%;">
             <thead>
                 <tr>
-                    <th style="padding: 0.4rem 0.5rem; text-align: left;">Type</th>
-                    <th style="padding: 0.4rem 0.5rem; text-align: center;">Count</th>
-                    <th style="padding: 0.4rem 0.5rem; text-align: right;">EUR/mo</th>
-                    <th style="padding: 0.4rem 0.5rem; text-align: right; min-width: 80px;"></th>
+                    <th style="padding: 0.35rem 0.5rem; text-align: left;">Type</th>
+                    <th style="padding: 0.35rem 0.5rem; text-align: center;">Count</th>
+                    <th style="padding: 0.35rem 0.5rem; text-align: right;">EUR/mo</th>
+                    <th style="padding: 0.35rem 0.5rem; text-align: right; min-width: 80px;"></th>
                 </tr>
             </thead>
             <tbody>
@@ -135,26 +206,27 @@
                 {% set amber_steps = ['#fde68a', '#fcd34d', '#fbbf24', '#f59e0b', '#d97706'] %}
                 {% set bar_color = amber_steps[[(bar_pct / 100 * 5) | int, 4] | min] %}
                 <tr>
-                    <td style="padding: 0.5rem 0.5rem;">
+                    <td style="padding: 0.35rem 0.5rem;">
                         {% if item.resource_type == 'ebs_snapshot' %}<span style="color: var(--gray-500); vertical-align: -2px; display: inline-block;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span> Snapshots
                         {% elif item.resource_type == 'ebs_volume' %}<span style="color: var(--gray-500); vertical-align: -2px; display: inline-block;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg></span> EBS Volumes
                         {% elif item.resource_type == 'ec2_instance' %}<span style="color: var(--gray-500); vertical-align: -2px; display: inline-block;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></span> EC2 Instances
                         {% elif item.resource_type == 'elastic_ip' %}<span style="color: var(--gray-500); vertical-align: -2px; display: inline-block;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></span> Elastic IPs
                         {% else %}{{ item.resource_type | replace('_', ' ') | title }}{% endif %}
                     </td>
-                    <td style="padding: 0.5rem 0.5rem; text-align: center;">
+                    <td style="padding: 0.35rem 0.5rem; text-align: center;">
                         <span style="background: var(--gray-100); color: var(--gray-700); border-radius: 10px; padding: 0.1rem 0.5rem; font-size: 0.78rem; font-weight: 600;">{{ item.cnt }}</span>
                     </td>
-                    <td style="padding: 0.5rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
-                    <td style="padding: 0.5rem 0.5rem;">
+                    <td style="padding: 0.35rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
+                    <td style="padding: 0.35rem 0.5rem;">
                         <div style="width: 100%; height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden;">
-                            <div style="height: 100%; width: {{ bar_pct }}%; background: {{ bar_color }}; border-radius: 3px;"></div>
+                            <div class="fill-bar" style="height: 100%; width: {{ bar_pct }}%; background: {{ bar_color }}; border-radius: 3px; animation-delay: {{ loop.index0 * 90 }}ms;"></div>
                         </div>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <div style="padding: 2rem; text-align: center;">
             <p class="text-muted" style="margin: 0;">No waste detected yet</p>
@@ -170,13 +242,13 @@
             <a href="/history" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
         </div>
         {% if recent_activity %}
-        <div style="display: flex; flex-direction: column; gap: 0.1rem;">
+        <div class="scroll-list" style="display: flex; flex-direction: column; gap: 0.1rem;">
             {% for item in recent_activity %}
-            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.25rem; border-bottom: 1px solid var(--gray-100);">
+            <div style="display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.25rem; border-bottom: 1px solid var(--gray-100); flex-shrink: 0;">
                 {% if item.event_type == 'detection' %}
                 <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--warning); flex-shrink: 0;"></span>
                 <div style="flex: 1; min-width: 0;">
-                    <span style="font-size: 0.84rem; color: var(--gray-800);">
+                    <span style="font-size: 0.8rem; color: var(--gray-800);">
                         <strong>{{ item.cnt }}</strong>
                         {% if item.resource_type == 'ebs_snapshot' %}snapshot{{ 's' if item.cnt > 1 else '' }} detected
                         {% elif item.resource_type == 'ebs_volume' %}EBS volume{{ 's' if item.cnt > 1 else '' }} detected
@@ -189,11 +261,11 @@
                 {% else %}
                 <span style="width: 8px; height: 8px; border-radius: 50%; background: {% if item.action_status == 'success' %}var(--success){% elif item.action_status == 'pending' %}var(--warning){% else %}var(--danger){% endif %}; flex-shrink: 0;"></span>
                 <div style="flex: 1; min-width: 0; overflow: hidden;">
-                    <span style="font-size: 0.84rem; color: var(--gray-800);">{{ item.resource_type | replace('_', ' ') | title }}</span>
+                    <span style="font-size: 0.8rem; color: var(--gray-800);">{{ item.resource_type | replace('_', ' ') | title }}</span>
                     <code style="font-size: 0.72rem; color: var(--gray-500); margin-left: 0.35rem;">{{ item.resource_id[:18] if item.resource_id else '' }}…</code>
                 </div>
                 {% if item.dry_run %}
-                <span style="font-size: 0.68rem; color: var(--primary); background: rgba(99,102,241,0.1); border-radius: 8px; padding: 0.1rem 0.4rem; font-weight: 600; flex-shrink: 0;">DRY-RUN</span>
+                <span style="font-size: 0.68rem; color: #92400e; background: rgba(180,83,9,0.08); border-radius: 3px; padding: 0.1rem 0.4rem; font-weight: 600; flex-shrink: 0;">DRY-RUN</span>
                 {% endif %}
                 {% if item.action_status == 'success' %}
                 <span style="font-size: 0.78rem; color: var(--success); font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{% if item.dry_run %}Simulated{% else %}Done{% endif %}</span>
@@ -217,28 +289,6 @@
     </div>
 </div>
 
-<!-- System Health -->
-<div class="card mt-1" style="padding: 0.6rem 1.25rem; background: var(--gray-100);">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; gap: 1.75rem; font-size: 0.8rem; color: var(--gray-600);">
-            <span style="display: flex; align-items: center; gap: 0.4rem;">
-                <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.db %}#4ade80{% else %}#f87171{% endif %};"></span>
-                DB {% if system_health.db %}Connected{% else %}Unreachable{% endif %}
-            </span>
-            <span style="display: flex; align-items: center; gap: 0.4rem;">
-                <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.aws == true %}#4ade80{% elif system_health.aws == false %}#f87171{% else %}#d1d5db{% endif %};"></span>
-                AWS {% if system_health.aws == true %}Reachable{% elif system_health.aws == false %}Unreachable{% else %}Not checked{% endif %}
-            </span>
-            <span style="display: flex; align-items: center; gap: 0.4rem;">
-                <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.scheduler %}#4ade80{% else %}#f87171{% endif %};"></span>
-                Scheduler {% if system_health.scheduler %}Active{% else %}Stopped{% endif %}
-            </span>
-        </div>
-        <span style="font-size: 0.78rem; color: var(--gray-400);">
-            Last collect: {% if last_sync %}{{ last_sync.strftime('%d %b, %H:%M') }}{% else %}Never{% endif %}
-        </span>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -246,14 +296,40 @@
 <script>
 // Daily briefing: fetched async so the page never waits for the LLM.
 // Cache miss = one generation (up to ~30s); afterwards it's instant.
+
+// While the LLM writes, a shimmering status line cycles through what the
+// briefing actually does — cosmetic pacing, the real work is server-side.
+const THINKING_STEPS = [
+    'Analyzing your infrastructure…',
+    'Reading active waste and trends…',
+    'Comparing with last week…',
+    'Writing today\'s briefing…'
+];
+let thinkingTimer = null;
+
+function startThinking(body) {
+    let i = 0;
+    body.innerHTML = '<span class="thinking" id="thinking-text">' + THINKING_STEPS[0] + '</span>';
+    clearInterval(thinkingTimer);
+    thinkingTimer = setInterval(() => {
+        i = (i + 1) % THINKING_STEPS.length;
+        const el = document.getElementById('thinking-text');
+        if (el) el.textContent = THINKING_STEPS[i];
+    }, 2200);
+}
+
+function stopThinking() {
+    clearInterval(thinkingTimer);
+    thinkingTimer = null;
+}
+
 async function loadBriefing(refresh) {
     const body = document.getElementById('briefing-body');
     const meta = document.getElementById('briefing-meta');
     const btn = document.getElementById('briefing-refresh');
     btn.disabled = true;
-    if (refresh) {
-        body.innerHTML = '<span style="color: var(--gray-400);">Regenerating…</span>';
-    }
+    btn.textContent = 'Generating…';
+    startThinking(body);
     try {
         const res = await fetch('/api/briefing/today' + (refresh ? '?refresh=1' : ''));
         const data = res.ok ? await res.json() : {};
@@ -262,6 +338,7 @@ async function loadBriefing(refresh) {
             document.getElementById('briefing-card').style.display = 'none';
             return;
         }
+        stopThinking();
         body.textContent = '';
         // Plain text from the model: blank-line-separated paragraphs.
         // Only the first shows by default — the numbers above lead, the
@@ -271,6 +348,8 @@ async function loadBriefing(refresh) {
             const p = document.createElement('p');
             p.textContent = para;
             p.style.margin = i === 0 ? '0' : '0.5rem 0 0';
+            p.classList.add('fade-in');
+            p.style.animationDelay = (i * 70) + 'ms';
             if (i > 0) {
                 p.dataset.briefingExtra = '1';
                 p.style.display = 'none';
@@ -301,7 +380,9 @@ async function loadBriefing(refresh) {
     } catch (err) {
         document.getElementById('briefing-card').style.display = 'none';
     } finally {
+        stopThinking();
         btn.disabled = false;
+        btn.textContent = 'Generate';
     }
 }
 loadBriefing(false);

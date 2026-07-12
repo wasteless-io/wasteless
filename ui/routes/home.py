@@ -135,7 +135,7 @@ def home(request: Request, conn=Depends(get_db)):
             FROM actions_log
         ) combined
         ORDER BY event_time DESC
-        LIMIT 8
+        LIMIT 20
     """)
     recent_activity = cursor.fetchall()
 

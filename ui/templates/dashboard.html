@@ -4,9 +4,10 @@
 
 {# Single money format for the whole page: "<€0.01" under a cent, cents up
    to €100, whole euros (grouped) above — large KPIs don't need cent noise. #}
+{# .countup: re-counted from 0 at load by the shared script in base.html #}
 {% macro eur(v) -%}
 {%- set v = v or 0 -%}
-{%- if v > 0 and v < 0.01 -%}&lt;€0.01{%- elif v < 100 -%}€{{ "%.2f"|format(v) }}{%- else -%}€{{ "{:,.0f}".format(v) }}{%- endif -%}
+<span class="countup">{%- if v > 0 and v < 0.01 -%}&lt;€0.01{%- elif v < 100 -%}€{{ "%.2f"|format(v) }}{%- else -%}€{{ "{:,.0f}".format(v) }}{%- endif -%}</span>
 {%- endmacro %}
 
 {% block extra_css %}
@@ -28,14 +29,13 @@
         margin-bottom: 0.5rem;
         background: rgba(239, 68, 68, 0.07);
         border: 1px solid rgba(239, 68, 68, 0.25);
-        border-radius: 8px;
+        border-radius: 12px;
         font-size: 0.85rem;
         color: var(--danger-text);
     }
     .alert-banner a { color: var(--danger-text); font-weight: 600; }
 
-    .card.compact { padding: 1rem; }
-    .card.slim { padding: 0.75rem; }
+    .card.compact, .card.slim { padding: 1.5rem; }
     /* Top row: 3 financial KPIs capped at 880px, Already Burned fills the rest */
     .top-grid {
         display: grid;
@@ -47,47 +47,27 @@
     .btn-sm { padding: 0.4rem 0.75rem; }
 
     .section-label {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--gray-500);
+        font-size: 0.85rem;
         font-weight: 600;
+        color: var(--ink-secondary);
         margin-bottom: 0.75rem;
     }
 
-    /* KPI tiles */
+    /* KPI tiles: hierarchy through size and weight — the colored icon
+       medallions are hidden, the numbers carry the tile. */
     .kpi { text-align: center; }
-    .kpi + .kpi { border-left: 1px solid var(--gray-200); }
-    .kpi-icon {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 0.5rem;
-    }
-    .kpi-icon span {
-        color: white;
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .kpi-value { font-size: 1.75rem; font-weight: 700; color: var(--gray-800); }
+    .kpi + .kpi { border-left: 1px solid var(--hairline); }
+    .kpi-icon { display: none; }
+    .kpi-value { font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
     .kpi-value .unit { font-size: 0.9rem; font-weight: 400; }
     .kpi-label {
-        font-size: 0.75rem;
-        color: var(--gray-600);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--ink-secondary);
     }
-    .kpi-sub { font-size: 0.8rem; color: var(--gray-500); margin-top: 0.2rem; }
+    .kpi-sub { font-size: 0.8rem; color: var(--ink-secondary); margin-top: 0.2rem; }
     .kpi-link { font-size: 0.8rem; color: var(--primary); text-decoration: none; font-weight: 500; }
 
-    .bg-success { background: var(--success); }
-    .bg-warning { background: var(--warning); }
-    .bg-danger { background: var(--danger); }
-    .bg-neutral { background: var(--gray-300); }
     .text-success { color: var(--success-text); }
     .text-warning { color: var(--warning-text); }
     .text-danger { color: var(--danger-text); }
@@ -108,8 +88,8 @@
         margin-bottom: 0.75rem;
     }
     .chart-title { margin: 0; font-size: 1rem; }
-    .chart-subtitle { font-size: 0.75rem; color: var(--gray-500); }
-    .chart-unit { font-size: 0.78rem; color: var(--gray-500); }
+    .chart-subtitle { font-size: 0.75rem; color: var(--ink-secondary); }
+    .chart-unit { font-size: 0.78rem; color: var(--ink-secondary); }
     .chart-area { height: 180px; position: relative; }
     .chart-empty {
         flex: 1;
@@ -128,16 +108,16 @@
         justify-content: center;
     }
     .stat-block { text-align: center; }
-    .stat-value { font-size: 2.25rem; font-weight: 700; color: var(--gray-900); }
+    .stat-value { font-size: 2.25rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
     .stat-arrow { font-size: 1.5rem; margin-left: 0.3rem; }
     .stat-sub { font-size: 0.82rem; color: var(--gray-500); margin-top: 0.35rem; }
     .stat-sub + .stat-sub { margin-top: 0.2rem; }
     .card-footnote {
         font-size: 0.78rem;
-        color: var(--gray-500);
+        color: var(--ink-secondary);
         margin-top: 0.5rem;
         padding-top: 0.5rem;
-        border-top: 1px solid var(--gray-100);
+        border-top: 1px solid var(--hairline);
         text-align: center;
     }
 
@@ -161,13 +141,36 @@
         white-space: nowrap;
     }
 
-    /* Trend card */
+    /* Trend card — range pickers styled as a segmented control (both
+       charts share .trend-ranges) */
     .trend-controls { display: flex; align-items: center; gap: 1.25rem; }
-    .trend-ranges { display: flex; gap: 0.25rem; }
+    .trend-ranges {
+        display: flex;
+        gap: 0;
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 9px;
+        padding: 2px;
+    }
     .trend-range-btn, .resource-range-btn { padding: 0.2rem 0.55rem; font-size: 0.72rem; }
+    .trend-ranges .btn {
+        border-radius: 7px;
+        border: none;
+        font-weight: 500;
+    }
+    .trend-ranges .btn-primary {
+        background: white;
+        color: var(--ink);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .trend-ranges .btn-primary:hover { background: white; }
+    .trend-ranges .btn-outline {
+        background: none;
+        color: var(--ink-secondary);
+    }
+    .trend-ranges .btn-outline:hover { color: var(--ink); border: none; }
     .trend-legend {
         font-size: 0.75rem;
-        color: var(--gray-500);
+        color: var(--ink-secondary);
         display: flex;
         align-items: center;
         gap: 1rem;
@@ -225,6 +228,7 @@
             padding-top: 1rem;
         }
     }
+
 </style>
 {% endblock %}
 
@@ -447,14 +451,14 @@
 
         <!-- Waste Detected -->
         <div class="kpi">
-            <div class="kpi-value">{{ kpis.waste_count or 0 }}</div>
+            <div class="kpi-value"><span class="countup">{{ kpis.waste_count or 0 }}</span></div>
             <div class="kpi-label">Waste Detected</div>
             <div class="kpi-sub">resources identified</div>
         </div>
 
         <!-- Actions Pending -->
         <div class="kpi">
-            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}">{{ kpis.pending_count or 0 }}</div>
+            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}"><span class="countup">{{ kpis.pending_count or 0 }}</span></div>
             <div class="kpi-label">Actions Pending</div>
             <div class="kpi-sub">
                 {% if (kpis.pending_count or 0) > 0 %}
@@ -553,14 +557,11 @@
                 labels: labels,
                 datasets: [{
                     data: values,
-                    // Sequential amber — waste is money leaking, green is
-                    // reserved for savings. Intensity follows magnitude,
-                    // the largest cost gets the darkest step.
-                    backgroundColor: values.map(v => {
-                        const max = Math.max(...values, 1e-9);
-                        const steps = ['#fde68a', '#fcd34d', '#fbbf24', '#f59e0b', '#d97706'];
-                        return steps[Math.min(steps.length - 1, Math.floor(v / max * steps.length))];
-                    }),
+                    // One flat hue, no ramp: bar length already encodes the
+                    // amount, so coloring by value would re-encode it — the
+                    // color's only job is "this is waste" (amber = data;
+                    // green stays reserved for savings).
+                    backgroundColor: '#d97706',
                     hoverBackgroundColor: '#b45309',
                     borderWidth: 0,
                     borderRadius: 4,

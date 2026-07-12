@@ -6,9 +6,46 @@
     <title>{% block title %}Wasteless.io{% endblock %}</title>
     <link rel="icon" href="/static/images/favicon.svg" type="image/svg+xml">
     <style>
+        /* Self-hosted (ui/static/fonts/): the UI must render identically
+           offline/air-gapped, so no CDN fonts. Latin subset only. */
+        @font-face {
+            font-family: 'Space Grotesk';
+            src: url('/static/fonts/space-grotesk-latin-500.woff2') format('woff2');
+            font-weight: 500;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Space Grotesk';
+            src: url('/static/fonts/space-grotesk-latin-700.woff2') format('woff2');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'IBM Plex Mono';
+            src: url('/static/fonts/ibm-plex-mono-latin-400.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'IBM Plex Mono';
+            src: url('/static/fonts/ibm-plex-mono-latin-600.woff2') format('woff2');
+            font-weight: 600;
+            font-style: normal;
+            font-display: swap;
+        }
+
         :root {
-            --primary: #111111;
-            --primary-dark: #000000;
+            /* Color roles (Apple-style split): blue = interactive (buttons,
+               links, selection), amber = the data itself (charts, waste
+               figures), green/red = status. Chrome stays neutral. */
+            --primary: #0071e3;
+            --primary-dark: #0062c4;
+            --ink: #1d1d1f;
+            --ink-secondary: #86868b;
+            --hairline: rgba(0, 0, 0, 0.08);
             --success: #22c55e;
             --warning: #f59e0b;
             --danger: #ef4444;
@@ -23,6 +60,8 @@
             --gray-900: #18181b;
             --white: #ffffff;
             --black: #000000;
+            --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         }
 
         * {
@@ -33,9 +72,22 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: var(--gray-100);
-            color: var(--gray-800);
+            background: #f5f5f7;
+            color: var(--ink);
             line-height: 1.6;
+            /* Columns of money must align digit-for-digit everywhere */
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Hierarchy through size and weight, in the system face (SF on
+           macOS); Space Grotesk is reserved for the wordmark. */
+        h1, h2, h3 {
+            letter-spacing: -0.02em;
+            color: var(--ink);
+        }
+
+        code {
+            font-family: var(--font-mono);
         }
 
         .layout {
@@ -43,12 +95,14 @@
             min-height: 100vh;
         }
 
-        /* Sidebar */
+        /* Sidebar — light, Apple-minimal: warm off-white plane, hairline
+           border, ink text, one muted green accent on the active item */
         .sidebar {
-            width: 220px;
-            background: #0a0a0a;
-            color: var(--white);
-            padding: 1.25rem 0.875rem;
+            width: 240px;
+            background: #faf9f7;
+            border-right: 1px solid rgba(0, 0, 0, 0.07);
+            color: #1d1d1f;
+            padding: 1.5rem 1rem;
             position: fixed;
             height: 100vh;
             overflow-y: auto;
@@ -57,20 +111,21 @@
         }
 
         .sidebar-header {
-            padding: 0 0.375rem;
-            margin-bottom: 1.25rem;
+            padding: 0 0.25rem;
+            margin-bottom: 1.5rem;
         }
 
         .logo {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.8rem;
+            font-family: var(--font-display);
+            font-size: 0.95rem;
             font-weight: 700;
-            letter-spacing: 0.14em;
+            letter-spacing: 0.18em;
             text-transform: uppercase;
-            color: white;
-            margin-bottom: 1rem;
+            color: #1d1d1f;
+            margin-bottom: 1.25rem;
         }
 
         .logo img {
@@ -78,8 +133,40 @@
             height: 22px;
         }
 
+        /* Execution-mode card (replaces the old pill) */
+        .mode-card {
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+            padding: 0.6rem 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        .mode-card .mode-line {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+        }
+
+        .mode-card .mode-sub {
+            color: #86868b;
+            font-size: 0.72rem;
+            margin-left: 1.05rem;
+            margin-top: 1px;
+        }
+
+        .mode-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
         .nav-section {
             flex: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .nav-links {
@@ -87,48 +174,48 @@
         }
 
         .nav-links li {
-            margin-bottom: 1px;
+            margin-bottom: 2px;
         }
 
         .nav-links a {
             display: flex;
             align-items: center;
-            gap: 0.625rem;
-            padding: 0.5rem 0.75rem;
-            color: rgba(255,255,255,0.5);
+            gap: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            color: #3a3a38;
             text-decoration: none;
-            border-radius: 6px;
-            font-size: 0.8125rem;
-            font-weight: 450;
+            border-radius: 10px;
+            font-size: 0.875rem;
+            font-weight: 500;
             transition: background 0.15s, color 0.15s;
             position: relative;
         }
 
         .nav-links a:hover {
-            background: rgba(255,255,255,0.06);
-            color: rgba(255,255,255,0.85);
+            background: rgba(0, 0, 0, 0.04);
+            color: #1d1d1f;
         }
 
         .nav-links a.active {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            font-weight: 500;
+            background: #efede8;
+            color: #1d1d1f;
+            font-weight: 600;
         }
 
         .nav-links a.active::before {
             content: '';
             position: absolute;
-            left: 0;
-            top: 18%;
-            height: 64%;
-            width: 2px;
-            background: white;
-            border-radius: 0 2px 2px 0;
+            left: -1rem; /* flush with the sidebar's own left edge */
+            top: 20%;
+            height: 60%;
+            width: 3px;
+            background: #256b2d;
+            border-radius: 0 3px 3px 0;
         }
 
         .nav-icon {
             flex-shrink: 0;
-            opacity: 0.6;
+            opacity: 0.7;
             display: flex;
         }
 
@@ -138,16 +225,41 @@
         }
 
         .nav-bottom {
-            border-top: 1px solid rgba(255,255,255,0.07);
-            padding-top: 0.625rem;
-            margin-top: 0.625rem;
+            border-top: 1px solid rgba(0, 0, 0, 0.07);
+            padding-top: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        /* AWS account card pinned at the bottom (wasteless has no user
+           accounts — the connected AWS account is the equivalent) */
+        .aws-card {
+            margin-top: auto;
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+            padding: 0.55rem 0.65rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .aws-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            font-weight: 700;
+            flex-shrink: 0;
         }
 
         /* Main content */
         .main {
             flex: 1;
-            margin-left: 220px;
-            padding: 2rem;
+            margin-left: 240px;
+            padding: 2.5rem 3rem;
         }
 
         .page-header {
@@ -155,37 +267,45 @@
         }
 
         .page-header h1 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            color: var(--gray-800);
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--ink);
         }
 
         .page-header p {
-            color: var(--gray-600);
+            color: var(--ink-secondary);
             margin-top: 0.25rem;
         }
 
-        /* Cards */
+        /* Cards: white planes on the #f5f5f7 page — separation comes from
+           space, not borders or shadows. On hover an ink border draws
+           itself in; the transparent border reserves the pixel so nothing
+           shifts. */
         .card {
             background: white;
-            border-radius: 12px;
+            border: 1px solid transparent;
+            border-radius: 18px;
             padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-bottom: 1.5rem;
+            transition: border-color 0.25s ease;
+        }
+
+        .card:hover {
+            border-color: var(--ink);
         }
 
         .card-title {
-            font-size: 0.875rem;
-            color: var(--gray-600);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--ink-secondary);
             margin-bottom: 0.5rem;
         }
 
         .card-value {
             font-size: 2rem;
-            font-weight: 700;
-            color: var(--gray-800);
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--ink);
         }
 
         .card-delta {
@@ -248,13 +368,13 @@
             background: var(--gray-100);
         }
 
-        /* Buttons */
+        /* Buttons: pills; blue = interactive */
         .btn {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
             padding: 0.5rem 1rem;
-            border-radius: 6px;
+            border-radius: 980px;
             font-size: 0.875rem;
             font-weight: 500;
             cursor: pointer;
@@ -263,12 +383,12 @@
         }
 
         .btn-primary {
-            background: var(--black);
+            background: var(--primary);
             color: var(--white);
         }
 
         .btn-primary:hover {
-            background: var(--gray-800);
+            background: var(--primary-dark);
         }
 
         .btn-success {
@@ -283,28 +403,33 @@
 
         .btn-outline {
             background: transparent;
-            border: 1px solid var(--gray-300);
-            color: var(--gray-600);
+            border: 1px solid var(--hairline);
+            color: var(--ink);
         }
 
         .btn-outline:hover {
-            border-color: var(--black);
-            color: var(--black);
+            border-color: var(--ink-secondary);
+            color: var(--ink);
         }
 
-        /* Badges */
+        /* Badges: outlined, square-ish — status is information, not
+           decoration (the screen now matches the print styles). */
         .badge {
             display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 500;
+            padding: 0.15rem 0.45rem;
+            border-radius: 3px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            border: 1px solid var(--gray-300);
+            color: var(--gray-600);
+            background: none;
         }
 
-        .badge-success { background: #dcfce7; color: #166534; }
-        .badge-warning { background: #fef3c7; color: #92400e; }
-        .badge-danger { background: #fee2e2; color: #991b1b; }
-        .badge-info { background: var(--gray-200); color: var(--gray-800); }
+        .badge-success { color: #166534; border-color: rgba(22, 101, 52, 0.4); }
+        .badge-warning { color: #92400e; border-color: rgba(146, 64, 14, 0.4); }
+        .badge-danger { color: #991b1b; border-color: rgba(153, 27, 27, 0.4); }
+        .badge-info { color: var(--gray-600); border-color: var(--gray-300); }
 
         /* Forms */
         .form-group {
@@ -329,8 +454,8 @@
 
         .form-input:focus, .form-select:focus {
             outline: none;
-            border-color: var(--black);
-            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
         }
 
         /* Alerts */
@@ -355,7 +480,7 @@
 
         .progress-bar {
             height: 100%;
-            background: var(--black);
+            background: var(--primary);
             transition: width 0.3s;
         }
 
@@ -391,6 +516,44 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+
+        /* Load animations, shared by every page.
+           - the page composes itself: top-level blocks fade up in sequence
+           - .fill-bar: data bars draw themselves from the left
+           - .countup targets are animated by the script at the bottom */
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        .fade-in { animation: fade-up 0.4s ease both; }
+
+        .main > * { animation: fade-up 0.45s ease both; }
+        .main > *:nth-child(2) { animation-delay: 70ms; }
+        .main > *:nth-child(3) { animation-delay: 140ms; }
+        .main > *:nth-child(4) { animation-delay: 210ms; }
+        .main > *:nth-child(5) { animation-delay: 280ms; }
+        .main > *:nth-child(6) { animation-delay: 350ms; }
+        .main > *:nth-child(7) { animation-delay: 420ms; }
+        .main > *:nth-child(8) { animation-delay: 490ms; }
+
+        .fill-bar {
+            transform-origin: left;
+            animation: bar-fill 0.5s ease-out both;
+        }
+        @keyframes bar-fill {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
+
+        /* OS-level "reduce motion": kill every animation and transition.
+           JS-driven effects must check the same media query themselves. */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -401,15 +564,23 @@
                 <div class="logo">
                     Wasteless
                 </div>
+                {# Same semantics as the old pill: dry-run is the safe state
+                   (green), production means real AWS actions (red, pulsing) #}
                 {% if get_dry_run() %}
-                <div style="display:flex;align-items:center;gap:0.4rem;padding:0.375rem 0.625rem;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.25);border-radius:5px;font-size:0.75rem;color:rgba(255,255,255,0.75);">
-                    <span style="width:6px;height:6px;background:#22c55e;border-radius:50%;flex-shrink:0;"></span>
-                    Dry-Run Mode
+                <div class="mode-card">
+                    <div class="mode-line" style="color:#256b2d;">
+                        <span class="mode-dot" style="background:#22c55e;"></span>
+                        Dry-Run
+                    </div>
+                    <div class="mode-sub">Actions are simulated only</div>
                 </div>
                 {% else %}
-                <div style="display:flex;align-items:center;gap:0.4rem;padding:0.375rem 0.625rem;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);border-radius:5px;font-size:0.75rem;color:rgba(255,255,255,0.75);">
-                    <span style="width:6px;height:6px;background:#ef4444;border-radius:50%;flex-shrink:0;animation:pulse 2s infinite;"></span>
-                    Production Mode
+                <div class="mode-card">
+                    <div class="mode-line" style="color:#b91c1c;">
+                        <span class="mode-dot" style="background:#ef4444;animation:pulse 2s infinite;"></span>
+                        Production
+                    </div>
+                    <div class="mode-sub">Real AWS actions enabled</div>
                 </div>
                 {% endif %}
             </div>
@@ -417,27 +588,27 @@
             <nav class="nav-section">
                 <ul class="nav-links">
                     <li><a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
-                        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
-                        Home
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+                        Overview
                     </a></li>
                     <li><a href="/recommendations" class="{% if request.url.path == '/recommendations' %}active{% endif %}">
-                        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
                         Recommendations
                     </a></li>
                     <li><a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}">
-                        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
                         Dashboard
                     </a></li>
                     <li><a href="/cloud-resources" class="{% if request.url.path == '/cloud-resources' %}active{% endif %}">
-                        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg></span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg></span>
                         Cloud Resources
                     </a></li>
                     <li><a href="/history" class="{% if request.url.path == '/history' %}active{% endif %}">
-                        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
                         History
                     </a></li>
                     <li><a href="/reports" class="{% if request.url.path == '/reports' %}active{% endif %}">
-                        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
                         Reports
                     </a></li>
                 </ul>
@@ -445,16 +616,45 @@
                 <div class="nav-bottom">
                     <ul class="nav-links">
                         <li><a href="/logs" class="{% if request.url.path == '/logs' %}active{% endif %}">
-                            <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+                            <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
                             Logs
                         </a></li>
                         <li><a href="/settings" class="{% if request.url.path == '/settings' %}active{% endif %}">
-                            <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span>
+                            <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span>
                             Settings
                         </a></li>
                     </ul>
                 </div>
             </nav>
+
+            {# Bottom card: the connected AWS account plays the role a user
+               card would in a multi-user product. Tri-state via the cached
+               reachability status — never calls AWS during a render. #}
+            {% if aws_reachable() is sameas true %}
+            <div class="aws-card">
+                <span class="aws-avatar" style="background:#e3f1e4;color:#256b2d;">AWS</span>
+                <div style="min-width:0;">
+                    <div style="font-size:0.8rem;font-weight:600;color:#1d1d1f;">AWS Account</div>
+                    <div style="font-size:0.72rem;color:#86868b;">Connected</div>
+                </div>
+            </div>
+            {% elif aws_reachable() is sameas false %}
+            <a href="/setup" class="aws-card" style="text-decoration:none;">
+                <span class="aws-avatar" style="background:#fdeaea;color:#b91c1c;">AWS</span>
+                <div style="min-width:0;">
+                    <div style="font-size:0.8rem;font-weight:600;color:#1d1d1f;">AWS Account</div>
+                    <div style="font-size:0.72rem;color:#86868b;">Not connected — set up &rarr;</div>
+                </div>
+            </a>
+            {% else %}
+            <div class="aws-card">
+                <span class="aws-avatar" style="background:#f0efec;color:#86868b;">AWS</span>
+                <div style="min-width:0;">
+                    <div style="font-size:0.8rem;font-weight:600;color:#1d1d1f;">AWS Account</div>
+                    <div style="font-size:0.72rem;color:#86868b;">Checking…</div>
+                </div>
+            </div>
+            {% endif %}
         </aside>
 
         <main class="main">
@@ -500,6 +700,39 @@
         async function refreshData() {
             location.reload();
         }
+
+        // KPI count-up: the server renders the final value; the number is
+        // re-counted from 0 client-side (~700ms, cubic ease-out). Prefix,
+        // suffix, decimals and thousands grouping are inferred from the
+        // rendered text so a plain class="countup" works on '€3.36',
+        // '85%', '1,234' alike. Skipped under prefers-reduced-motion.
+        (function () {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            document.querySelectorAll('.countup').forEach(el => {
+                const raw = el.textContent;
+                const m = raw.match(/-?\d[\d,]*(?:\.\d+)?/);
+                if (!m) return;
+                const numStr = m[0];
+                const target = parseFloat(numStr.replace(/,/g, ''));
+                if (!isFinite(target) || target === 0) return;
+                const decimals = (numStr.split('.')[1] || '').length;
+                const grouped = numStr.includes(',');
+                const prefix = raw.slice(0, m.index);
+                const suffix = raw.slice(m.index + numStr.length);
+                const duration = 700;
+                const t0 = performance.now();
+                const fmt = v => grouped
+                    ? Math.round(v).toLocaleString('en-US')
+                    : v.toFixed(decimals);
+                function frame(t) {
+                    const p = Math.min((t - t0) / duration, 1);
+                    const eased = 1 - Math.pow(1 - p, 3);
+                    el.textContent = prefix + fmt(target * eased) + suffix;
+                    if (p < 1) requestAnimationFrame(frame);
+                }
+                requestAnimationFrame(frame);
+            });
+        })();
     </script>
     {% block extra_js %}{% endblock %}
 </body>
