@@ -409,3 +409,86 @@ def grace_executor_job() -> None:
         # exception, commit failure) so scheduler ticks don't leak connections.
         if conn is not None:
             conn.close()
+
+
+def cost_collector_job() -> None:
+    """Collecte quotidienne Cost Explorer → cloud_costs_raw.
+
+    Alimente le dénominateur du Waste Rate (home + dashboard) et le KPI
+    AWS Spend. Programmé sur un intervalle court mais s'auto-limite :
+    l'API Cost Explorer est facturée 0,01 $ par requête, donc le job sort
+    sans appeler AWS tant que les données d'hier sont déjà en base
+    (~1 requête payée par jour). Même seuil de bruit (> 0,01 $) et même
+    upsert que src/aws_collector.py, la version script manuelle.
+    """
+    import os
+    from datetime import date, timedelta
+
+    from psycopg2.extras import execute_values
+
+    from utils.aws_clients import get_client
+
+    try:
+        with closing(psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute(
+                "SELECT MAX(usage_date) AS latest FROM cloud_costs_raw WHERE provider = 'aws'"
+            )
+            row = cursor.fetchone()
+            yesterday = date.today() - timedelta(days=1)
+            if row and row["latest"] is not None and row["latest"] >= yesterday:
+                return  # fresh enough — don't pay for another CE call
+
+            end = date.today()
+            start = end - timedelta(days=30)
+            ce = get_client("ce", region=os.getenv("AWS_REGION", "eu-west-1"))
+            response = ce.get_cost_and_usage(
+                TimePeriod={"Start": str(start), "End": str(end)},
+                Granularity="DAILY",
+                Metrics=["UnblendedCost"],
+                GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+            )
+
+            account_id = os.getenv("AWS_ACCOUNT_ID", "unknown")
+            region = os.getenv("AWS_REGION", "unknown")
+            values: List[Tuple[Any, ...]] = []
+            for day in response.get("ResultsByTime", []):
+                usage_date = day["TimePeriod"]["Start"]
+                for group in day.get("Groups", []):
+                    cost = float(group["Metrics"]["UnblendedCost"]["Amount"])
+                    if cost > 0.01:
+                        values.append(
+                            (
+                                "aws",
+                                account_id,
+                                group["Keys"][0],
+                                None,
+                                usage_date,
+                                cost,
+                                "USD",
+                                region,
+                                None,
+                            )
+                        )
+
+            if not values:
+                return
+
+            execute_values(
+                cursor,
+                """
+                INSERT INTO cloud_costs_raw
+                (provider, account_id, service, resource_id, usage_date,
+                 cost, currency, region, raw_data)
+                VALUES %s
+                ON CONFLICT ON CONSTRAINT uq_cloud_costs
+                DO UPDATE SET cost = EXCLUDED.cost, currency = EXCLUDED.currency
+                """,
+                values,
+            )
+            conn.commit()
+            print(f"Cost Explorer collect: {len(values)} rows upserted ({start} → {end})")
+
+    except Exception as e:
+        print(f"Cost Explorer collect error: {e}")
