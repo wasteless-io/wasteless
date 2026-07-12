@@ -225,6 +225,99 @@
             padding-top: 1rem;
         }
     }
+
+    /* ===================================================================
+       EXPERIMENT — Apple-minimal restyle, THIS PAGE ONLY, pending
+       validation. Locally overrides base.html tokens and the identity
+       pass above. If validated: promote to base.html and delete this
+       block; if rejected: delete this block, nothing else changed.
+       Swap --apple-accent to var(--primary) to test the amber variant.
+       =================================================================== */
+    :root {
+        --apple-bg: #f5f5f7;
+        --apple-text: #1d1d1f;
+        --apple-secondary: #86868b;
+        --apple-accent: #0071e3;
+        --apple-hairline: rgba(0, 0, 0, 0.08);
+        --apple-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body { background: var(--apple-bg); color: var(--apple-text); }
+    .main { padding: 2.5rem 3rem; }
+
+    /* Hierarchy through size and weight, not color or box chrome */
+    h1, h2, h3 { font-family: var(--apple-font); letter-spacing: -0.02em; color: var(--apple-text); }
+    .page-header h1 { font-size: 2rem; font-weight: 700; }
+    .page-header p { color: var(--apple-secondary); }
+
+    .card {
+        border: none;
+        border-radius: 18px;
+        box-shadow: none;
+    }
+    .card.compact, .card.slim { padding: 1.5rem; }
+
+    .section-label {
+        text-transform: none;
+        letter-spacing: 0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--apple-secondary);
+    }
+
+    /* KPIs: SF numbers, no colored icon medallions */
+    .kpi-icon { display: none; }
+    .kpi-value {
+        font-family: var(--apple-font);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        font-size: 2rem;
+    }
+    .kpi-label {
+        text-transform: none;
+        letter-spacing: 0;
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--apple-secondary);
+    }
+    .kpi-sub { color: var(--apple-secondary); }
+    .kpi + .kpi { border-left: 1px solid var(--apple-hairline); }
+    .stat-value { font-family: var(--apple-font); font-weight: 600; letter-spacing: -0.02em; }
+    .card-footnote { border-top: 1px solid var(--apple-hairline); color: var(--apple-secondary); }
+    .chart-subtitle, .chart-unit, .trend-legend { color: var(--apple-secondary); }
+
+    /* Pill buttons */
+    .btn { border-radius: 980px; }
+    .btn-primary { background: var(--apple-accent); }
+    .btn-primary:hover { background: #0077ed; }
+    .btn-outline { border-color: var(--apple-hairline); color: var(--apple-text); }
+    .btn-outline:hover { border-color: var(--apple-secondary); color: var(--apple-text); }
+
+    /* Range pickers as a segmented control (both charts share .trend-ranges) */
+    .trend-ranges {
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 9px;
+        padding: 2px;
+        gap: 0;
+    }
+    .trend-ranges .btn {
+        border-radius: 7px;
+        border: none;
+        font-weight: 500;
+    }
+    .trend-ranges .btn-primary {
+        background: white;
+        color: var(--apple-text);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .trend-ranges .btn-primary:hover { background: white; }
+    .trend-ranges .btn-outline {
+        background: none;
+        color: var(--apple-secondary);
+    }
+    .trend-ranges .btn-outline:hover { color: var(--apple-text); border: none; }
+
+    .alert-banner { border-radius: 12px; }
 </style>
 {% endblock %}
 
