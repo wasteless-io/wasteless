@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from state import get_db, SYNCABLE_STATUSES
-from jobs import _sync_ec2_instance_states
+from jobs import _resolve_vanished, _sync_ec2_instance_states
 from utils.logger import get_logger
 
 router = APIRouter()
@@ -46,41 +46,32 @@ def api_sync_aws(conn=Depends(get_db)):
 
         total_checked = len(pending_instances) + sum(len(ids) for ids in pending_by_type.values())
 
-        # Non-EC2 resources: obsolete recommendations whose resource is gone
-        obsolete_count = 0
+        # Non-EC2 resources: resolve recommendations whose resource is gone
+        # (approved_manual -> applied, others -> obsolete; see
+        # jobs._resolve_vanished, shared with the background job)
+        resolved_count = 0
         if pending_by_type:
             from utils.aws_sync import find_vanished_resources
 
             vanished = find_vanished_resources(pending_by_type)
             for resource_type, ids in vanished.items():
-                cursor.execute(
-                    """
-                    UPDATE recommendations r
-                    SET status = 'obsolete', applied_at = NOW()
-                    FROM waste_detected w
-                    WHERE r.waste_id = w.id
-                    AND w.resource_type = %s
-                    AND w.resource_id = ANY(%s)
-                    AND r.status = ANY(%s)
-                """,
-                    (resource_type, ids, list(SYNCABLE_STATUSES)),
-                )
-                obsolete_count += cursor.rowcount
+                resolved_count += _resolve_vanished(cursor, resource_type, ids)
 
         # EC2 instances: same state-based reconciliation as sync_aws_job,
         # so a manual click never resolves more (or less) than the auto job.
         synced_count = 0
         if pending_instances:
-            synced_count, ec2_obsolete = _sync_ec2_instance_states(cursor, pending_instances)
-            obsolete_count += ec2_obsolete
+            synced_count, ec2_resolved = _sync_ec2_instance_states(cursor, pending_instances)
+            resolved_count += ec2_resolved
 
         conn.commit()
 
         return {
             "synced": synced_count,
-            "obsolete": obsolete_count,
+            "obsolete": resolved_count,
             "total_checked": total_checked,
-            "message": f"Synced {synced_count} instances, marked {obsolete_count} as obsolete",
+            "message": f"Synced {synced_count} instances, resolved {resolved_count} "
+            "(applied/obsolete)",
         }
 
     except Exception as e:
