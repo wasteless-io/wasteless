@@ -572,6 +572,70 @@
             color: inherit;
             text-decoration: none;
         }
+
+        /* Notifications: corner pastille (bell + hero CTA) and the bell's
+           popover. Every .js-pending-badge is fed by the shared poller at
+           the bottom of this file. */
+        .notif-badge {
+            position: absolute;
+            top: -7px;
+            right: -7px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border-radius: 999px;
+            background: var(--warning);
+            color: white;
+            border: 2px solid white;
+            font-size: 0.66rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+        .badge-pop {
+            animation: badge-pop 0.35s ease;
+        }
+        @keyframes badge-pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.35); }
+            100% { transform: scale(1); }
+        }
+
+        .notif-bell {
+            position: relative;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #3a3a38;
+            padding: 4px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+        }
+        .notif-bell:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: #1d1d1f;
+        }
+        .notif-bell .notif-badge {
+            border-color: #faf9f7; /* sidebar plane, not white */
+        }
+
+        .notif-popover {
+            display: none;
+            position: fixed;
+            left: 252px; /* sidebar width + gap; the sidebar is fixed */
+            top: 14px;
+            z-index: 1000;
+            width: 270px;
+            background: white;
+            border: 1px solid var(--hairline);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            padding: 1rem 1.15rem;
+        }
+        .notif-popover.open { display: block; }
         .kpi-zoom {
             display: inline-block;
             transition: transform 0.18s ease;
@@ -624,8 +688,12 @@
     <div class="layout">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="logo">
+                <div class="logo" style="justify-content: space-between;">
                     Wasteless
+                    <button type="button" id="notif-bell" class="notif-bell" aria-label="Notifications — recommendations awaiting review" onclick="toggleNotifPopover(event)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                        <span class="notif-badge js-pending-badge" style="display: none;">0</span>
+                    </button>
                 </div>
                 {# Same semantics as the old pill: dry-run is the safe state
                    (green), production means real AWS actions (red, pulsing) #}
@@ -720,6 +788,15 @@
             {% endif %}
         </aside>
 
+        {# Bell popover: summary of what awaits a decision. Fixed-positioned
+           next to the (fixed) sidebar so the sidebar's overflow-y can't
+           clip it. Filled by the shared poller. #}
+        <div id="notif-popover" class="notif-popover" role="dialog" aria-label="Notifications">
+            <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem;">Notifications</div>
+            <div id="notif-body" style="font-size: 0.82rem; color: var(--ink-secondary); line-height: 1.5;">Loading…</div>
+            <a href="/recommendations" id="notif-link" style="display: none; margin-top: 0.6rem; font-size: 0.82rem; font-weight: 600; color: var(--primary); text-decoration: none;">Review recommendations &rarr;</a>
+        </div>
+
         <main class="main">
             {# Global onboarding banner: distinct from the "partial collection"
                banner (steampipe) — this one means NO AWS data at all. #}
@@ -763,6 +840,85 @@
         async function refreshData() {
             location.reload();
         }
+
+        // Shared pending-recommendations poller: feeds every element with
+        // class .js-pending-badge (sidebar bell, home hero CTA) and the
+        // bell popover, on every page, every 60s via /api/metrics. A count
+        // increase pops the badges (CSS animation, disabled globally by
+        // prefers-reduced-motion).
+        let _pendingCount = null;
+        let _pendingSavings = 0;
+
+        function _renderPendingBadges(n) {
+            document.querySelectorAll('.js-pending-badge').forEach(badge => {
+                const prev = parseInt(badge.textContent, 10) || 0;
+                badge.textContent = n;
+                badge.style.display = n > 0 ? 'flex' : 'none';
+                if (_pendingCount !== null && n > prev) {
+                    badge.classList.remove('badge-pop');
+                    void badge.offsetWidth; // restart the animation
+                    badge.classList.add('badge-pop');
+                }
+            });
+        }
+
+        function _renderNotifBody() {
+            const body = document.getElementById('notif-body');
+            const link = document.getElementById('notif-link');
+            if (!body) return;
+            if (_pendingCount === null) {
+                body.textContent = 'Loading…';
+                link.style.display = 'none';
+            } else if (_pendingCount > 0) {
+                body.textContent = _pendingCount + ' recommendation' + (_pendingCount > 1 ? 's' : '')
+                    + ' awaiting your review — ' + _pendingSavings.toFixed(2)
+                    + ' €/mo recoverable if approved.';
+                link.style.display = 'inline-block';
+            } else {
+                body.textContent = 'Nothing to review — all clear.';
+                link.style.display = 'none';
+            }
+        }
+
+        async function _refreshPending() {
+            try {
+                const res = await fetch('/api/metrics');
+                if (!res.ok) return;
+                const data = await res.json();
+                _renderPendingBadges(data.pending_count || 0);
+                _pendingCount = data.pending_count || 0;
+                _pendingSavings = data.potential_savings || 0;
+                _renderNotifBody();
+            } catch (e) {
+                // network hiccup: keep the current badges
+            }
+        }
+
+        function toggleNotifPopover(event) {
+            event.stopPropagation();
+            const pop = document.getElementById('notif-popover');
+            pop.classList.toggle('open');
+            if (pop.classList.contains('open')) {
+                _renderNotifBody();
+                _refreshPending(); // fresh numbers on open
+            }
+        }
+
+        document.addEventListener('click', (e) => {
+            const pop = document.getElementById('notif-popover');
+            if (pop && pop.classList.contains('open') && !pop.contains(e.target)) {
+                pop.classList.remove('open');
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const pop = document.getElementById('notif-popover');
+                if (pop) pop.classList.remove('open');
+            }
+        });
+
+        _refreshPending();
+        setInterval(_refreshPending, 60000);
 
         // KPI count-up: the server renders the final value; the number is
         // re-counted from 0 client-side (~700ms, cubic ease-out). Prefix,
