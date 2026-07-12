@@ -102,14 +102,12 @@ from your account ID and the template's default role names. Click
 **Test & save**. Both configuration files are written for you; no restart
 needed.
 
-## 5. Collect (1 min)
+## 5. Watch the dashboard fill (2 min)
 
-```bash
-wasteless collect
-```
-
-The dashboard fills with your account's waste within a couple of minutes,
-and collection re-runs automatically from then on.
+Nothing to do: a first collection starts automatically the moment you save,
+the dashboard fills with your account's waste within a couple of minutes,
+and collection re-runs automatically from then on. (`wasteless collect` in
+a terminal triggers one manually at any time.)
 
 ---
 
