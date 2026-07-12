@@ -226,6 +226,23 @@ def home(request: Request, conn=Depends(get_db)):
             elif delta_pct < -0.01:
                 aws_spend_vs_avg = "below"
 
+    # Services view of the waste card: top services by real spend, same
+    # source and window as the AWS Spend tile so the card and the KPI agree.
+    cursor.execute(
+        """
+        SELECT service,
+               SUM(CASE WHEN currency = 'USD' THEN cost * %s
+                        ELSE cost END) as total_eur
+        FROM cloud_costs_raw
+        WHERE usage_date >= CURRENT_DATE - 30
+        GROUP BY service
+        ORDER BY total_eur DESC
+        LIMIT 8
+    """,
+        (USD_TO_EUR,),
+    )
+    top_services = cursor.fetchall()
+
     cursor.close()
 
     system_health = {
@@ -255,5 +272,6 @@ def home(request: Request, conn=Depends(get_db)):
             "aws_spend_avg_eur": aws_spend_avg_eur,
             "aws_spend_vs_avg": aws_spend_vs_avg,
             "aws_service_count": aws_service_count,
+            "top_services": top_services,
         },
     )

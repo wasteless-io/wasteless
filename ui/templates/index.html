@@ -191,12 +191,26 @@
 
 <!-- Recent Activity -->
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-    <!-- Waste by Type -->
+    <!-- Waste by Type / Top AWS Services (toggle) -->
     <div class="card" style="padding: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Waste by Type</h3>
-            <a href="/recommendations" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; gap: 0.75rem;">
+            <h3 id="waste-card-title" style="margin: 0; font-size: 0.95rem; font-weight: 600;">Waste by Type</h3>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                {% if top_services %}
+                {# Segmented toggle: waste stays the default view, the real
+                   bill by service is one click away #}
+                <div style="display: flex; gap: 0; background: rgba(0,0,0,0.05); border-radius: 7px; padding: 2px;">
+                    <button type="button" id="waste-card-tab-waste" onclick="switchWasteCard('waste')" style="border: none; cursor: pointer; font-size: 0.72rem; font-weight: 500; padding: 0.15rem 0.55rem; border-radius: 5px; background: white; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.08);">Waste</button>
+                    <button type="button" id="waste-card-tab-services" onclick="switchWasteCard('services')" style="border: none; cursor: pointer; font-size: 0.72rem; font-weight: 500; padding: 0.15rem 0.55rem; border-radius: 5px; background: none; color: var(--ink-secondary);">Services</button>
+                </div>
+                {% endif %}
+                <a href="/recommendations" id="waste-view-all" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
+                {% if top_services %}
+                <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" id="services-view-all" style="font-size: 0.8rem; color: var(--primary); text-decoration: none; display: none;">Cost Explorer &rarr;</a>
+                {% endif %}
+            </div>
         </div>
+        <div id="waste-panel">
         {% if waste_by_type %}
         {% set max_eur = waste_by_type[0].total_eur %}
         <div class="scroll-list">
@@ -242,6 +256,41 @@
         <div style="padding: 2rem; text-align: center;">
             <p class="text-muted" style="margin: 0;">No waste detected yet</p>
             <p style="font-size: 0.8rem; color: var(--gray-500); margin: 0.5rem 0 0 0;">Run <code>wasteless collect</code> to start</p>
+        </div>
+        {% endif %}
+        </div>
+
+        {% if top_services %}
+        {# Top services by real spend (Cost Explorer, last 30 days) — same
+           window as the AWS Spend KPI. Flat amber bars: length already
+           encodes the amount. #}
+        <div id="services-panel" style="display: none;">
+            {% set smax = top_services[0].total_eur %}
+            <div class="scroll-list">
+                <table style="font-size: 0.8rem; width: 100%;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.35rem 0.5rem; text-align: left;">Service</th>
+                            <th style="padding: 0.35rem 0.5rem; text-align: right;">EUR (30d)</th>
+                            <th style="padding: 0.35rem 0.5rem; text-align: right; min-width: 80px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in top_services %}
+                        {% set spct = ((item.total_eur / smax) * 100) if smax > 0 else 0 %}
+                        <tr>
+                            <td style="padding: 0.35rem 0.5rem;"><span style="display: inline-block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;" title="{{ item.service }}">{{ item.service | replace('Amazon ', '') | replace('AWS ', '') }}</span></td>
+                            <td style="padding: 0.35rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
+                            <td style="padding: 0.35rem 0.5rem;">
+                                <div style="width: 100%; height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden;">
+                                    <div class="fill-bar" style="height: 100%; width: {{ spct }}%; background: #d97706; border-radius: 3px; animation-delay: {{ loop.index0 * 90 }}ms;"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
         {% endif %}
     </div>
@@ -303,6 +352,26 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+// Waste/Services toggle on the breakdown card — both views are rendered
+// server-side, this only switches visibility (same pattern as the
+// Cloud Resources tabs).
+function switchWasteCard(view) {
+    document.getElementById('waste-panel').style.display = view === 'waste' ? '' : 'none';
+    document.getElementById('services-panel').style.display = view === 'services' ? '' : 'none';
+    document.getElementById('waste-view-all').style.display = view === 'waste' ? '' : 'none';
+    document.getElementById('services-view-all').style.display = view === 'services' ? '' : 'none';
+    document.getElementById('waste-card-title').textContent =
+        view === 'waste' ? 'Waste by Type' : 'Top AWS Services';
+    ['waste', 'services'].forEach(v => {
+        const btn = document.getElementById('waste-card-tab-' + v);
+        if (!btn) return;
+        btn.style.background = v === view ? 'white' : 'none';
+        btn.style.boxShadow = v === view ? '0 1px 3px rgba(0,0,0,0.08)' : 'none';
+        btn.style.color = v === view ? 'var(--ink)' : 'var(--ink-secondary)';
+    });
+}
+</script>
 {% if llm_enabled %}
 <script>
 // Daily briefing: fetched async so the page never waits for the LLM.
