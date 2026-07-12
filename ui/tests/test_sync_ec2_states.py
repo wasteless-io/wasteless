@@ -33,7 +33,7 @@ try:
 except ImportError:
     PSYCOPG2_AVAILABLE = False
 
-from jobs import _sync_ec2_instance_states
+from jobs import _resolve_vanished, _sync_ec2_instance_states
 
 
 def _connect():
@@ -181,6 +181,115 @@ class TestSyncEc2InstanceStates(unittest.TestCase):
 
         self.assertEqual(obsolete, 0)
         self.assertEqual(synced, 0)
+        self.assertEqual(self._rec_status(rec_id), "dismissed")
+
+    def test_vanished_approved_manual_becomes_applied(self):
+        """approved_manual + resource gone = the human executed their own
+        decision: 'applied' (realized remediation), not 'obsolete'
+        (vanished outside the process)."""
+        rec_id = self._insert_ec2_waste("i-manual-gone", status="approved_manual")
+
+        with patch("utils.aws_clients.get_client", _fake_get_client({})):
+            synced, resolved = _sync_ec2_instance_states(self.cur, ["i-manual-gone"])
+
+        self.assertEqual(resolved, 1)
+        self.assertEqual(self._rec_status(rec_id), "applied")
+
+    def test_stopped_approved_manual_becomes_applied(self):
+        """Same rule on the state-based path (stop_instance degraded to
+        manual via the per-action opt-out, then stopped by the human)."""
+        rec_id = self._insert_ec2_waste("i-manual-stopped", status="approved_manual")
+
+        with patch(
+            "utils.aws_clients.get_client", _fake_get_client({"i-manual-stopped": "stopped"})
+        ):
+            synced, resolved = _sync_ec2_instance_states(self.cur, ["i-manual-stopped"])
+
+        self.assertEqual(resolved, 1)
+        self.assertEqual(self._rec_status(rec_id), "applied")
+
+
+@unittest.skipUnless(PSYCOPG2_AVAILABLE, "psycopg2 not installed")
+class TestResolveVanished(unittest.TestCase):
+    """_resolve_vanished (jobs.py) — the non-EC2 half of the same rule,
+    shared by sync_aws_job and /api/sync-aws."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            from dotenv import load_dotenv
+
+            load_dotenv()
+        except ImportError:
+            pass
+        try:
+            cls.conn = _connect()
+        except Exception as e:
+            raise unittest.SkipTest(f"Postgres indisponible ({e})") from e
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.conn.close()
+
+    def setUp(self):
+        self.cur = self.conn.cursor()
+
+    def tearDown(self):
+        self.conn.rollback()
+
+    def _insert_waste(self, resource_id, resource_type, status):
+        self.cur.execute(
+            """
+            INSERT INTO waste_detected (
+                detection_date, provider, account_id, resource_id,
+                resource_type, waste_type, monthly_waste_eur,
+                confidence_score, metadata, created_at
+            ) VALUES (CURRENT_DATE, 'aws', 'test-resolve', %s, %s,
+                       'test_waste', 5.0, 0.90, '{}'::jsonb, NOW())
+            RETURNING id
+        """,
+            (resource_id, resource_type),
+        )
+        waste_id = self.cur.fetchone()["id"]
+        self.cur.execute(
+            """
+            INSERT INTO recommendations (
+                waste_id, recommendation_type, status, estimated_monthly_savings_eur
+            ) VALUES (%s, 'delete_vpc', %s, 5.0)
+            RETURNING id
+        """,
+            (waste_id, status),
+        )
+        return self.cur.fetchone()["id"]
+
+    def _rec_status(self, rec_id):
+        self.cur.execute("SELECT status FROM recommendations WHERE id = %s", (rec_id,))
+        return self.cur.fetchone()["status"]
+
+    def test_approved_manual_becomes_applied(self):
+        rec_id = self._insert_waste("vpc-decided", "vpc", "approved_manual")
+        resolved = _resolve_vanished(self.cur, "vpc", ["vpc-decided"])
+        self.assertEqual(resolved, 1)
+        self.assertEqual(self._rec_status(rec_id), "applied")
+
+    def test_pending_becomes_obsolete(self):
+        rec_id = self._insert_waste("vpc-unreviewed", "vpc", "pending")
+        resolved = _resolve_vanished(self.cur, "vpc", ["vpc-unreviewed"])
+        self.assertEqual(resolved, 1)
+        self.assertEqual(self._rec_status(rec_id), "obsolete")
+
+    def test_mixed_statuses_resolve_each_their_way(self):
+        applied_id = self._insert_waste("vpc-a", "vpc", "approved_manual")
+        obsolete_id = self._insert_waste("vpc-b", "vpc", "pending")
+        resolved = _resolve_vanished(self.cur, "vpc", ["vpc-a", "vpc-b"])
+        self.assertEqual(resolved, 2)
+        self.assertEqual(self._rec_status(applied_id), "applied")
+        self.assertEqual(self._rec_status(obsolete_id), "obsolete")
+
+    def test_dismissed_is_never_touched(self):
+        rec_id = self._insert_waste("vpc-dismissed", "vpc", "dismissed")
+        resolved = _resolve_vanished(self.cur, "vpc", ["vpc-dismissed"])
+        self.assertEqual(resolved, 0)
         self.assertEqual(self._rec_status(rec_id), "dismissed")
 
 
