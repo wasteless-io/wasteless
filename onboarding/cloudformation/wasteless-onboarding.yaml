@@ -67,6 +67,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - ce:GetCostAndUsage
+                  - cloudtrail:LookupEvents
                   - cloudwatch:GetMetricStatistics
                   - ec2:DescribeAddresses
                   - ec2:DescribeImages
@@ -117,6 +118,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - ce:GetCostAndUsage
+                  - cloudtrail:LookupEvents
                   - cloudwatch:GetMetricStatistics
                   - ec2:DescribeAddresses
                   - ec2:DescribeImages
