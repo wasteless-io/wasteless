@@ -85,7 +85,9 @@ class TestPolicyJsons:
 
     def test_readonly_actions_are_read_only(self):
         readonly = load_json(READONLY_JSON)
-        pattern = re.compile(r"^(ce|cloudwatch|ec2|elasticloadbalancing|s3):(Describe|Get|List)")
+        pattern = re.compile(
+            r"^(ce|cloudtrail|cloudwatch|ec2|elasticloadbalancing|s3):(Describe|Get|List|Lookup)"
+        )
         for statement in readonly["Statement"]:
             for action in statement["Action"]:
                 assert pattern.match(action), f"Non read-only action in readonly.json: {action}"
