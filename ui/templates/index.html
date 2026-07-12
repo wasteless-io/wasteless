@@ -2,6 +2,30 @@
 
 {% block title %}Home - Wasteless.io{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Compact scrollable lists (~6 rows visible) with a thin ink
+       scrollbar, invisible track — Claude-style. */
+    .scroll-list {
+        overflow-y: auto;
+        max-height: 13rem;
+        scrollbar-width: thin;               /* Firefox */
+        scrollbar-color: #1d1d1f transparent;
+    }
+    .scroll-list::-webkit-scrollbar { width: 5px; }
+    .scroll-list::-webkit-scrollbar-track { background: transparent; }
+    .scroll-list::-webkit-scrollbar-thumb { background: #1d1d1f; border-radius: 999px; }
+
+    /* Header stays readable while the rows scroll under it */
+    .scroll-list thead th {
+        position: sticky;
+        top: 0;
+        background: var(--gray-100);
+        z-index: 1;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <!-- Hero Section -->
 {# Same plane as the sidebar's active pill (#efede8) — the hero belongs
@@ -136,13 +160,14 @@
         </div>
         {% if waste_by_type %}
         {% set max_eur = waste_by_type[0].total_eur %}
-        <table style="font-size: 0.85rem; width: 100%;">
+        <div class="scroll-list">
+        <table style="font-size: 0.8rem; width: 100%;">
             <thead>
                 <tr>
-                    <th style="padding: 0.4rem 0.5rem; text-align: left;">Type</th>
-                    <th style="padding: 0.4rem 0.5rem; text-align: center;">Count</th>
-                    <th style="padding: 0.4rem 0.5rem; text-align: right;">EUR/mo</th>
-                    <th style="padding: 0.4rem 0.5rem; text-align: right; min-width: 80px;"></th>
+                    <th style="padding: 0.35rem 0.5rem; text-align: left;">Type</th>
+                    <th style="padding: 0.35rem 0.5rem; text-align: center;">Count</th>
+                    <th style="padding: 0.35rem 0.5rem; text-align: right;">EUR/mo</th>
+                    <th style="padding: 0.35rem 0.5rem; text-align: right; min-width: 80px;"></th>
                 </tr>
             </thead>
             <tbody>
@@ -153,18 +178,18 @@
                 {% set amber_steps = ['#fde68a', '#fcd34d', '#fbbf24', '#f59e0b', '#d97706'] %}
                 {% set bar_color = amber_steps[[(bar_pct / 100 * 5) | int, 4] | min] %}
                 <tr>
-                    <td style="padding: 0.5rem 0.5rem;">
+                    <td style="padding: 0.35rem 0.5rem;">
                         {% if item.resource_type == 'ebs_snapshot' %}<span style="color: var(--gray-500); vertical-align: -2px; display: inline-block;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span> Snapshots
                         {% elif item.resource_type == 'ebs_volume' %}<span style="color: var(--gray-500); vertical-align: -2px; display: inline-block;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg></span> EBS Volumes
                         {% elif item.resource_type == 'ec2_instance' %}<span style="color: var(--gray-500); vertical-align: -2px; display: inline-block;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></span> EC2 Instances
                         {% elif item.resource_type == 'elastic_ip' %}<span style="color: var(--gray-500); vertical-align: -2px; display: inline-block;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></span> Elastic IPs
                         {% else %}{{ item.resource_type | replace('_', ' ') | title }}{% endif %}
                     </td>
-                    <td style="padding: 0.5rem 0.5rem; text-align: center;">
+                    <td style="padding: 0.35rem 0.5rem; text-align: center;">
                         <span style="background: var(--gray-100); color: var(--gray-700); border-radius: 10px; padding: 0.1rem 0.5rem; font-size: 0.78rem; font-weight: 600;">{{ item.cnt }}</span>
                     </td>
-                    <td style="padding: 0.5rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
-                    <td style="padding: 0.5rem 0.5rem;">
+                    <td style="padding: 0.35rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
+                    <td style="padding: 0.35rem 0.5rem;">
                         <div style="width: 100%; height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden;">
                             <div style="height: 100%; width: {{ bar_pct }}%; background: {{ bar_color }}; border-radius: 3px;"></div>
                         </div>
@@ -173,6 +198,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <div style="padding: 2rem; text-align: center;">
             <p class="text-muted" style="margin: 0;">No waste detected yet</p>
@@ -188,13 +214,13 @@
             <a href="/history" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
         </div>
         {% if recent_activity %}
-        <div style="display: flex; flex-direction: column; gap: 0.1rem;">
+        <div class="scroll-list" style="display: flex; flex-direction: column; gap: 0.1rem;">
             {% for item in recent_activity %}
-            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.25rem; border-bottom: 1px solid var(--gray-100);">
+            <div style="display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.25rem; border-bottom: 1px solid var(--gray-100); flex-shrink: 0;">
                 {% if item.event_type == 'detection' %}
                 <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--warning); flex-shrink: 0;"></span>
                 <div style="flex: 1; min-width: 0;">
-                    <span style="font-size: 0.84rem; color: var(--gray-800);">
+                    <span style="font-size: 0.8rem; color: var(--gray-800);">
                         <strong>{{ item.cnt }}</strong>
                         {% if item.resource_type == 'ebs_snapshot' %}snapshot{{ 's' if item.cnt > 1 else '' }} detected
                         {% elif item.resource_type == 'ebs_volume' %}EBS volume{{ 's' if item.cnt > 1 else '' }} detected
@@ -207,7 +233,7 @@
                 {% else %}
                 <span style="width: 8px; height: 8px; border-radius: 50%; background: {% if item.action_status == 'success' %}var(--success){% elif item.action_status == 'pending' %}var(--warning){% else %}var(--danger){% endif %}; flex-shrink: 0;"></span>
                 <div style="flex: 1; min-width: 0; overflow: hidden;">
-                    <span style="font-size: 0.84rem; color: var(--gray-800);">{{ item.resource_type | replace('_', ' ') | title }}</span>
+                    <span style="font-size: 0.8rem; color: var(--gray-800);">{{ item.resource_type | replace('_', ' ') | title }}</span>
                     <code style="font-size: 0.72rem; color: var(--gray-500); margin-left: 0.35rem;">{{ item.resource_id[:18] if item.resource_id else '' }}…</code>
                 </div>
                 {% if item.dry_run %}
