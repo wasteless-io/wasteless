@@ -121,8 +121,10 @@ def sync_aws_job() -> None:
     """Background job to sync recommendations with AWS state.
 
     Covers every resource type detectors can produce (EC2 instances, EBS
-    volumes, Elastic IPs, snapshots, NAT gateways, load balancers): when
-    the resource no longer exists, the pending recommendation is obsolete.
+    volumes, Elastic IPs, snapshots, NAT gateways, load balancers, VPCs):
+    when the resource no longer exists, the pending recommendation is
+    obsolete. The guard test in test_aws_sync.py fails when a detector
+    resource_type has no checker here.
     EC2 instances also get the stopped/terminated-outside-wasteless check
     via _sync_ec2_instance_states (see its docstring).
     """
