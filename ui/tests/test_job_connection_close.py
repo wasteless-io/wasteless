@@ -53,6 +53,31 @@ class TestJobsCloseConnectionOnError(unittest.TestCase):
             jobs.grace_executor_job()
         conn.close.assert_called_once()
 
+    def test_cost_collector_job_closes_connection_on_error(self):
+        conn = self._mock_conn()
+        conn.cursor.return_value.execute.side_effect = RuntimeError("boom")
+        with patch.object(jobs.psycopg2, "connect", return_value=conn):
+            jobs.cost_collector_job()  # must swallow the error, not raise
+        conn.close.assert_called_once()
+
+
+class TestCostCollectorBillingGuard(unittest.TestCase):
+    """L'API Cost Explorer est facturée 0,01 $ par requête : tant que les
+    données d'hier sont en base, le job ne doit PAS appeler AWS."""
+
+    def test_skips_ce_call_when_data_is_fresh(self):
+        from datetime import date
+
+        conn = MagicMock(name="connection")
+        conn.cursor.return_value.fetchone.return_value = {"latest": date.today()}
+        with (
+            patch.object(jobs.psycopg2, "connect", return_value=conn),
+            patch("utils.aws_clients.get_client") as get_client,
+        ):
+            jobs.cost_collector_job()
+        get_client.assert_not_called()
+        conn.close.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

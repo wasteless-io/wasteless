@@ -175,6 +175,74 @@ def home(request: Request, conn=Depends(get_db)):
         else None
     )
 
+    # Real bill from Cost Explorer (cloud_costs_raw, collected daily by
+    # cost_collector_job): last 30 days rolling — the only window the
+    # 30-day collection guarantees complete (a calendar month can have a
+    # hole if collection started mid-month). USD kept for the tooltip.
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
+                                 ELSE cost END), 0) as spend_eur,
+               COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost
+                                 ELSE 0 END), 0) as spend_usd,
+               COUNT(DISTINCT service) as service_count,
+               COUNT(*) as row_count
+        FROM cloud_costs_raw
+        WHERE usage_date >= CURRENT_DATE - 30
+    """,
+        (USD_TO_EUR,),
+    )
+    spend_row = cursor.fetchone()
+    aws_spend_30d_eur = (
+        float(spend_row["spend_eur"]) if spend_row and spend_row["row_count"] > 0 else None
+    )
+    aws_spend_30d_usd = float(spend_row["spend_usd"]) if spend_row else 0.0
+    aws_service_count = int(spend_row["service_count"]) if spend_row else 0
+
+    # Monthly average over ALL collected history (rows accumulate beyond
+    # the 30-day collection window as days pass): daily average scaled to
+    # a month, same 365/12 convention as everywhere else. Feeds the
+    # above/below-average arrow next to the AWS Spend value — only shown
+    # once the delta is meaningful (>1%), so the early weeks (history ≈
+    # the displayed window, delta mechanically ~0) show no arrow.
+    aws_spend_vs_avg = None
+    aws_spend_avg_eur = None
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
+                                 ELSE cost END), 0) as total_eur,
+               MAX(usage_date) - MIN(usage_date) + 1 as days_covered
+        FROM cloud_costs_raw
+    """,
+        (USD_TO_EUR,),
+    )
+    avg_row = cursor.fetchone()
+    if avg_row and avg_row["days_covered"] and aws_spend_30d_eur is not None:
+        aws_spend_avg_eur = float(avg_row["total_eur"]) / avg_row["days_covered"] * DAYS_PER_MONTH
+        if aws_spend_avg_eur > 0:
+            delta_pct = (aws_spend_30d_eur - aws_spend_avg_eur) / aws_spend_avg_eur
+            if delta_pct > 0.01:
+                aws_spend_vs_avg = "above"
+            elif delta_pct < -0.01:
+                aws_spend_vs_avg = "below"
+
+    # Services view of the waste card: top services by real spend, same
+    # source and window as the AWS Spend tile so the card and the KPI agree.
+    cursor.execute(
+        """
+        SELECT service,
+               SUM(CASE WHEN currency = 'USD' THEN cost * %s
+                        ELSE cost END) as total_eur
+        FROM cloud_costs_raw
+        WHERE usage_date >= CURRENT_DATE - 30
+        GROUP BY service
+        ORDER BY total_eur DESC
+        LIMIT 8
+    """,
+        (USD_TO_EUR,),
+    )
+    top_services = cursor.fetchall()
+
     cursor.close()
 
     system_health = {
@@ -199,5 +267,11 @@ def home(request: Request, conn=Depends(get_db)):
             "monthly_cost": monthly_cost,
             "savings_trend": savings_trend,
             "savings_trend_pct": savings_trend_pct,
+            "aws_spend_30d_eur": aws_spend_30d_eur,
+            "aws_spend_30d_usd": aws_spend_30d_usd,
+            "aws_spend_avg_eur": aws_spend_avg_eur,
+            "aws_spend_vs_avg": aws_spend_vs_avg,
+            "aws_service_count": aws_service_count,
+            "top_services": top_services,
         },
     )

@@ -49,8 +49,8 @@
     @keyframes shimmer {
         to { background-position: -200% 0; }
     }
-    {# fade-up / .fade-in / .main cascade / .fill-bar / count-up: shared,
-       defined in base.html #}
+    {# fade-up / .fade-in / .main cascade / .fill-bar / count-up /
+       .kpi-hover tooltips: shared, defined in base.html #}
 </style>
 {% endblock %}
 
@@ -103,7 +103,7 @@
     <!-- What leaks: current waste + how it moved -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Active detected waste, summed per month — AWS on-demand pricing converted to EUR at a fixed {{ usd_to_eur }} USD&rarr;EUR rate"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></span></span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if savings_trend is none %}
             {# No snapshot from a week ago yet: no trend beats a fake one #}
@@ -123,7 +123,7 @@
     <!-- What awaits a decision -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="{% if (metrics.pending_count or 0) > 0 %}Recoverable every month if you approve the {{ metrics.pending_count }} pending recommendation{{ 's' if metrics.pending_count > 1 }}{% else %}Monthly amount recoverable by approving pending recommendations — none awaiting right now{% endif %}"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></span></span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if (metrics.pending_count or 0) > 0 %}
             <a href="/recommendations" style="color: var(--warning); font-weight: 600; text-decoration: none;">{{ metrics.pending_count }} action{{ 's' if metrics.pending_count > 1 }} awaiting approval &rarr;</a>
@@ -138,20 +138,31 @@
     <!-- What is proven: the number that justifies the tool -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="Savings verified via AWS Cost Explorer after applied actions — measured, not estimated"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></span></span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">
-            {% if (metrics.savings_realized or 0) > 0 %}verified via Cost Explorer{% else %}appears after your first applied action{% endif %}
+            {% if (metrics.savings_realized or 0) > 0 %}verified via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a>{% else %}appears after your first applied action{% endif %}
         </div>
     </div>
 
-    {# Waste Rate only earns a slot once Cost Explorer data exists #}
-    {% if metrics.waste_rate %}
+    {# Real AWS bill (Cost Explorer) — only earns a slot once collected.
+       The waste share moves to the sub-line: the headline is the fact. #}
+    {% if aws_spend_30d_eur is not none %}
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Waste Rate</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};"><span class="countup">{{ "%.1f"|format(metrics.waste_rate) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
-        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">of last month's spend</div>
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Spend</div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><a class="kpi-hover" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Real bill from the Cost Explorer API — {{ "%.2f"|format(aws_spend_30d_usd) }} $US over the last 30 days, converted at the fixed {{ usd_to_eur }} USD&rarr;EUR rate{% if aws_spend_avg_eur %} · monthly average since collection started: {{ "%.2f"|format(aws_spend_avg_eur) }} €{% endif %} · click to open Cost Explorer"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(aws_spend_30d_eur) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></span></a>{% if aws_spend_vs_avg == 'above' %}<span style="font-size: 0.8rem; color: var(--danger); vertical-align: 2px; margin-left: 0.2rem;" aria-hidden="true">&#9650;</span><span class="sr-only">above monthly average</span>{% elif aws_spend_vs_avg == 'below' %}<span style="font-size: 0.8rem; color: var(--success); vertical-align: 2px; margin-left: 0.2rem;" aria-hidden="true">&#9660;</span><span class="sr-only">below monthly average</span>{% endif %}</div>
+        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">last 30 days · whole bill</div>
     </div>
+
+    {# Billed-services count, same source and window as AWS Spend #}
+    {% if aws_service_count > 0 %}
+    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Services</div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Distinct AWS services billed over the last 30 days, from Cost Explorer — services under 0.01 $US/day are not collected, so the console may show a few more"><span class="kpi-zoom"><span class="countup">{{ aws_service_count }}</span></span></span></div>
+        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">billed last 30 days</div>
+    </div>
+    {% endif %}
     {% endif %}
 </div>
 
@@ -180,12 +191,26 @@
 
 <!-- Recent Activity -->
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-    <!-- Waste by Type -->
+    <!-- Waste by Type / Top AWS Services (toggle) -->
     <div class="card" style="padding: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Waste by Type</h3>
-            <a href="/recommendations" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; gap: 0.75rem;">
+            <h3 id="waste-card-title" style="margin: 0; font-size: 0.95rem; font-weight: 600;">Waste by Type</h3>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                {% if top_services %}
+                {# Segmented toggle: waste stays the default view, the real
+                   bill by service is one click away #}
+                <div style="display: flex; gap: 0; background: rgba(0,0,0,0.05); border-radius: 7px; padding: 2px;">
+                    <button type="button" id="waste-card-tab-waste" onclick="switchWasteCard('waste')" style="border: none; cursor: pointer; font-size: 0.72rem; font-weight: 500; padding: 0.15rem 0.55rem; border-radius: 5px; background: white; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.08);">Waste</button>
+                    <button type="button" id="waste-card-tab-services" onclick="switchWasteCard('services')" style="border: none; cursor: pointer; font-size: 0.72rem; font-weight: 500; padding: 0.15rem 0.55rem; border-radius: 5px; background: none; color: var(--ink-secondary);">Services</button>
+                </div>
+                {% endif %}
+                <a href="/recommendations" id="waste-view-all" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
+                {% if top_services %}
+                <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" id="services-view-all" style="font-size: 0.8rem; color: var(--primary); text-decoration: none; display: none;">Cost Explorer &rarr;</a>
+                {% endif %}
+            </div>
         </div>
+        <div id="waste-panel">
         {% if waste_by_type %}
         {% set max_eur = waste_by_type[0].total_eur %}
         <div class="scroll-list">
@@ -231,6 +256,41 @@
         <div style="padding: 2rem; text-align: center;">
             <p class="text-muted" style="margin: 0;">No waste detected yet</p>
             <p style="font-size: 0.8rem; color: var(--gray-500); margin: 0.5rem 0 0 0;">Run <code>wasteless collect</code> to start</p>
+        </div>
+        {% endif %}
+        </div>
+
+        {% if top_services %}
+        {# Top services by real spend (Cost Explorer, last 30 days) — same
+           window as the AWS Spend KPI. Flat amber bars: length already
+           encodes the amount. #}
+        <div id="services-panel" style="display: none;">
+            {% set smax = top_services[0].total_eur %}
+            <div class="scroll-list">
+                <table style="font-size: 0.8rem; width: 100%;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.35rem 0.5rem; text-align: left;">Service</th>
+                            <th style="padding: 0.35rem 0.5rem; text-align: right;">EUR (30d)</th>
+                            <th style="padding: 0.35rem 0.5rem; text-align: right; min-width: 80px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in top_services %}
+                        {% set spct = ((item.total_eur / smax) * 100) if smax > 0 else 0 %}
+                        <tr>
+                            <td style="padding: 0.35rem 0.5rem;"><span style="display: inline-block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;" title="{{ item.service }}">{{ item.service | replace('Amazon ', '') | replace('AWS ', '') }}</span></td>
+                            <td style="padding: 0.35rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
+                            <td style="padding: 0.35rem 0.5rem;">
+                                <div style="width: 100%; height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden;">
+                                    <div class="fill-bar" style="height: 100%; width: {{ spct }}%; background: #d97706; border-radius: 3px; animation-delay: {{ loop.index0 * 90 }}ms;"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
         {% endif %}
     </div>
@@ -292,6 +352,26 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+// Waste/Services toggle on the breakdown card — both views are rendered
+// server-side, this only switches visibility (same pattern as the
+// Cloud Resources tabs).
+function switchWasteCard(view) {
+    document.getElementById('waste-panel').style.display = view === 'waste' ? '' : 'none';
+    document.getElementById('services-panel').style.display = view === 'services' ? '' : 'none';
+    document.getElementById('waste-view-all').style.display = view === 'waste' ? '' : 'none';
+    document.getElementById('services-view-all').style.display = view === 'services' ? '' : 'none';
+    document.getElementById('waste-card-title').textContent =
+        view === 'waste' ? 'Waste by Type' : 'Top AWS Services';
+    ['waste', 'services'].forEach(v => {
+        const btn = document.getElementById('waste-card-tab-' + v);
+        if (!btn) return;
+        btn.style.background = v === view ? 'white' : 'none';
+        btn.style.boxShadow = v === view ? '0 1px 3px rgba(0,0,0,0.08)' : 'none';
+        btn.style.color = v === view ? 'var(--ink)' : 'var(--ink-secondary)';
+    });
+}
+</script>
 {% if llm_enabled %}
 <script>
 // Daily briefing: fetched async so the page never waits for the LLM.

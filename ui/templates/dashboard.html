@@ -217,9 +217,9 @@
 
     @media (max-width: 1024px) {
         .top-grid, .charts-grid { grid-template-columns: 1fr; }
-        /* .grid-3 wraps to 2 columns here (base.html): keep the divider
-           only where a left neighbour actually remains */
-        .grid-3 .kpi:nth-child(odd) { border-left: none; }
+        /* .grid-3/.grid-4 wrap to 2 columns here (base.html): keep the
+           divider only where a left neighbour actually remains */
+        .grid-3 .kpi:nth-child(odd), .grid-4 .kpi:nth-child(odd) { border-left: none; }
     }
     @media (max-width: 768px) {
         .kpi + .kpi {
@@ -257,14 +257,14 @@
 <div class="top-grid">
 <div class="card compact">
     <div class="section-label">Financial Overview</div>
-    <div class="grid grid-3">
+    <div class="grid grid-4">
 
         <!-- Monthly Waste -->
         <div class="kpi">
             <div class="kpi-icon">
                 <span class="bg-warning"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
             </div>
-            <div class="kpi-value text-warning">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></div>
+            <div class="kpi-value text-warning"><span class="kpi-hover" tabindex="0" data-tip="Active detected waste per month{% if (kpis.declined_count or 0) > 0 %} — includes {{ "%.2f"|format(kpis.declined_monthly or 0) }} €/mo you reviewed and declined{% endif %} · AWS on-demand pricing at a fixed {{ usd_to_eur }} USD&rarr;EUR rate"><span class="kpi-zoom">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></span></span></div>
             <div class="kpi-label">Monthly Waste</div>
             <div class="kpi-sub">{{ eur((kpis.active_monthly or 0) * 12) }}/year{% if (kpis.declined_count or 0) > 0 %} · incl. {{ eur(kpis.declined_monthly) }}/mo declined after review{% endif %}</div>
         </div>
@@ -275,9 +275,9 @@
                 <span class="{% if (kpis.cumulative_savings or 0) > 0 %}bg-success{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
             </div>
             {% if (kpis.cumulative_savings or 0) > 0 %}
-            <div class="kpi-value text-success">{{ eur(kpis.cumulative_savings) }}</div>
+            <div class="kpi-value text-success"><span class="kpi-hover" tabindex="0" data-tip="Cumulative savings since launch, verified via AWS Cost Explorer — measured, not estimated"><span class="kpi-zoom">{{ eur(kpis.cumulative_savings) }}</span></span></div>
             <div class="kpi-label">Savings Realized</div>
-            <div class="kpi-sub">Since launch · verified via Cost Explorer</div>
+            <div class="kpi-sub">Since launch · verified via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a></div>
             {% else %}
             <div class="kpi-value is-muted">—</div>
             <div class="kpi-label">Savings Realized</div>
@@ -291,13 +291,27 @@
                 <span class="{% if (kpis.pending_count or 0) > 0 %}bg-warning{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12M6 22h12M8 2v4l4 4 4-4V2M8 22v-4l4-4 4 4v4"/></svg></span>
             </div>
             {% if (kpis.pending_count or 0) > 0 %}
-            <div class="kpi-value text-warning">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></div>
+            <div class="kpi-value text-warning"><span class="kpi-hover" tabindex="0" data-tip="Recoverable every month if you approve the {{ kpis.pending_count }} pending recommendation{{ 's' if (kpis.pending_count or 0) > 1 }}"><span class="kpi-zoom">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></span></span></div>
             <div class="kpi-label">Pending Savings</div>
             <div class="kpi-sub">Recoverable if approved</div>
             {% else %}
             <div class="kpi-value is-muted">—</div>
             <div class="kpi-label">Pending Savings</div>
             <div class="kpi-sub">Nothing awaiting approval</div>
+            {% endif %}
+        </div>
+
+        <!-- AWS Spend (last full month, Cost Explorer) — the whole bill,
+             so waste and savings read against their real denominator -->
+        <div class="kpi">
+            {% if aws_spend_eur is not none %}
+            <div class="kpi-value"><a class="kpi-hover" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Total AWS bill for {{ aws_spend_month }} (last full month), from Cost Explorer — collected daily, converted at the fixed {{ usd_to_eur }} USD&rarr;EUR rate · click to open Cost Explorer"><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></a></div>
+            <div class="kpi-label">AWS Spend</div>
+            <div class="kpi-sub">{{ aws_spend_month }} · whole bill, not just waste</div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">AWS Spend</div>
+            <div class="kpi-sub">Appears after the first daily Cost Explorer collection</div>
             {% endif %}
         </div>
 
@@ -318,7 +332,7 @@
     {% if burned_total > 0 %}
     <div class="stat-center">
         <div class="stat-value">
-            {{ eur(burned_total) }}<span class="text-danger stat-arrow" aria-hidden="true">&#8595;</span><span class="sr-only">(money lost, growing)</span>
+            <span class="kpi-hover" tabindex="0" data-tip="Estimated cost of leaving detected waste running, accumulated since {{ burned_since.strftime('%b %Y') }} — currently {{ "%.2f"|format(daily_burn) }} €/day"><span class="kpi-zoom">{{ eur(burned_total) }}</span></span><span class="text-danger stat-arrow" aria-hidden="true">&#8595;</span><span class="sr-only">(money lost, growing)</span>
         </div>
         <div class="stat-sub">
             since {{ burned_since.strftime('%b %-d, %Y') }} · {{ eur(daily_burn) }}/day now
@@ -413,7 +427,7 @@
         {% if ai_usage %}
         {% set feature_labels = {'insight': 'Insights', 'narrative': 'Report narratives'} %}
         <div class="stat-block">
-            <div class="stat-value">{{ eur(ai_usage.cost_eur) }}</div>
+            <div class="stat-value"><span class="kpi-hover" tabindex="0" data-tip="LLM cost over the last 30 days — {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }}, {{ "{:,}".format(ai_usage.tokens) }} tokens"><span class="kpi-zoom">{{ eur(ai_usage.cost_eur) }}</span></span></div>
             <div class="stat-sub">
                 {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }} · {{ "{:,}".format(ai_usage.tokens) }} tokens
             </div>
@@ -451,14 +465,14 @@
 
         <!-- Waste Detected -->
         <div class="kpi">
-            <div class="kpi-value"><span class="countup">{{ kpis.waste_count or 0 }}</span></div>
+            <div class="kpi-value"><span class="kpi-hover" tabindex="0" data-tip="Resources currently identified as active waste across all detectors"><span class="kpi-zoom"><span class="countup">{{ kpis.waste_count or 0 }}</span></span></span></div>
             <div class="kpi-label">Waste Detected</div>
             <div class="kpi-sub">resources identified</div>
         </div>
 
         <!-- Actions Pending -->
         <div class="kpi">
-            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}"><span class="countup">{{ kpis.pending_count or 0 }}</span></div>
+            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}"><span class="kpi-hover" tabindex="0" data-tip="Recommendations awaiting your review — nothing touches AWS without an approval"><span class="kpi-zoom"><span class="countup">{{ kpis.pending_count or 0 }}</span></span></span></div>
             <div class="kpi-label">Actions Pending</div>
             <div class="kpi-sub">
                 {% if (kpis.pending_count or 0) > 0 %}
@@ -474,7 +488,7 @@
             {% if kpis.last_analysis %}
             {% set hours_ago = ((now() - kpis.last_analysis).total_seconds() / 3600) | int %}
             {% set days_ago = (hours_ago / 24) | int %}
-            <div class="kpi-value {% if hours_ago >= 48 %}text-danger{% elif hours_ago >= 24 %}text-warning{% endif %}">{% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}</div>
+            <div class="kpi-value {% if hours_ago >= 48 %}text-danger{% elif hours_ago >= 24 %}text-warning{% endif %}"><span class="kpi-hover" tabindex="0" data-tip="Last collection: {{ kpis.last_analysis.strftime('%d %b, %H:%M') }} — flagged stale after 24h, overdue after 48h"><span class="kpi-zoom">{% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}</span></span></div>
             <div class="kpi-label">Last Scan</div>
             <div class="kpi-sub">{{ kpis.last_analysis.strftime('%d %b, %H:%M') }}{% if hours_ago >= 48 %} — overdue{% elif hours_ago >= 24 %} — stale{% endif %}</div>
             {% else %}

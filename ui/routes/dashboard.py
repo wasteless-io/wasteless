@@ -1,6 +1,7 @@
 """Executive dashboard (KPIs + charts) and the JSON endpoints feeding it."""
 
 import os
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
@@ -221,6 +222,27 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     )
     inaction_row = cursor.fetchone()
 
+    # AWS Spend KPI: last full calendar month from Cost Explorer data
+    # (cloud_costs_raw, collected daily by cost_collector_job) — same
+    # denominator convention as home's Waste Rate: the current month would
+    # be a partial month-to-date and mechanically understate the bill.
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
+                                 ELSE cost END), 0) as spend_eur,
+               COUNT(*) as row_count
+        FROM cloud_costs_raw
+        WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+          AND usage_date < DATE_TRUNC('month', CURRENT_DATE)
+    """,
+        (USD_TO_EUR,),
+    )
+    spend_row = cursor.fetchone()
+    aws_spend_eur = (
+        float(spend_row["spend_eur"]) if spend_row and spend_row["row_count"] > 0 else None
+    )
+    aws_spend_month = (date.today().replace(day=1) - timedelta(days=1)).strftime("%B %Y")
+
     # Trend: active-waste totals from waste_snapshots (stable history written
     # by detector runs + one-shot backfill)
     trend, trend_granularity, trend_subtitle, waste_trend = fetch_waste_trend(cursor, trend)
@@ -350,6 +372,8 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             "ai_daily_cost": ai_daily_cost,
             "ai_roi": ai_roi,
             "last_run": last_run,
+            "aws_spend_eur": aws_spend_eur,
+            "aws_spend_month": aws_spend_month,
         },
     )
 
