@@ -56,6 +56,25 @@
         from { opacity: 0; transform: translateY(3px); }
         to { opacity: 1; transform: none; }
     }
+
+    /* The page composes itself: top-level blocks fade up in sequence */
+    .main > * { animation: fade-up 0.45s ease both; }
+    .main > *:nth-child(2) { animation-delay: 70ms; }
+    .main > *:nth-child(3) { animation-delay: 140ms; }
+    .main > *:nth-child(4) { animation-delay: 210ms; }
+    .main > *:nth-child(5) { animation-delay: 280ms; }
+    .main > *:nth-child(6) { animation-delay: 350ms; }
+
+    /* Waste by Type: the amber bars fill from the left — the data draws
+       itself. Per-row stagger set inline via animation-delay. */
+    .fill-bar {
+        transform-origin: left;
+        animation: bar-fill 0.5s ease-out both;
+    }
+    @keyframes bar-fill {
+        from { transform: scaleX(0); }
+        to { transform: scaleX(1); }
+    }
 </style>
 {% endblock %}
 
@@ -108,7 +127,7 @@
     <!-- What leaks: current waste + how it moved -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);">{{ "%.2f"|format(monthly_cost) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="countup" data-decimals="2">{{ "%.2f"|format(monthly_cost) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if savings_trend is none %}
             {# No snapshot from a week ago yet: no trend beats a fake one #}
@@ -128,7 +147,7 @@
     <!-- What awaits a decision -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.pending_eur or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="countup" data-decimals="2">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if (metrics.pending_count or 0) > 0 %}
             <a href="/recommendations" style="color: var(--warning); font-weight: 600; text-decoration: none;">{{ metrics.pending_count }} action{{ 's' if metrics.pending_count > 1 }} awaiting approval &rarr;</a>
@@ -143,7 +162,7 @@
     <!-- What is proven: the number that justifies the tool -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};">{{ "%.2f"|format(metrics.savings_realized or 0) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="countup" data-decimals="2">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">
             {% if (metrics.savings_realized or 0) > 0 %}verified via Cost Explorer{% else %}appears after your first applied action{% endif %}
         </div>
@@ -154,7 +173,7 @@
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Waste Rate</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};">{{ "%.1f"|format(metrics.waste_rate) }} <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};"><span class="countup" data-decimals="1">{{ "%.1f"|format(metrics.waste_rate) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">of last month's spend</div>
     </div>
     {% endif %}
@@ -224,7 +243,7 @@
                     <td style="padding: 0.35rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
                     <td style="padding: 0.35rem 0.5rem;">
                         <div style="width: 100%; height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden;">
-                            <div style="height: 100%; width: {{ bar_pct }}%; background: {{ bar_color }}; border-radius: 3px;"></div>
+                            <div class="fill-bar" style="height: 100%; width: {{ bar_pct }}%; background: {{ bar_color }}; border-radius: 3px; animation-delay: {{ loop.index0 * 90 }}ms;"></div>
                         </div>
                     </td>
                 </tr>
@@ -297,6 +316,28 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+// KPI count-up: the server renders the final values; the numbers are
+// re-counted from 0 client-side (~700ms, cubic ease-out). Skipped
+// entirely under prefers-reduced-motion — the rendered value stays.
+(function () {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    document.querySelectorAll('.countup').forEach(el => {
+        const target = parseFloat(el.textContent);
+        if (!isFinite(target) || target === 0) return;
+        const decimals = parseInt(el.dataset.decimals || '2', 10);
+        const duration = 700;
+        const t0 = performance.now();
+        function frame(t) {
+            const p = Math.min((t - t0) / duration, 1);
+            const eased = 1 - Math.pow(1 - p, 3);
+            el.textContent = (target * eased).toFixed(decimals);
+            if (p < 1) requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+    });
+})();
+</script>
 {% if llm_enabled %}
 <script>
 // Daily briefing: fetched async so the page never waits for the LLM.

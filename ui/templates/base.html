@@ -516,6 +516,15 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+
+        /* OS-level "reduce motion": kill every animation and transition.
+           JS-driven effects must check the same media query themselves. */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
