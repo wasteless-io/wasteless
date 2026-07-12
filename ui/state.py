@@ -159,6 +159,17 @@ scheduler = AsyncIOScheduler()
 _aws_status: dict = {"reachable": None, "checked_at": None}
 
 
+def aws_connection_configured() -> bool:
+    """Une connexion AWS est-elle configurée ? Même heuristique large que
+    l'atterrissage navigateur de wasteless.sh : ARNs/clés dans
+    l'environnement (ui/.env est chargé au démarrage) ou credentials
+    partagés crées par `aws configure`. Dans le doute, considéré configuré
+    — on ne renvoie jamais un compte connecté vers /setup."""
+    if os.getenv("AWS_ROLE_ARN") or os.getenv("AWS_ACCESS_KEY_ID"):
+        return True
+    return (Path.home() / ".aws" / "credentials").exists()
+
+
 def check_aws_reachable() -> bool:
     """Quick AWS connectivity check via STS."""
     try:

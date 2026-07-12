@@ -1,9 +1,17 @@
 """Landing page and the home/overview page (/, /landing)."""
 
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
-from state import get_db, templates, USD_TO_EUR, DAYS_PER_MONTH, scheduler, _aws_status
+from state import (
+    get_db,
+    templates,
+    USD_TO_EUR,
+    DAYS_PER_MONTH,
+    scheduler,
+    _aws_status,
+    aws_connection_configured,
+)
 
 router = APIRouter()
 
@@ -17,6 +25,13 @@ def landing(request: Request):
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request, conn=Depends(get_db)):
     """Home page with overview metrics."""
+    # Premier lancement : tant qu'AWS n'est pas connecte, la home n'affiche
+    # que des zeros — on emmene l'utilisateur au wizard, comme l'ouverture
+    # navigateur de wasteless.sh. Seule la racine redirige : les autres
+    # pages restent accessibles en direct.
+    if not aws_connection_configured():
+        return RedirectResponse("/setup", status_code=302)
+
     cursor = conn.cursor()
 
     # Fetch metrics in single query
