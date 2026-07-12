@@ -9,6 +9,7 @@ values to the running process so no restart is needed.
 
 import os
 import re
+import subprocess
 from pathlib import Path
 
 import boto3
@@ -137,6 +138,29 @@ def _write_env_files(values: dict) -> None:
         os.chmod(path, 0o600)
 
 
+def _start_background_collection() -> bool:
+    """Fire-and-forget first collection right after a successful save: the
+    user just connected AWS, the next scheduled run is up to 5 minutes away,
+    and this is exactly when they are staring at an empty dashboard. The
+    collect lock in wasteless.sh makes an overlap with a scheduled run
+    harmless, and a failure here never fails the save itself."""
+    script = ROOT_DIR / "wasteless.sh"
+    if not script.exists():
+        return False
+    try:
+        subprocess.Popen(
+            [str(script), "collect"],
+            cwd=ROOT_DIR,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"Post-save collection not started: {e}")
+        return False
+
+
 def _apply_to_process(values: dict) -> None:
     """Make the new connection live without a restart: env vars for boto3's
     chain, reset of the backend client cache, refreshed status for the
@@ -213,8 +237,10 @@ def api_aws_setup_save(payload: AwsSetupRequest):
     }
     _write_env_files(values)
     _apply_to_process(values)
+    collection_started = _start_background_collection()
     logger.info(
         f"AWS connection saved via /setup (account {result['account_id']}, "
-        f"role={'yes' if payload.role_arn else 'no'})"
+        f"role={'yes' if payload.role_arn else 'no'}, "
+        f"collection={'started' if collection_started else 'not started'})"
     )
-    return {"success": True, **result}
+    return {"success": True, "collection_started": collection_started, **result}

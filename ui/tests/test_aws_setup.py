@@ -196,6 +196,7 @@ class TestEndpoints(unittest.TestCase):
                 patch.object(setup_module, "ENV_FILES", [root_env, ui_env]),
                 patch.object(setup_module.boto3, "Session", return_value=_fake_session()),
                 patch.object(setup_module, "check_aws_reachable", return_value=True),
+                patch.object(setup_module, "_start_background_collection", return_value=True),
             ):
                 resp = self.client.post("/api/aws-setup", json={"role_arn": VALID_ROLE})
             self.assertEqual(resp.status_code, 200)
@@ -224,6 +225,75 @@ class TestEndpoints(unittest.TestCase):
             self.assertEqual(resp.status_code, 400)
             self.assertFalse(root_env.exists())
             self.assertFalse(ui_env.exists())
+
+
+class TestPostSaveCollection(unittest.TestCase):
+    """A successful save fires one background collection (fire-and-forget);
+    its failure must never fail the save itself."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            from fastapi.testclient import TestClient
+            from main import app
+        except Exception as e:
+            raise unittest.SkipTest(f"app non importable ({e})") from e
+        cls.client = TestClient(app)
+
+    def _save(self, collection_mock):
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                patch.object(setup_module, "ENV_FILES", [Path(tmp) / ".env", Path(tmp) / "ui.env"]),
+                patch.object(setup_module.boto3, "Session", return_value=_fake_session()),
+                patch.object(setup_module, "check_aws_reachable", return_value=True),
+                patch.object(setup_module, "_start_background_collection", collection_mock),
+            ):
+                return self.client.post("/api/aws-setup", json={"role_arn": VALID_ROLE})
+
+    def test_save_starts_collection_and_reports_it(self):
+        collection = MagicMock(return_value=True)
+        resp = self._save(collection)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["collection_started"])
+        collection.assert_called_once()
+
+    def test_save_succeeds_when_collection_cannot_start(self):
+        collection = MagicMock(return_value=False)
+        resp = self._save(collection)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["success"])
+        self.assertFalse(resp.json()["collection_started"])
+
+    def test_failed_save_does_not_collect(self):
+        collection = MagicMock(return_value=True)
+        with (
+            patch.object(
+                setup_module.boto3,
+                "Session",
+                return_value=_fake_session(assume_error=Exception("AccessDenied")),
+            ),
+            patch.object(setup_module, "_start_background_collection", collection),
+        ):
+            resp = self.client.post("/api/aws-setup", json={"role_arn": VALID_ROLE})
+        self.assertEqual(resp.status_code, 400)
+        collection.assert_not_called()
+
+    def test_start_background_collection_launches_wasteless_collect(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / "wasteless.sh"
+            script.write_text("#!/bin/bash\n")
+            with (
+                patch.object(setup_module, "ROOT_DIR", Path(tmp)),
+                patch.object(setup_module.subprocess, "Popen") as popen,
+            ):
+                self.assertTrue(setup_module._start_background_collection())
+            popen.assert_called_once()
+            self.assertEqual(popen.call_args.args[0], [str(script), "collect"])
+
+    def test_start_background_collection_without_script(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(setup_module, "ROOT_DIR", Path(tmp)):
+                self.assertFalse(setup_module._start_background_collection())
 
 
 class TestWriteEnvFiles(unittest.TestCase):
