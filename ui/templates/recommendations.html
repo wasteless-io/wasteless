@@ -496,7 +496,7 @@
 {% set filters_active = min_savings > 0 or min_confidence > 0 %}
 <div class="card mt-1" style="padding: 2.5rem; text-align: center;">
     {% if filters_active %}
-        <div style="font-size: 2rem; margin-bottom: 0.75rem;">🔍</div>
+        <div style="margin-bottom: 0.75rem; color: var(--gray-400);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
         <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations match your filters</p>
         <p class="text-muted" style="margin-bottom: 1.25rem; font-size: 0.9rem;">Try relaxing the filters to see more results.</p>
         <a href="/recommendations" class="btn btn-outline" style="padding: 0.4rem 1rem;">Reset filters</a>
@@ -556,6 +556,9 @@
     let currentTab = 'ec2';
 
     const ALL_TABS = ['ec2', 'ebs', 'eip', 'snap', 'other'];
+    // 'ebs' (delete_volume, snapshot-first) and 'other' (gp2 migrations,
+    // NAT gateways, load balancers) have automated remediators
+    const AUTOMATED_TABS = ['ec2', 'ebs', 'other'];
 
     function switchTab(tab) {
         currentTab = tab;
@@ -587,9 +590,7 @@
             }
         });
         // Show automated vs manual action bar
-        // 'ebs' (delete_volume, snapshot-first) and 'other' (gp2 migrations,
-        // NAT gateways, load balancers) have automated remediators
-        const isAutomated = tab === 'ec2' || tab === 'ebs' || tab === 'other';
+        const isAutomated = AUTOMATED_TABS.includes(tab);
         document.getElementById('actions-automated').style.display = isAutomated ? 'flex' : 'none';
         document.getElementById('actions-manual').style.display    = isAutomated ? 'none' : 'flex';
 
@@ -612,7 +613,10 @@
 
     function updateSelectedCount() {
         const count = document.querySelectorAll('.rec-checkbox-' + currentTab + ':checked').length;
-        if (currentTab === 'ec2') {
+        // Update the action bar this tab actually shows (see switchTab):
+        // keying on 'ec2' left the automated bar's counter and buttons
+        // frozen on the EBS and Other tabs, which display that same bar.
+        if (AUTOMATED_TABS.includes(currentTab)) {
             document.getElementById('selectedCount').textContent = count + ' selected';
             const approveBtn = document.getElementById('approveBtn');
             const rejectBtn  = document.getElementById('rejectBtn');
@@ -633,7 +637,10 @@
     }
 
     function getSelectedIds() {
-        const checkboxes = document.querySelectorAll('.rec-checkbox:checked');
+        // Scoped to the visible tab: switching tabs keeps row checkboxes
+        // checked, and the counter only reflects the current tab — an
+        // unscoped query would silently submit selections from other tabs.
+        const checkboxes = document.querySelectorAll('.rec-checkbox-' + currentTab + ':checked');
         return Array.from(checkboxes).map(cb => parseInt(cb.value));
     }
 
@@ -899,6 +906,9 @@
             btn.disabled = false;
         }
     }
+
+    // Initial state: action buttons stay disabled until a row is selected
+    updateSelectedCount();
 </script>
 <style>
     @keyframes spin {

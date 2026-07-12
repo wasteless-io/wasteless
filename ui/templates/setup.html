@@ -184,7 +184,7 @@ async function setupTest() {
     const data = await setupCall('/api/aws-setup/test', 'Testing…');
     if (data) {
         document.getElementById('setup-result').textContent =
-            '✓ Connected as ' + data.identity + (data.role_assumed ? ' — role assumed' : '');
+            'Connected as ' + data.identity + (data.role_assumed ? ' — role assumed' : '');
     }
 }
 
@@ -192,9 +192,9 @@ async function setupSave() {
     const data = await setupCall('/api/aws-setup', 'Testing and saving…');
     if (data) {
         document.getElementById('setup-result').textContent = data.collection_started
-            ? '✓ Saved — account ' + data.account_id + ' connected, first collection running:'
+            ? 'Saved — account ' + data.account_id + ' connected, first collection running:'
               + ' the dashboard fills up within a couple of minutes. Reloading…'
-            : '✓ Saved — account ' + data.account_id + ' connected. Reloading…';
+            : 'Saved — account ' + data.account_id + ' connected. Reloading…';
         setTimeout(() => window.location.reload(), data.collection_started ? 2500 : 1200);
     }
 }
