@@ -51,6 +51,52 @@
     }
     {# fade-up / .fade-in / .main cascade / .fill-bar / count-up: shared,
        defined in base.html #}
+
+    /* KPI values: the characters swell on hover/focus and a small ink
+       tooltip (data-tip) opens above. The scale lives on the inner
+       .kpi-zoom so the tooltip itself does not inflate with the number. */
+    .kpi-hover {
+        position: relative;
+        display: inline-block;
+        cursor: default;
+        outline: none;
+    }
+    .kpi-zoom {
+        display: inline-block;
+        transition: transform 0.18s ease;
+    }
+    .kpi-hover:hover .kpi-zoom,
+    .kpi-hover:focus-visible .kpi-zoom {
+        transform: scale(1.12);
+    }
+    .kpi-hover::after {
+        content: attr(data-tip);
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%) scale(0.95);
+        background: #1d1d1f;
+        color: white;
+        font-size: 0.72rem;
+        font-weight: 400;
+        letter-spacing: 0;
+        line-height: 1.45;
+        text-align: center;
+        width: max-content;
+        max-width: 250px;
+        white-space: normal;
+        padding: 0.45rem 0.65rem;
+        border-radius: 8px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease, transform 0.15s ease;
+        z-index: 10;
+    }
+    .kpi-hover:hover::after,
+    .kpi-hover:focus-visible::after {
+        opacity: 1;
+        transform: translateX(-50%) scale(1);
+    }
 </style>
 {% endblock %}
 
@@ -103,7 +149,7 @@
     <!-- What leaks: current waste + how it moved -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Active detected waste, summed per month — AWS on-demand pricing converted to EUR at a fixed {{ usd_to_eur }} USD&rarr;EUR rate"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></span></span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if savings_trend is none %}
             {# No snapshot from a week ago yet: no trend beats a fake one #}
@@ -123,7 +169,7 @@
     <!-- What awaits a decision -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="{% if (metrics.pending_count or 0) > 0 %}Recoverable every month if you approve the {{ metrics.pending_count }} pending recommendation{{ 's' if metrics.pending_count > 1 }}{% else %}Monthly amount recoverable by approving pending recommendations — none awaiting right now{% endif %}"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€/mo</span></span></span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem;">
             {% if (metrics.pending_count or 0) > 0 %}
             <a href="/recommendations" style="color: var(--warning); font-weight: 600; text-decoration: none;">{{ metrics.pending_count }} action{{ 's' if metrics.pending_count > 1 }} awaiting approval &rarr;</a>
@@ -138,7 +184,7 @@
     <!-- What is proven: the number that justifies the tool -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="Savings verified via AWS Cost Explorer after applied actions — measured, not estimated"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">€</span></span></span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">
             {% if (metrics.savings_realized or 0) > 0 %}verified via Cost Explorer{% else %}appears after your first applied action{% endif %}
         </div>
@@ -149,7 +195,7 @@
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Waste Rate</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};"><span class="countup">{{ "%.1f"|format(metrics.waste_rate) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if metrics.waste_rate > 20 %}var(--danger){% else %}var(--warning){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="Active monthly waste as a share of last full month's AWS spend"><span class="kpi-zoom"><span class="countup">{{ "%.1f"|format(metrics.waste_rate) }}</span> <span style="font-size: 0.85rem; font-weight: 400; color: var(--gray-500);">% of spend</span></span></span></div>
         <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">of last month's spend</div>
     </div>
     {% endif %}
