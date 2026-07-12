@@ -23,6 +23,39 @@
         background: var(--gray-100);
         z-index: 1;
     }
+
+    /* Daily Briefing: the AI reads as always-on — pulsing dot on the
+       chip, shimmering status line while it writes, prose fades in. */
+    @keyframes ai-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+    .ai-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #d97706;
+        animation: ai-pulse 1.8s ease-in-out infinite;
+        flex-shrink: 0;
+    }
+    .thinking {
+        background: linear-gradient(90deg, #86868b 0%, #1d1d1f 50%, #86868b 100%);
+        background-size: 200% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: shimmer 1.8s linear infinite;
+    }
+    @keyframes shimmer {
+        to { background-position: -200% 0; }
+    }
+    .fade-in {
+        animation: fade-up 0.4s ease both;
+    }
+    @keyframes fade-up {
+        from { opacity: 0; transform: translateY(3px); }
+        to { opacity: 1; transform: none; }
+    }
 </style>
 {% endblock %}
 
@@ -134,15 +167,15 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
             Daily Briefing
-            <span style="font-size: 0.65rem; font-weight: 600; color: #92400e; background: rgba(180,83,9,0.08); border-radius: 3px; padding: 0.1rem 0.45rem; text-transform: uppercase; letter-spacing: 0.05em;">AI</span>
+            <span style="font-size: 0.65rem; font-weight: 600; color: #92400e; background: rgba(180,83,9,0.08); border-radius: 3px; padding: 0.1rem 0.45rem; text-transform: uppercase; letter-spacing: 0.05em; display: inline-flex; align-items: center; gap: 0.3rem;"><span class="ai-dot"></span>AI</span>
         </h3>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
             <span id="briefing-meta" style="font-size: 0.72rem; color: var(--gray-400);"></span>
-            <button id="briefing-refresh" onclick="loadBriefing(true)" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.72rem; display: none;">Refresh</button>
+            <button id="briefing-refresh" onclick="loadBriefing(true)" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.72rem; display: none;">Generate</button>
         </div>
     </div>
     <div id="briefing-body" style="font-size: 0.87rem; line-height: 1.55; color: var(--gray-700);">
-        <span style="color: var(--gray-400);">Generating today's briefing…</span>
+        <span class="thinking">Analyzing your infrastructure…</span>
     </div>
     <div style="font-size: 0.72rem; color: var(--gray-400); margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100);">
         The AI comments the numbers — the numbers themselves are always computed from the database. AI can make mistakes: double-check any figure before acting on it.
@@ -268,14 +301,40 @@
 <script>
 // Daily briefing: fetched async so the page never waits for the LLM.
 // Cache miss = one generation (up to ~30s); afterwards it's instant.
+
+// While the LLM writes, a shimmering status line cycles through what the
+// briefing actually does — cosmetic pacing, the real work is server-side.
+const THINKING_STEPS = [
+    'Analyzing your infrastructure…',
+    'Reading active waste and trends…',
+    'Comparing with last week…',
+    'Writing today\'s briefing…'
+];
+let thinkingTimer = null;
+
+function startThinking(body) {
+    let i = 0;
+    body.innerHTML = '<span class="thinking" id="thinking-text">' + THINKING_STEPS[0] + '</span>';
+    clearInterval(thinkingTimer);
+    thinkingTimer = setInterval(() => {
+        i = (i + 1) % THINKING_STEPS.length;
+        const el = document.getElementById('thinking-text');
+        if (el) el.textContent = THINKING_STEPS[i];
+    }, 2200);
+}
+
+function stopThinking() {
+    clearInterval(thinkingTimer);
+    thinkingTimer = null;
+}
+
 async function loadBriefing(refresh) {
     const body = document.getElementById('briefing-body');
     const meta = document.getElementById('briefing-meta');
     const btn = document.getElementById('briefing-refresh');
     btn.disabled = true;
-    if (refresh) {
-        body.innerHTML = '<span style="color: var(--gray-400);">Regenerating…</span>';
-    }
+    btn.textContent = 'Generating…';
+    startThinking(body);
     try {
         const res = await fetch('/api/briefing/today' + (refresh ? '?refresh=1' : ''));
         const data = res.ok ? await res.json() : {};
@@ -284,6 +343,7 @@ async function loadBriefing(refresh) {
             document.getElementById('briefing-card').style.display = 'none';
             return;
         }
+        stopThinking();
         body.textContent = '';
         // Plain text from the model: blank-line-separated paragraphs.
         // Only the first shows by default — the numbers above lead, the
@@ -293,6 +353,8 @@ async function loadBriefing(refresh) {
             const p = document.createElement('p');
             p.textContent = para;
             p.style.margin = i === 0 ? '0' : '0.5rem 0 0';
+            p.classList.add('fade-in');
+            p.style.animationDelay = (i * 70) + 'ms';
             if (i > 0) {
                 p.dataset.briefingExtra = '1';
                 p.style.display = 'none';
@@ -323,7 +385,9 @@ async function loadBriefing(refresh) {
     } catch (err) {
         document.getElementById('briefing-card').style.display = 'none';
     } finally {
+        stopThinking();
         btn.disabled = false;
+        btn.textContent = 'Generate';
     }
 }
 loadBriefing(false);
