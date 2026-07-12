@@ -4,22 +4,24 @@
 
 {% block content %}
 <!-- Hero Section -->
-<div class="card mb-1" style="padding: 1.25rem 1.5rem; background: var(--gray-800); border-color: var(--gray-800); color: white;">
+{# Same plane as the sidebar's active pill (#efede8) — the hero belongs
+   to the chrome, not to the data #}
+<div class="card mb-1" style="padding: 1.25rem 1.5rem; background: #efede8; border-color: #efede8; color: #1d1d1f;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: white; font-weight: 700;">Waste Overview</h1>
-            <p style="margin: 0; opacity: 0.7; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+            <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: #1d1d1f; font-weight: 700;">Waste Overview</h1>
+            <p style="margin: 0; color: #52514e; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
                 {% if last_sync %}
                     {% set now = now() if now is defined else last_sync %}
-                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #4ade80;"></span>
+                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #22c55e;"></span>
                     Last sync: {{ last_sync.strftime('%d %b, %H:%M') }}
                 {% else %}
-                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #fbbf24;"></span>
-                    No data — run <code style="background: rgba(255,255,255,0.15); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">wasteless collect</code>
+                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b;"></span>
+                    No data — run <code style="background: rgba(0,0,0,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">wasteless collect</code>
                 {% endif %}
             </p>
         </div>
-        <a href="/recommendations" class="btn" style="background: white; color: var(--primary); padding: 0.5rem 1.25rem; font-weight: 600;">
+        <a href="/recommendations" class="btn" style="background: white; border: 1px solid rgba(0,0,0,0.08); color: var(--primary); padding: 0.5rem 1.25rem; font-weight: 600;">
             Review Recommendations {% if (metrics.pending_count or 0) > 0 %}<span style="background: var(--warning); color: white; border-radius: 10px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.4rem;">{{ metrics.pending_count }}</span>{% endif %}
         </a>
     </div>
