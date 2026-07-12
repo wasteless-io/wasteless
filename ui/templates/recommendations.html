@@ -670,12 +670,22 @@
             // Red toast as soon as one action failed; note manual approvals
             const manualCount = response.results.filter(r => r.success && r.manual).length;
             const scheduledCount = response.results.filter(r => r.success && r.scheduled).length;
+            const failures = response.results.filter(r => !r.success && r.error);
             let msg = successCount + '/' + ids.length + ' actions completed successfully!';
             if (manualCount > 0) {
                 msg += ' (' + manualCount + ' approved — execute manually on AWS)';
             }
             if (scheduledCount > 0) {
                 msg += ' (' + scheduledCount + ' scheduled — grace period, cancellable from this page)';
+            }
+            // The error text carries the fix (which switch to enable, which
+            // safeguard refused): showing only the count buried it in the
+            // browser console. First error in full, the rest by count.
+            if (failures.length > 0) {
+                msg += ' — ' + failures[0].error;
+                if (failures.length > 1) {
+                    msg += ' (+' + (failures.length - 1) + ' more, see console)';
+                }
             }
             showToast(msg, successCount === ids.length ? 'success' : 'error');
             if (scheduledCount > 0) {
