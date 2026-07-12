@@ -215,30 +215,30 @@
 <div class="grid grid-4 mb-1 no-print">
     <div class="card">
         <div class="card-title">Waste detected (period)</div>
-        <div class="card-value"><span class="countup">€{{ "%.2f"|format(report.new_waste.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
+        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="New waste detected between {{ report.period.start }} and {{ report.period.end }} — monthly rate at detection time"><span class="kpi-zoom"><span class="countup">€{{ "%.2f"|format(report.new_waste.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
         <div class="card-delta">{{ report.new_waste.count }} resource(s)</div>
     </div>
     <div class="card">
         {% if report.pending.scope == 'snapshot' %}
         <div class="card-title">Recommendations <span class="badge badge-info">live</span></div>
-        <div class="card-value"><span class="countup">€{{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
+        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Live view — what is pending approval right now, not a period total · recoverable every month if approved"><span class="kpi-zoom"><span class="countup">€{{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
         <div class="card-delta">{{ report.pending.count }} pending{% if report.pending.oldest_days is not none and report.pending.count > 0 %} · oldest {{ report.pending.oldest_days }}d{% endif %}</div>
         {% else %}
         <div class="card-title">Recommendations created</div>
-        <div class="card-value"><span class="countup">€{{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></div>
+        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Recommendations created during this period, at their estimated monthly savings"><span class="kpi-zoom"><span class="countup">€{{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
         <div class="card-delta-neutral">{{ report.pending.count }} in the period</div>
         {% endif %}
     </div>
     <div class="card">
         <div class="card-title">Actions executed</div>
-        <div class="card-value"><span class="countup">{{ report.actions.succeeded }}</span></div>
+        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Successful executions in the period{% if report.actions.failed > 0 %} · {{ report.actions.failed }} failed{% endif %} · {{ report.actions.dry_run }} dry-run simulation{{ 's' if report.actions.dry_run != 1 }} (no AWS change)"><span class="kpi-zoom"><span class="countup">{{ report.actions.succeeded }}</span></span></span></div>
         <div class="card-delta-neutral">
             {% if report.actions.failed > 0 %}<span class="text-danger">{{ report.actions.failed }} failed</span> · {% endif %}{{ report.actions.dry_run }} dry-run
         </div>
     </div>
     <div class="card">
         <div class="card-title">Savings verified</div>
-        <div class="card-value"><span class="countup">€{{ "%.2f"|format(report.verified_savings_eur) }}</span></div>
+        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Verified via AWS Cost Explorer after applied actions — measured, not estimated"><span class="kpi-zoom"><span class="countup">€{{ "%.2f"|format(report.verified_savings_eur) }}</span></span></span></div>
         <div class="card-delta">via Cost Explorer</div>
     </div>
 </div>
