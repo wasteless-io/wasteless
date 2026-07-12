@@ -364,7 +364,13 @@ class Safeguards:
         try:
             # Check 1: Auto-remediation enabled
             if not self.is_auto_remediation_enabled():
-                results["reason"] = "Auto-remediation disabled globally"
+                # Message affiche a l'utilisateur : nommer l'interrupteur et
+                # ou l'activer, pas seulement constater le refus.
+                results["reason"] = (
+                    "Auto-remediation is disabled — enable it in Settings > "
+                    "Automated actions (auto_remediation.enabled in "
+                    "config/remediation.yaml), then approve again"
+                )
                 results["checks_failed"].append("global_enabled")
                 return results
 
