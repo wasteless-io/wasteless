@@ -82,13 +82,19 @@
         <label style="font-size: 0.85rem;">External ID <span class="text-muted">(optional)</span>
             <input class="form-input" id="setup-external-id" placeholder="">
         </label>
-        <label style="font-size: 0.85rem;">Access key ID <span class="text-muted">(source credentials; empty = use ~/.aws)</span>
+        <label style="font-size: 0.85rem;">Access key ID <span class="text-muted">(optional &mdash; leave empty if this machine already has AWS credentials, e.g. via <code>aws configure</code>)</span>
             <input class="form-input" id="setup-access-key" autocomplete="off" placeholder="AKIA...">
         </label>
-        <label style="font-size: 0.85rem;">Secret access key
+        <label style="font-size: 0.85rem;">Secret access key <span class="text-muted">(optional &mdash; goes with the access key ID)</span>
             <input class="form-input" id="setup-secret-key" type="password" autocomplete="off" placeholder="{{ 'saved — leave empty to keep' if has_access_keys else '' }}">
         </label>
     </div>
+    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
+        With role ARNs set, the access keys are only the <em>source</em> identity used to
+        assume the wasteless roles &mdash; the permissions come from the roles, not the keys.
+        Fill them only if <strong>Test connection</strong> reports
+        <code>Unable to locate credentials</code>.
+    </p>
     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
         <button class="btn btn-outline" onclick="setupTest()">Test connection</button>
         <button class="btn btn-primary" onclick="setupSave()">Test &amp; save</button>
