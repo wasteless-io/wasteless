@@ -839,8 +839,9 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
     echo "    1) Les roles sont crees, j'ai leurs ARN sous la main -> je les colle maintenant"
     echo "       (recommande si vous avez deja suivi docs/CTO_QUICKSTART.md)"
     echo "    2) Pas encore -> terminer l'installation d'abord. Le navigateur s'ouvrira"
-    echo "       sur le guide de connexion (/setup) : tout se fait ensuite en quelques clics,"
-    echo "       sans revenir au terminal. C'est le choix par defaut."
+    echo "       sur le guide de connexion (/setup) : creation des roles en un clic dans"
+    echo "       votre console AWS, champs pre-remplis, sans revenir au terminal."
+    echo "       C'est le choix par defaut."
     echo "    3) Coller des cles d'acces IAM directes (deconseille : wasteless obtient"
     echo "       alors tous les droits de ces cles, au lieu d'etre limite au role read-only)"
     AWS_ROLE_ARN=""
@@ -1217,6 +1218,13 @@ if [ -f "ui/.env" ]; then
         sed_inplace "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" ui/.env
         UPDATED=1
     fi
+    # Account ID toujours reflete, meme quand la connexion AWS est reportee :
+    # la page /setup s'en sert pour pre-remplir les ARNs des roles et le
+    # lien quick-create CloudFormation.
+    if [ -n "${AWS_ACCOUNT_ID:-}" ]; then
+        set_env_kv ui/.env AWS_ACCOUNT_ID "$AWS_ACCOUNT_ID"
+        UPDATED=1
+    fi
     # Si l'utilisateur vient de (re)configurer AWS a l'etape 3, refleter les
     # valeurs dans ui/.env existant — le miroir manuel etait un piege.
     if [ -z "${SKIP_ENV_CONFIG:-}" ] && [ "${AWS_CONFIGURED:-0}" -eq 1 ]; then
@@ -1251,6 +1259,9 @@ WASTELESS_HOST=127.0.0.1
 LOG_LEVEL=INFO
 AWS_REGION=${AWS_REGION:-eu-west-1}
 UIENV
+    # Account ID meme sans connexion configuree : /setup pre-remplit les ARNs
+    # des roles et le lien quick-create CloudFormation avec.
+    [ -n "${AWS_ACCOUNT_ID:-}" ] && echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> ui/.env
     if [ -n "${AWS_ROLE_ARN:-}" ]; then
         echo "AWS_ROLE_ARN=$AWS_ROLE_ARN" >> ui/.env
         [ -n "${AWS_WRITE_ROLE_ARN:-}" ] && echo "AWS_WRITE_ROLE_ARN=$AWS_WRITE_ROLE_ARN" >> ui/.env

@@ -26,7 +26,7 @@ sys.path.insert(0, str(UI_DIR))
 
 from schemas import AwsSetupRequest
 from routes import setup as setup_module
-from routes.setup import _validation_error, _write_env_files
+from routes.setup import _account_id, _validation_error, _write_env_files
 
 VALID_ROLE = "arn:aws:iam::123456789012:role/wasteless-readonly"
 
@@ -82,6 +82,30 @@ class TestValidation(unittest.TestCase):
         self.assertIn("provide", _validation_error(p))
 
 
+class TestAccountId(unittest.TestCase):
+    """_account_id feeds the pre-filled ARNs: env var first, root .env as
+    fallback (installs whose install.sh predates the ui/.env mirror), and
+    anything that is not a 12-digit ID is treated as absent."""
+
+    def test_from_environment(self):
+        with patch.dict(setup_module.os.environ, {"AWS_ACCOUNT_ID": "123456789012"}):
+            self.assertEqual(_account_id(), "123456789012")
+
+    def test_invalid_value_is_ignored(self):
+        with patch.dict(setup_module.os.environ, {"AWS_ACCOUNT_ID": "not-an-id"}):
+            self.assertEqual(_account_id(), "")
+
+    def test_fallback_to_root_env_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / ".env").write_text("DB_HOST=x\nAWS_ACCOUNT_ID=999988887777\n")
+            with (
+                patch.dict(setup_module.os.environ, {}, clear=False),
+                patch.object(setup_module, "ROOT_DIR", Path(tmp)),
+            ):
+                setup_module.os.environ.pop("AWS_ACCOUNT_ID", None)
+                self.assertEqual(_account_id(), "999988887777")
+
+
 class TestEndpoints(unittest.TestCase):
     """FastAPI TestClient against the real app (needs Postgres for the
     import-time pool, same convention as the other route tests)."""
@@ -99,6 +123,47 @@ class TestEndpoints(unittest.TestCase):
         resp = self.client.get("/setup")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("Connect your AWS account", resp.text)
+        # The quick-create link always ships with the page
+        self.assertIn("wasteless-onboarding.yaml", resp.text)
+
+    def test_setup_page_prefills_suggested_arns(self):
+        with patch.dict(setup_module.os.environ, {"AWS_ACCOUNT_ID": "123456789012"}, clear=False):
+            setup_module.os.environ.pop("AWS_ROLE_ARN", None)
+            setup_module.os.environ.pop("AWS_WRITE_ROLE_ARN", None)
+            resp = self.client.get("/setup")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("arn:aws:iam::123456789012:role/wasteless-readonly", resp.text)
+        self.assertIn("arn:aws:iam::123456789012:role/wasteless-remediation", resp.text)
+
+    def test_test_endpoint_validates_write_role(self):
+        """A pre-filled remediation ARN that cannot be assumed must fail the
+        test — saving it silently would break remediation much later."""
+
+        def assume(RoleArn, **kwargs):
+            if RoleArn.endswith("-remediation"):
+                raise Exception("AccessDenied: wasteless-remediation does not exist")
+            return {}
+
+        session = _fake_session()
+        session.client.return_value.assume_role.side_effect = assume
+        write_arn = "arn:aws:iam::123456789012:role/wasteless-remediation"
+        with patch.object(setup_module.boto3, "Session", return_value=session):
+            resp = self.client.post(
+                "/api/aws-setup/test",
+                json={"role_arn": VALID_ROLE, "write_role_arn": write_arn},
+            )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("wasteless-remediation", resp.json()["error"])
+
+    def test_test_endpoint_write_role_success(self):
+        write_arn = "arn:aws:iam::123456789012:role/wasteless-remediation"
+        with patch.object(setup_module.boto3, "Session", return_value=_fake_session()):
+            resp = self.client.post(
+                "/api/aws-setup/test",
+                json={"role_arn": VALID_ROLE, "write_role_arn": write_arn},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["write_role_assumed"], write_arn)
 
     def test_test_endpoint_success(self):
         with patch.object(setup_module.boto3, "Session", return_value=_fake_session()):
