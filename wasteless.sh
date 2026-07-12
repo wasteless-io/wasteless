@@ -132,9 +132,13 @@ _start() {
         LANDING_URL="http://localhost:$PORT/setup"
     fi
 
-    # Already running?
+    # Already running? On ouvre quand meme le navigateur : ce chemin est
+    # atteint quand l'utilisateur relance `wasteless` (ou re-execute
+    # install.sh) pendant que le serveur tourne — imprimer l'URL sans
+    # l'ouvrir laissait l'utilisateur la recopier a la main.
     if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
         echo -e "${GREEN}WasteLess is already running → http://localhost:$PORT${NC}"
+        _open_browser "$LANDING_URL"
         exit 0
     fi
 
