@@ -197,6 +197,33 @@ def home(request: Request, conn=Depends(get_db)):
     )
     aws_spend_30d_usd = float(spend_row["spend_usd"]) if spend_row else 0.0
 
+    # Monthly average over ALL collected history (rows accumulate beyond
+    # the 30-day collection window as days pass): daily average scaled to
+    # a month, same 365/12 convention as everywhere else. Feeds the
+    # above/below-average arrow next to the AWS Spend value — only shown
+    # once the delta is meaningful (>1%), so the early weeks (history ≈
+    # the displayed window, delta mechanically ~0) show no arrow.
+    aws_spend_vs_avg = None
+    aws_spend_avg_eur = None
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
+                                 ELSE cost END), 0) as total_eur,
+               MAX(usage_date) - MIN(usage_date) + 1 as days_covered
+        FROM cloud_costs_raw
+    """,
+        (USD_TO_EUR,),
+    )
+    avg_row = cursor.fetchone()
+    if avg_row and avg_row["days_covered"] and aws_spend_30d_eur is not None:
+        aws_spend_avg_eur = float(avg_row["total_eur"]) / avg_row["days_covered"] * DAYS_PER_MONTH
+        if aws_spend_avg_eur > 0:
+            delta_pct = (aws_spend_30d_eur - aws_spend_avg_eur) / aws_spend_avg_eur
+            if delta_pct > 0.01:
+                aws_spend_vs_avg = "above"
+            elif delta_pct < -0.01:
+                aws_spend_vs_avg = "below"
+
     cursor.close()
 
     system_health = {
@@ -223,5 +250,7 @@ def home(request: Request, conn=Depends(get_db)):
             "savings_trend_pct": savings_trend_pct,
             "aws_spend_30d_eur": aws_spend_30d_eur,
             "aws_spend_30d_usd": aws_spend_30d_usd,
+            "aws_spend_avg_eur": aws_spend_avg_eur,
+            "aws_spend_vs_avg": aws_spend_vs_avg,
         },
     )
