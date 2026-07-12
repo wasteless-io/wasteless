@@ -18,18 +18,49 @@ from state import DB_CONFIG, SYNCABLE_STATUSES, _config_manager, _aws_status, ch
 from utils.action_registry import execution_mode
 
 
+def _resolve_vanished(cursor: Any, resource_type: str, ids: List[str]) -> int:
+    """Solde les recommandations dont la ressource n'existe plus. Partage
+    par sync_aws_job et /api/sync-aws — avant cette factorisation, les deux
+    portaient chacun leur copie du meme UPDATE.
+
+    Une reco approved_manual devient 'applied' : l'humain avait valide, la
+    disparition EST l'execution de sa decision (cycle manuel symetrique du
+    cycle automatise). Tout autre statut syncable devient 'obsolete'
+    (ressource evaporee hors process). Retourne le nombre de
+    recommandations resolues (applied + obsolete confondus)."""
+    cursor.execute(
+        """
+        UPDATE recommendations r
+        SET status = CASE WHEN r.status = 'approved_manual'
+                          THEN 'applied' ELSE 'obsolete' END,
+            applied_at = NOW()
+        FROM waste_detected w
+        WHERE r.waste_id = w.id
+        AND w.resource_type = %s
+        AND w.resource_id = ANY(%s)
+        AND r.status = ANY(%s)
+    """,
+        (resource_type, ids, list(SYNCABLE_STATUSES)),
+    )
+    return cursor.rowcount
+
+
 def _sync_ec2_instance_states(cursor: Any, instance_ids: List[str]) -> Tuple[int, int]:
     """Reconcile EC2 recommendations against live instance state.
 
     A stop_instance/terminate_instance recommendation whose instance was
     already stopped or terminated outside wasteless (AWS console, another
-    tool) is obsolete just like a vanished resource — retrying it forever
+    tool) is resolved just like a vanished resource — retrying it forever
     would never resolve it. Shared by sync_aws_job (every 5 min) and the
     manual /api/sync-aws button so both resolve the same cases; this used
     to be manual-button-only, so a stopped instance behind a 'scheduled'
     or 'rejected' recommendation never cleared until someone clicked sync.
 
-    Returns (synced_count, obsolete_count).
+    Resolution: 'applied' when the recommendation was approved_manual (the
+    human decided, then executed it themselves), 'obsolete' otherwise
+    (changed outside the process) — same rule as _resolve_vanished.
+
+    Returns (synced_count, resolved_count).
     """
     from utils.aws_clients import get_client
 
@@ -60,7 +91,9 @@ def _sync_ec2_instance_states(cursor: Any, instance_ids: List[str]) -> Tuple[int
             cursor.execute(
                 """
                 UPDATE recommendations r
-                SET status = 'obsolete', applied_at = NOW()
+                SET status = CASE WHEN r.status = 'approved_manual'
+                                  THEN 'applied' ELSE 'obsolete' END,
+                    applied_at = NOW()
                 FROM waste_detected w
                 WHERE r.waste_id = w.id
                 AND w.resource_id = %s
@@ -93,7 +126,9 @@ def _sync_ec2_instance_states(cursor: Any, instance_ids: List[str]) -> Tuple[int
                 cursor.execute(
                     """
                     UPDATE recommendations
-                    SET status = 'obsolete', applied_at = NOW()
+                    SET status = CASE WHEN status = 'approved_manual'
+                                      THEN 'applied' ELSE 'obsolete' END,
+                        applied_at = NOW()
                     WHERE id = %s
                 """,
                     (rec["id"],),
@@ -157,30 +192,18 @@ def sync_aws_job() -> None:
             instance_ids = pending.pop("ec2_instance", [])
             vanished = find_vanished_resources(pending)
 
-            obsolete_count = 0
+            resolved_count = 0
             for resource_type, ids in vanished.items():
-                cursor.execute(
-                    """
-                    UPDATE recommendations r
-                    SET status = 'obsolete', applied_at = NOW()
-                    FROM waste_detected w
-                    WHERE r.waste_id = w.id
-                    AND w.resource_type = %s
-                    AND w.resource_id = ANY(%s)
-                    AND r.status = ANY(%s)
-                """,
-                    (resource_type, ids, list(SYNCABLE_STATUSES)),
-                )
-                obsolete_count += cursor.rowcount
+                resolved_count += _resolve_vanished(cursor, resource_type, ids)
 
             if instance_ids:
-                _, ec2_obsolete = _sync_ec2_instance_states(cursor, instance_ids)
-                obsolete_count += ec2_obsolete
+                _, ec2_resolved = _sync_ec2_instance_states(cursor, instance_ids)
+                resolved_count += ec2_resolved
 
             conn.commit()
 
-            if obsolete_count > 0:
-                print(f"Auto-sync: marked {obsolete_count} recommendations as obsolete")
+            if resolved_count > 0:
+                print(f"Auto-sync: resolved {resolved_count} recommendations (applied/obsolete)")
 
     except Exception as e:
         print(f"Auto-sync error: {e}")
