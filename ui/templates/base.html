@@ -133,6 +133,39 @@
             height: 22px;
         }
 
+        /* Wordmark: links back to Overview. Two per-letter effects share
+           the same nth-child stagger — an entrance wave at load
+           (animation), and on hover a lift+ember wave that rolls in and
+           rolls back out in reverse (transition-delay, so un-hovering
+           replays the wave backwards instead of snapping). */
+        .logo-mark {
+            display: inline-flex;
+            color: inherit;
+            text-decoration: none;
+        }
+        .logo-mark span {
+            display: inline-block;
+            animation: logo-wave 0.45s ease both;
+            transition: transform 0.25s ease, color 0.25s ease;
+        }
+        .logo-mark:hover span {
+            transform: translateY(-3px);
+            color: #d97706;
+        }
+        .logo-mark span:nth-child(1) { animation-delay: 0ms;   transition-delay: 0ms; }
+        .logo-mark span:nth-child(2) { animation-delay: 40ms;  transition-delay: 35ms; }
+        .logo-mark span:nth-child(3) { animation-delay: 80ms;  transition-delay: 70ms; }
+        .logo-mark span:nth-child(4) { animation-delay: 120ms; transition-delay: 105ms; }
+        .logo-mark span:nth-child(5) { animation-delay: 160ms; transition-delay: 140ms; }
+        .logo-mark span:nth-child(6) { animation-delay: 200ms; transition-delay: 175ms; }
+        .logo-mark span:nth-child(7) { animation-delay: 240ms; transition-delay: 210ms; }
+        .logo-mark span:nth-child(8) { animation-delay: 280ms; transition-delay: 245ms; }
+        .logo-mark span:nth-child(9) { animation-delay: 320ms; transition-delay: 280ms; }
+        @keyframes logo-wave {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: none; }
+        }
+
         /* Execution-mode card (replaces the old pill) */
         .mode-card {
             background: white;
@@ -689,7 +722,7 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo" style="justify-content: space-between;">
-                    Wasteless
+                    <a href="/" class="logo-mark" aria-label="Wasteless — back to overview"><span>W</span><span>a</span><span>s</span><span>t</span><span>e</span><span>l</span><span>e</span><span>s</span><span>s</span></a>
                     <button type="button" id="notif-bell" class="notif-bell" aria-label="Notifications — recommendations awaiting review" onclick="toggleNotifPopover(event)">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
                         <span class="notif-badge js-pending-badge" style="display: none;">0</span>
