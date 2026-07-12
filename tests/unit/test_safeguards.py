@@ -468,7 +468,11 @@ class TestValidateAll:
         assert result["safe_to_proceed"] is False
         assert result["checks_passed"] == []
         assert result["checks_failed"] == ["global_enabled"]
-        assert result["reason"] == "Auto-remediation disabled globally"
+        # Le message doit rester actionnable : nommer l'interrupteur et le
+        # chemin pour l'activer, pas seulement constater le refus.
+        assert "Auto-remediation is disabled" in result["reason"]
+        assert "Settings" in result["reason"]
+        assert "auto_remediation.enabled" in result["reason"]
 
     def test_whitelisted_short_circuits_before_age_confidence_idle(self):
         sg = self._safeguards(

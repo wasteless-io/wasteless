@@ -202,7 +202,15 @@ class ResourceRemediator:
             self.safeguards.check_confidence_score(confidence)
             self.safeguards.check_schedule()
             if not self.dry_run and not self.safeguards.is_auto_remediation_enabled():
-                raise SafeguardException("Auto-remediation is disabled (dry-run only)")
+                # Ce message remonte tel quel dans l'UI : il doit nommer
+                # l'interrupteur ET où l'activer — c'est le 3e kill-switch
+                # (avec le dry-run UI et le delai de grace) et le seul que
+                # l'utilisateur ne voit pas au moment d'approuver.
+                raise SafeguardException(
+                    "Auto-remediation is disabled — enable it in Settings > "
+                    "Automated actions (auto_remediation.enabled in "
+                    "config/remediation.yaml), then approve again"
+                )
 
             action_log_id = self._log_action(
                 recommendation_id,
