@@ -217,9 +217,9 @@
 
     @media (max-width: 1024px) {
         .top-grid, .charts-grid { grid-template-columns: 1fr; }
-        /* .grid-3 wraps to 2 columns here (base.html): keep the divider
-           only where a left neighbour actually remains */
-        .grid-3 .kpi:nth-child(odd) { border-left: none; }
+        /* .grid-3/.grid-4 wrap to 2 columns here (base.html): keep the
+           divider only where a left neighbour actually remains */
+        .grid-3 .kpi:nth-child(odd), .grid-4 .kpi:nth-child(odd) { border-left: none; }
     }
     @media (max-width: 768px) {
         .kpi + .kpi {
@@ -257,7 +257,7 @@
 <div class="top-grid">
 <div class="card compact">
     <div class="section-label">Financial Overview</div>
-    <div class="grid grid-3">
+    <div class="grid grid-4">
 
         <!-- Monthly Waste -->
         <div class="kpi">
@@ -298,6 +298,20 @@
             <div class="kpi-value is-muted">—</div>
             <div class="kpi-label">Pending Savings</div>
             <div class="kpi-sub">Nothing awaiting approval</div>
+            {% endif %}
+        </div>
+
+        <!-- AWS Spend (last full month, Cost Explorer) — the whole bill,
+             so waste and savings read against their real denominator -->
+        <div class="kpi">
+            {% if aws_spend_eur is not none %}
+            <div class="kpi-value"><span class="kpi-hover" tabindex="0" data-tip="Total AWS bill for {{ aws_spend_month }} (last full month), from Cost Explorer — collected daily, converted at the fixed {{ usd_to_eur }} USD&rarr;EUR rate"><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></span></div>
+            <div class="kpi-label">AWS Spend</div>
+            <div class="kpi-sub">{{ aws_spend_month }} · whole bill, not just waste</div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">AWS Spend</div>
+            <div class="kpi-sub">Appears after the first daily Cost Explorer collection</div>
             {% endif %}
         </div>
 
