@@ -51,6 +51,35 @@
     }
     {# fade-up / .fade-in / .main cascade / .fill-bar / count-up /
        .kpi-hover tooltips: shared, defined in base.html #}
+
+    /* Notification badge on the hero CTA: pending recommendations count,
+       pinned to the button's corner and refreshed live (see extra_js). */
+    .reco-badge {
+        position: absolute;
+        top: -7px;
+        right: -7px;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: var(--warning);
+        color: white;
+        border: 2px solid white;
+        font-size: 0.7rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+    .badge-pop {
+        animation: badge-pop 0.35s ease;
+    }
+    @keyframes badge-pop {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.35); }
+        100% { transform: scale(1); }
+    }
 </style>
 {% endblock %}
 
@@ -89,8 +118,9 @@
                 </span>
             </p>
         </div>
-        <a href="/recommendations" class="btn" style="background: white; border: 1px solid rgba(0,0,0,0.08); color: var(--primary); padding: 0.5rem 1.25rem; font-weight: 600;">
-            Review Recommendations {% if (metrics.pending_count or 0) > 0 %}<span style="background: var(--warning); color: white; border-radius: 10px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.4rem;">{{ metrics.pending_count }}</span>{% endif %}
+        <a href="/recommendations" class="btn" style="position: relative; background: white; border: 1px solid rgba(0,0,0,0.08); color: var(--primary); padding: 0.5rem 1.25rem; font-weight: 600;">
+            Review Recommendations
+            <span id="reco-badge" class="reco-badge" {% if not (metrics.pending_count or 0) > 0 %}style="display: none;"{% endif %}>{{ metrics.pending_count or 0 }}</span>
         </a>
     </div>
 </div>
@@ -353,6 +383,37 @@
 
 {% block extra_js %}
 <script>
+// Live notification badge on the hero CTA: pending recommendations
+// count, refreshed every 60s from /api/metrics — the 5-min sync job can
+// create or resolve recommendations while the page stays open. A count
+// increase pops the badge (CSS animation, disabled by the global
+// prefers-reduced-motion rule).
+(function () {
+    const badge = document.getElementById('reco-badge');
+    if (!badge) return;
+    let current = parseInt(badge.textContent, 10) || 0;
+    async function refresh() {
+        try {
+            const res = await fetch('/api/metrics');
+            if (!res.ok) return;
+            const data = await res.json();
+            const n = data.pending_count || 0;
+            if (n === current) return;
+            badge.textContent = n;
+            badge.style.display = n > 0 ? 'flex' : 'none';
+            if (n > current) {
+                badge.classList.remove('badge-pop');
+                void badge.offsetWidth; // restart the animation
+                badge.classList.add('badge-pop');
+            }
+            current = n;
+        } catch (e) {
+            // network hiccup: keep the current badge
+        }
+    }
+    setInterval(refresh, 60000);
+})();
+
 // Waste/Services toggle on the breakdown card — both views are rendered
 // server-side, this only switches visibility (same pattern as the
 // Cloud Resources tabs).
