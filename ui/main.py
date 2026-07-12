@@ -106,6 +106,12 @@ app = FastAPI(
 # Mount static files
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
+# Anti-CSRF/DNS-rebinding : les methodes d'ecriture doivent viser un hote de
+# confiance (voir ui/utils/security.py — protection d'attente du token d'auth)
+from utils.security import block_cross_origin_writes
+
+app.middleware("http")(block_cross_origin_writes)
+
 # Live log capture for the /logs debug page (in-memory, nothing persisted)
 from utils.log_buffer import install_capture
 
