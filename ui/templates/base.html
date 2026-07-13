@@ -246,17 +246,44 @@
         .mode-seg-btn.dry.active { color: #256b2d; }
         .mode-seg-btn.prod.active { color: #b91c1c; }
 
+        /* The mode description only exists on hover: a small ink bubble
+           fades in under the control (data-tip carries the current
+           mode's message). Kept narrower than the sidebar so the
+           scroll container can't clip it. */
+        .mode-seg::after {
+            content: attr(data-tip);
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%) translateY(-3px);
+            background: #1d1d1f;
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 500;
+            line-height: 1.4;
+            padding: 0.35rem 0.6rem;
+            border-radius: 7px;
+            width: max-content;
+            max-width: 195px;
+            text-align: center;
+            white-space: normal;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            z-index: 20;
+        }
+
+        .mode-seg:hover::after {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
         /* While the switch is in flight: no double-click, dimmed */
         .mode-seg.switching {
             pointer-events: none;
             opacity: 0.6;
         }
 
-        .mode-card .mode-sub {
-            color: #86868b;
-            font-size: 0.72rem;
-            margin: 5px 2px 0;
-        }
 
         .nav-section {
             flex: 1;
@@ -788,7 +815,8 @@
                    (green), production means real AWS actions (red) — but
                    clickable: pick the other mode to switch. #}
                 <div class="mode-card{% if not get_dry_run() %} prod-card{% endif %}">
-                    <div class="mode-seg{% if not get_dry_run() %} prod{% endif %}" id="mode-seg" role="group" aria-label="Execution mode">
+                    <div class="mode-seg{% if not get_dry_run() %} prod{% endif %}" id="mode-seg" role="group" aria-label="Execution mode"
+                         data-tip="{% if get_dry_run() %}Actions are simulated only{% else %}Real AWS actions enabled{% endif %}">
                         <span class="mode-thumb" aria-hidden="true"></span>
                         <button type="button" class="mode-seg-btn dry{% if get_dry_run() %} active{% endif %}"
                                 aria-pressed="{{ 'true' if get_dry_run() else 'false' }}"
@@ -797,7 +825,6 @@
                                 aria-pressed="{{ 'false' if get_dry_run() else 'true' }}"
                                 onclick="setExecMode(false)">Production</button>
                     </div>
-                    <div class="mode-sub">{% if get_dry_run() %}Actions are simulated only{% else %}Real AWS actions enabled{% endif %}</div>
                 </div>
             </div>
 
