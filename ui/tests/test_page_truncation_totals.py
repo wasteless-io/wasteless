@@ -92,7 +92,7 @@ class TestPageTruncationTotals(unittest.TestCase):
                 dry_run, action_date
             )
             SELECT 'i-trunc-' || g, 'ec2_instance', 'test_trunc_action',
-                   'success', true, NOW()
+                   'success', false, NOW()
             FROM generate_series(1, 105) AS g
         """)
 
