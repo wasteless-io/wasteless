@@ -170,16 +170,32 @@
            both modes stay readable, the active one is highlighted, click
            the other to switch (production always confirms). Same
            /api/config key as the Settings page. */
+        /* The card's outline carries the mode color and breathes: a soft
+           glow swells and fades around the border — green (safe) in
+           dry-run, red in production. Static colored border under
+           prefers-reduced-motion (the glow is an animation). */
         .mode-card {
             background: white;
-            border: 1px solid rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(34, 197, 94, 0.45);
             border-radius: 12px;
             padding: 0.6rem 0.65rem;
             font-size: 0.8rem;
+            animation: mode-glow-dry 2.6s ease-in-out infinite;
         }
 
         .mode-card.prod-card {
-            border-color: rgba(239, 68, 68, 0.35);
+            border-color: rgba(239, 68, 68, 0.5);
+            animation: mode-glow-prod 2.6s ease-in-out infinite;
+        }
+
+        @keyframes mode-glow-dry {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+            50% { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14); }
+        }
+
+        @keyframes mode-glow-prod {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+            50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.16); }
         }
 
         /* The white thumb physically slides between the two positions
