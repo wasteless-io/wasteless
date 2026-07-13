@@ -909,6 +909,16 @@
 
     // Initial state: action buttons stay disabled until a row is selected
     updateSelectedCount();
+
+    // Deep link: /recommendations#tab=eip opens straight on that tab
+    // (used by the notifications popover rows). hashchange covers the
+    // popover being used while already on this page (no reload then).
+    function applyTabHash() {
+        const m = location.hash.match(/^#tab=(\w+)$/);
+        if (m && ALL_TABS.includes(m[1])) switchTab(m[1]);
+    }
+    applyTabHash();
+    window.addEventListener('hashchange', applyTabHash);
 </script>
 <style>
     @keyframes spin {
