@@ -150,18 +150,6 @@
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
         <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="What your idle and orphaned resources cost every month if nothing changes"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span><span class="ring-unit">€</span></span></span></div>
-        <div style="font-size: 0.72rem; margin-top: 0.15rem;">
-            {% if savings_trend is none %}
-            {# No snapshot from a week ago yet: no trend beats a fake one #}
-            {% elif savings_trend > 0.01 %}
-            <span style="color: var(--danger); font-weight: 600;">&#9650; {% if savings_trend_pct is not none %}+{{ "%.1f"|format(savings_trend_pct) }} %{% else %}+{{ "%.2f"|format(savings_trend) }} €{% endif %} vs last week</span> <span style="color: var(--gray-400);">·</span>
-            {% elif savings_trend < -0.01 %}
-            <span style="color: var(--success); font-weight: 600;">&#9660; {% if savings_trend_pct is not none %}{{ "%.1f"|format(savings_trend_pct) }} %{% else %}{{ "%.2f"|format(savings_trend) }} €{% endif %} vs last week</span> <span style="color: var(--gray-400);">·</span>
-            {% else %}
-            <span style="color: var(--gray-500);">stable vs last week</span> <span style="color: var(--gray-400);">·</span>
-            {% endif %}
-            <span style="color: var(--gray-400);">&approx; {{ "%.0f"|format(monthly_cost * 12) }} €/yr{% if (metrics.declined_count or 0) > 0 %} · incl. {{ "%.2f"|format(metrics.declined_monthly) }} €/mo declined after review{% endif %}</span>
-        </div>
     </div>
 
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
@@ -170,13 +158,6 @@
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
         <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="What you recover each month by approving the recommendations awaiting your review"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span><span class="ring-unit">€/mo</span></span></span></div>
-        <div style="font-size: 0.72rem; margin-top: 0.15rem;">
-            {% if (metrics.pending_count or 0) > 0 %}
-            <a href="/recommendations" style="color: var(--warning); font-weight: 600; text-decoration: none;">{{ metrics.pending_count }} action{{ 's' if metrics.pending_count > 1 }} awaiting approval &rarr;</a>
-            {% else %}
-            <span style="color: var(--gray-400);">nothing awaiting approval</span>
-            {% endif %}
-        </div>
     </div>
 
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
@@ -184,10 +165,7 @@
     <!-- What is proven: the number that justifies the tool -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Savings actually measured on your bill after applied actions — verified, not estimated"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span><span class="ring-unit">€</span></span></span></div>
-        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">
-            {% if (metrics.savings_realized or 0) > 0 %}verified via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a>{% else %}appears after your first applied action{% endif %}
-        </div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Savings actually measured on your bill after applied actions, verified rather than estimated"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span><span class="ring-unit">€</span></span></span></div>
     </div>
 
     {# Real AWS bill (Cost Explorer) — only earns a slot once collected.
@@ -196,8 +174,7 @@
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Spend</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><a class="kpi-hover kpi-ring" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Your real AWS bill for the past month, straight from Cost Explorer — click to open the console"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(aws_spend_30d_eur) }}</span><span class="ring-unit">€</span>{% if aws_spend_vs_avg == 'above' %}<span style="font-size: 0.8rem; color: var(--danger); vertical-align: 2px; margin-left: 0.1rem;" aria-hidden="true">&#9650;</span><span class="sr-only">above monthly average</span>{% elif aws_spend_vs_avg == 'below' %}<span style="font-size: 0.8rem; color: var(--success); vertical-align: 2px; margin-left: 0.1rem;" aria-hidden="true">&#9660;</span><span class="sr-only">below monthly average</span>{% endif %}</span></a></div>
-        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">last 30 days · whole bill</div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><a class="kpi-hover kpi-ring" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Your real AWS bill for the past month, straight from Cost Explorer. Click to open the console"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(aws_spend_30d_eur) }}</span><span class="ring-unit">€</span>{% if aws_spend_vs_avg == 'above' %}<span style="font-size: 0.8rem; color: var(--danger); vertical-align: 2px; margin-left: 0.1rem;" aria-hidden="true">&#9650;</span><span class="sr-only">above monthly average</span>{% elif aws_spend_vs_avg == 'below' %}<span style="font-size: 0.8rem; color: var(--success); vertical-align: 2px; margin-left: 0.1rem;" aria-hidden="true">&#9660;</span><span class="sr-only">below monthly average</span>{% endif %}</span></a></div>
     </div>
 
     {# Billed-services count, same source and window as AWS Spend #}
@@ -205,8 +182,7 @@
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Services</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="How many distinct AWS services generated charges this past month — the footprint wasteless watches"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ aws_service_count }}</span></span></span></div>
-        <div style="font-size: 0.72rem; margin-top: 0.15rem; color: var(--gray-400);">billed last 30 days</div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="How many distinct AWS services generated charges this past month, the footprint wasteless watches"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ aws_service_count }}</span></span></span></div>
     </div>
     {% endif %}
     {% endif %}
