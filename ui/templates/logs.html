@@ -36,12 +36,36 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header" style="margin-bottom: 0.75rem;">
-    <h1 style="margin-bottom: 0.25rem;">Logs</h1>
-    <p style="font-size: 0.8rem; color: var(--gray-600, #6b7280); margin: 0;">
-        Live logs of the UI process (in-memory, last 2000 entries, reset on restart).
-        Backend pipeline runs log to their own terminal.
-    </p>
+<div class="page-header" style="margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+    <div>
+        <h1 style="margin-bottom: 0.25rem;">Logs</h1>
+        <p style="font-size: 0.8rem; color: var(--gray-600, #6b7280); margin: 0;">
+            Live logs of the UI process (in-memory, last 2000 entries, reset on restart).
+            Backend pipeline runs log to their own terminal.
+        </p>
+    </div>
+    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; flex-shrink: 0;">
+        {# System-health dots, moved here from the overview header #}
+        <span style="display: flex; align-items: center; gap: 1.1rem; font-size: 0.75rem; color: var(--gray-600); white-space: nowrap;">
+            <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.db %}#22c55e{% else %}#ef4444{% endif %};"></span>
+                DB {% if system_health.db %}Connected{% else %}Unreachable{% endif %}
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.aws == true %}#22c55e{% elif system_health.aws == false %}#ef4444{% else %}#d1d5db{% endif %};"></span>
+                AWS {% if system_health.aws == true %}Reachable{% elif system_health.aws == false %}Unreachable{% else %}Not checked{% endif %}
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.scheduler %}#22c55e{% else %}#ef4444{% endif %};"></span>
+                Scheduler {% if system_health.scheduler %}Active{% else %}Stopped{% endif %}
+            </span>
+        </span>
+        {% if last_scan %}
+        <span style="font-size: 0.75rem; color: var(--gray-500); white-space: nowrap;">
+            Last scan: {{ last_scan|localtime }}
+        </span>
+        {% endif %}
+    </div>
 </div>
 
 <div class="card mb-1 logs-toolbar">

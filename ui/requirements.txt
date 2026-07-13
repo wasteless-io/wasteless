@@ -1,6 +1,7 @@
 # Sources de dependances UI (contraintes >=). Ce qui est installe est
 # ui/requirements.lock (lock epingle). Apres edition, regenerer :
-#   uv pip compile ui/requirements.txt --universal --output-file ui/requirements.lock
+#   uv pip compile ui/requirements.txt --universal --python-version 3.11 --output-file ui/requirements.lock
+# (--python-version 3.11 = plancher du CI, voir requirements.txt racine)
 # FastAPI Web Framework
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
@@ -16,6 +17,12 @@ apscheduler>=3.10.0
 
 # Optional: AWS integration
 boto3>=1.34.0
+
+# AI insights / Daily Briefing — src/core/llm.py:is_enabled() hides every
+# AI feature (briefing card, report narrative, Ask AI) when litellm is not
+# importable. Must stay pinned here: as an optional dep it silently
+# disappeared on venv rebuilds.
+litellm>=1.40
 
 # Optional: error tracking (no-op without SENTRY_DSN, see src/core/observability.py)
 sentry-sdk[fastapi]>=2.64.0

@@ -13,34 +13,61 @@
     .row-action-btn { padding: 0.15rem 0.4rem; border: 1px solid var(--gray-300); border-radius: 4px; background: white; cursor: pointer; color: var(--gray-600); vertical-align: middle; line-height: 0; }
     .row-action-btn + .row-action-btn { margin-left: 0.25rem; }
     .row-action-btn:hover { color: var(--primary); border-color: var(--primary); }
+
+    /* Summary KPIs — same bare style as the current overview dials:
+       label above, number below, thin vertical separators between
+       blocks (no rings). .kpi-hover (base.html) still gives the swell
+       + tooltip. Pushed to the end of the filter row. */
+    .summary-rings { display: flex; align-items: center; gap: 2rem; }
+    .summary-kpi { text-align: center; }
+    .summary-ring-label { text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-500); font-weight: 600; font-size: 0.6rem; margin-bottom: 0.15rem; }
+    .summary-kpi .ring-value { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
+    .summary-kpi .ring-unit { font-size: 0.72rem; font-weight: 400; color: var(--gray-500); margin-left: 0.1rem; }
+    .summary-sep { width: 1px; height: 42px; background: var(--gray-400); }
 </style>
 <div class="page-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
     <h1 style="margin-bottom: 0;">Recommendations</h1>
-    <button type="button" onclick="syncWithAWS()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" id="syncBtn">
-        <span id="syncIcon">&#8635;</span> Sync AWS
-    </button>
+    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
+        <button type="button" onclick="syncWithAWS()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" id="syncBtn">
+            <span id="syncIcon">&#8635;</span> Sync AWS
+        </button>
+        {# Stamped by the 5-min job; a manual click updates it in place
+           from syncWithAWS (the button does not always reload the page).
+           Always rendered so the JS has a target even before the first
+           sync after a server start. #}
+        <span id="lastSyncStamp" style="font-size: 0.7rem; color: var(--gray-400);{% if not aws_sync_at %} display: none;{% endif %}">Last sync: {% if aws_sync_at %}{{ aws_sync_at.strftime('%d %b, %H:%M') }}{% endif %}</span>
+    </div>
 </div>
 
-<!-- Filters + Summary -->
-<div class="card mb-1" style="padding: 0.75rem;">
-    <form method="get" action="/recommendations">
-        <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
-            <div class="form-group" style="margin: 0;">
-                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Min Savings</label>
-                <input type="number" name="min_savings" class="form-input" style="padding: 0.4rem; width: 80px;" value="{{ min_savings }}" min="0" max="1000" step="5">
+<!-- Summary + chat -->
+<div class="card mb-1" style="padding: 0.75rem; border-radius: 0;">
+    <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+        {# Summary KPIs — bare style, same as the overview dials #}
+        <div class="summary-rings">
+            <div class="summary-kpi">
+                <div class="summary-ring-label">Recommendations</div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Total pending recommendations"><span class="kpi-zoom"><span class="countup">{{ total_count }}</span></span></span></div>
             </div>
-            <div class="form-group" style="margin: 0;">
-                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Min Confidence</label>
-                <input type="number" name="min_confidence" class="form-input" style="padding: 0.4rem; width: 70px;" value="{{ min_confidence }}" min="0" max="1" step="0.1">
+            <div class="summary-sep"></div>
+            <div class="summary-kpi">
+                <div class="summary-ring-label">Savings / mo</div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Total estimated monthly savings across these recommendations"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(total_savings) }}</span><span class="ring-unit">€</span></span></span></div>
             </div>
-            <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
-            <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
-                <span><strong class="countup">{{ total_count }}</strong> recommendations</span>
-                <span class="text-success">Savings: <strong class="countup">{{ "%.2f"|format(total_savings) }}</strong> €/mo</span>
-                <span><strong class="countup">{{ "%.0f"|format(avg_confidence * 100) }}%</strong> conf.</span>
+            <div class="summary-sep"></div>
+            <div class="summary-kpi">
+                <div class="summary-ring-label">Avg confidence</div>
+                <div class="ring-value" style="color: {% if avg_confidence >= 0.8 %}var(--success){% elif avg_confidence >= 0.5 %}var(--warning){% else %}var(--danger){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="Average detection confidence across these recommendations"><span class="kpi-zoom"><span class="countup">{{ "%.0f"|format(avg_confidence * 100) }}</span><span class="ring-unit">%</span></span></span></div>
             </div>
         </div>
-    </form>
+
+        {# AI chat over the whole set of pending recommendations — field
+           and Ask button on one line, on the right of the tile #}
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem; flex: 1 1 300px; max-width: 560px;">
+            <input id="estateAskInput" type="text" placeholder="Ask the AI about these recommendations…" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitEstateQuestion();}" style="flex: 1; min-width: 0; padding: 0.5rem 0.7rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.85rem;">
+            <button type="button" id="estateAskBtn" onclick="submitEstateQuestion()" class="btn btn-primary" style="padding: 0.5rem 1rem;">Ask</button>
+        </div>
+    </div>
+    <div id="estateAnswer" style="display: none; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--gray-100); font-size: 0.85rem; color: var(--gray-700); white-space: pre-wrap; line-height: 1.5;"></div>
 </div>
 
 {% if pr_open_recs %}
@@ -152,9 +179,9 @@
 <div class="card" style="padding: 0.75rem;">
     <!-- Tab nav -->
     <div style="display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1rem;">
-        <button id="tab-btn-ec2" onclick="switchTab('ec2')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--primary); margin-bottom: -2px;">
-            <span style="font-size: 0.9rem; font-weight: 600; color: var(--primary);">EC2 Instances <span style="background: var(--primary); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ec2_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--primary); opacity: 0.7; margin-top: 2px;">AUTOMATED</span>
+        <button id="tab-btn-ec2" onclick="switchTab('ec2')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--gray-800); margin-bottom: -2px;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-800);">EC2 Instances <span style="background: var(--gray-800); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ec2_recs|length }}</span></span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-800); opacity: 0.7; margin-top: 2px;">AUTOMATED</span>
         </button>
         <button id="tab-btn-ebs" onclick="switchTab('ebs')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">EBS Volumes <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ebs_recs|length }}</span></span>
@@ -224,7 +251,6 @@
                             <th style="padding: 0.5rem;">Running for</th>
                             <th style="padding: 0.5rem;">Avg CPU</th>
                             <th style="padding: 0.5rem;">Monthly cost</th>
-                            <th style="padding: 0.5rem;">After action</th>
                             <th style="padding: 0.5rem;">Savings</th>
                             <th style="padding: 0.5rem;">Confidence</th>
                         </tr>
@@ -233,7 +259,6 @@
                         {% for rec in ec2_recs %}
                         {% set current_cost = rec.monthly_cost or 0 %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
-                        {% set after_cost = current_cost - savings %}
                         {% set savings_pct = (savings / current_cost * 100) if current_cost > 0 else 100 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" onclick="event.stopPropagation(); updateSelectedCount();"></td>
@@ -254,13 +279,6 @@
                                 <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(current_cost) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
-                            <td style="padding: 0.4rem 0.5rem;">
-                                {% if rec.recommendation_type in ['stop_instance', 'terminate_instance'] %}
-                                <span class="text-success">0.00</span>
-                                {% else %}
-                                <span>{{ "%.2f"|format(after_cost) }}</span>
-                                {% endif %}
-                            </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
@@ -575,10 +593,10 @@
             const badgeSpan  = btn.querySelector(':scope > span:first-child > span');
             const sublabel   = btn.querySelector(':scope > span:last-child');
             if (t === tab) {
-                btn.style.borderBottom = '2px solid var(--primary)';
-                if (labelSpan) labelSpan.style.color = 'var(--primary)';
-                if (badgeSpan) badgeSpan.style.background = 'var(--primary)';
-                if (sublabel)  sublabel.style.color = 'var(--primary)';
+                btn.style.borderBottom = '2px solid var(--gray-800)';
+                if (labelSpan) labelSpan.style.color = 'var(--gray-800)';
+                if (badgeSpan) badgeSpan.style.background = 'var(--gray-800)';
+                if (sublabel)  sublabel.style.color = 'var(--gray-800)';
             } else {
                 btn.style.borderBottom = '2px solid transparent';
                 if (labelSpan) labelSpan.style.color = 'var(--gray-600)';
@@ -814,6 +832,18 @@
         try {
             const response = await api('/api/sync-aws', { method: 'POST' });
 
+            // The sync succeeded, so the server just re-stamped
+            // _aws_status — mirror it here without waiting for a reload
+            // (the no-obsolete branch below doesn't reload the page).
+            const stamp = document.getElementById('lastSyncStamp');
+            if (stamp) {
+                const now = new Date();
+                stamp.textContent = 'Last sync: '
+                    + now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                    + ', ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                stamp.style.display = '';
+            }
+
             if (response.obsolete > 0) {
                 alert(`Sync complete!\n\n${response.obsolete} recommendation(s) marked as obsolete.\n${response.synced} instance(s) updated.\n\nPage will refresh.`);
                 refreshData();
@@ -907,8 +937,44 @@
         }
     }
 
+    // Estate chat (summary tile): one-shot question about ALL pending
+    // recommendations, answered inline under the tile.
+    async function submitEstateQuestion() {
+        const input = document.getElementById('estateAskInput');
+        const question = input.value.trim();
+        if (!question) return;
+        const answerEl = document.getElementById('estateAnswer');
+        const btn = document.getElementById('estateAskBtn');
+        btn.disabled = true;
+        answerEl.style.display = 'block';
+        answerEl.textContent = 'Thinking…';
+        try {
+            const response = await fetch('/api/recommendations/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question })
+            });
+            const data = await response.json();
+            answerEl.textContent = data.answer || data.error || 'No answer available.';
+        } catch (error) {
+            answerEl.textContent = 'Error: ' + error.message;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
     // Initial state: action buttons stay disabled until a row is selected
     updateSelectedCount();
+
+    // Deep link: /recommendations#tab=eip opens straight on that tab
+    // (used by the notifications popover rows). hashchange covers the
+    // popover being used while already on this page (no reload then).
+    function applyTabHash() {
+        const m = location.hash.match(/^#tab=(\w+)$/);
+        if (m && ALL_TABS.includes(m[1])) switchTab(m[1]);
+    }
+    applyTabHash();
+    window.addEventListener('hashchange', applyTabHash);
 </script>
 <style>
     @keyframes spin {

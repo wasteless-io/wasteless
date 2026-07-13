@@ -1,7 +1,9 @@
 # Sources de dependances (contraintes >=, editees a la main). Ce qui est
 # REELLEMENT installe (install.sh + CI) est requirements.lock, un lock epingle
 # et reproductible. Apres toute edition ici, regenerer le lock :
-#   uv pip compile requirements.txt --universal --output-file requirements.lock
+#   uv pip compile requirements.txt --universal --python-version 3.11 --output-file requirements.lock
+# (--python-version 3.11 = plancher du CI ; sans lui uv prend le Python local
+# et le lock peut perdre les forks 3.11 comme numpy/tomli)
 boto3>=1.34.0
 pandas>=2.2.3
 numpy>=1.26.4
@@ -10,9 +12,18 @@ python-dotenv>=1.0.0
 pyyaml>=6.0.1
 click>=8.1.7
 
-# Optional — AI insights on recommendations (any litellm provider).
-# Wasteless works without it; see .env.template (WASTELESS_LLM_MODEL).
-# litellm>=1.40
+# AI insights / Daily Briefing (any litellm provider). The features stay
+# hidden without WASTELESS_LLM_MODEL in .env, but the package is always
+# installed: when it was optional, every venv rebuild silently dropped it
+# and all AI features vanished from the UI without an error anywhere.
+litellm>=1.40
+
+# anyio est transitif (httpx, openai via litellm) mais doit rester aligne
+# avec le lock UI, ou starlette (fastapi) le plafonne a 4.14.1 : la CI
+# installe requirements.lock ET ui/requirements.lock dans le meme env, et
+# deux versions d'anyio y sont irreconciliables. Sans starlette ici, la
+# racine choisirait sinon 4.14.2 toute seule.
+anyio<4.14.2
 
 # Testing
 pytest>=8.0.0
