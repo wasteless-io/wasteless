@@ -11,7 +11,8 @@ import logging
 import os
 import threading
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from psycopg2 import pool as pg_pool
@@ -135,6 +136,24 @@ templates = Jinja2Templates(directory=APP_DIR / "templates")
 
 # Add datetime to template globals for time calculations
 templates.env.globals["now"] = datetime.now
+
+
+# DB timestamps are UTC-naive (Postgres runs in UTC inside Docker); the
+# conversion happens at display time only. Staleness checks stay in SQL,
+# in the same clock that stamped the rows — never compare a converted
+# value against NOW().
+DISPLAY_TZ = ZoneInfo("Europe/Paris")
+
+
+def _localtime(dt, fmt: str = "%d %b, %H:%M") -> str:
+    if dt is None:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(DISPLAY_TZ).strftime(fmt)
+
+
+templates.env.filters["localtime"] = _localtime
 
 # Add config_manager to template globals for mode badge
 from utils.config_manager import ConfigManager
