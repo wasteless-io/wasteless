@@ -22,8 +22,7 @@ def history(
     # Dry-run actions are simulations, not history: they never appear
     # here. NULL dry_run (legacy rows) counts as a real action.
     where_clause = (
-        "WHERE a.action_date >= NOW() - INTERVAL '%s days'"
-        " AND NOT COALESCE(a.dry_run, FALSE)"
+        "WHERE a.action_date >= NOW() - INTERVAL '%s days'" " AND NOT COALESCE(a.dry_run, FALSE)"
     )
     params = [days_back]
 
