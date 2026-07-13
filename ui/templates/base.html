@@ -624,7 +624,7 @@
             left: 252px; /* sidebar width + gap; the sidebar is fixed */
             top: 14px;
             z-index: 1000;
-            width: 270px;
+            width: 340px;
             background: white;
             border: 1px solid var(--hairline);
             border-radius: 12px;
@@ -809,7 +809,7 @@
            clip it. Filled by the shared poller. #}
         <div id="notif-popover" class="notif-popover" role="dialog" aria-label="Notifications">
             <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem;">Notifications</div>
-            <div id="notif-body" style="font-size: 0.82rem; color: var(--ink-secondary); line-height: 1.5;">Loading…</div>
+            <div id="notif-body" style="font-size: 0.82rem; color: var(--ink-secondary); line-height: 1.5; white-space: nowrap;">Loading…</div>
             <div id="notif-list" style="margin-top: 0.5rem;"></div>
             <a href="/recommendations" id="notif-link" style="display: none; margin-top: 0.6rem; font-size: 0.82rem; font-weight: 600; color: var(--primary); text-decoration: none;">Review recommendations &rarr;</a>
         </div>
@@ -921,10 +921,16 @@
                 const res = await fetch('/api/recommendations?limit=5');
                 if (!res.ok) return;
                 const data = await res.json();
+                // Same bucketing as the recommendations page: tabs group by
+                // resource, gp2 migrations and network resources land in Other.
+                const tabByType = {
+                    stop_instance: 'ec2', terminate_instance: 'ec2', downsize_instance: 'ec2',
+                    delete_volume: 'ebs', release_ip: 'eip', delete_snapshot: 'snap'
+                };
                 for (const rec of data.recommendations || []) {
                     const row = document.createElement('a');
                     row.className = 'notif-item';
-                    row.href = '/recommendations';
+                    row.href = '/recommendations#tab=' + (tabByType[rec.recommendation_type] || 'other');
                     const action = document.createElement('span');
                     action.className = 'notif-item-action';
                     action.textContent = String(rec.recommendation_type || '').replace(/_/g, ' ');
