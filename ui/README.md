@@ -97,7 +97,7 @@ See [routes/README.md](routes/README.md) for which module owns each endpoint.
 | `/api/dashboard/waste-by-resource` | GET | JSON waste breakdown by resource type |
 | `/recommendations` | GET | Pending recommendations |
 | `/api/recommendations` | GET | JSON recommendations |
-| `/api/recommendations/{id}/ask` | POST | Ask the AI about a recommendation |
+| `/api/recommendations/chat` | POST | Ask the AI about all pending recommendations |
 | `/history` | GET | Action history |
 | `/reports` | GET | Activity report |
 | `/api/reports/download` | GET | Download report as Markdown |

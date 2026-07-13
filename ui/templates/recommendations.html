@@ -273,7 +273,7 @@
                                 <span class="badge badge-info">Downsize</span>
                                 {% endif %}
                             </td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">{% if rec.recommendation_type == 'stop_instance' %}CPU avg below {{ "%.1f"|format(rec.cpu_avg or 0) }}% for 7d{% elif rec.recommendation_type == 'terminate_instance' %}Stopped, still billing EBS{% else %}Underutilized — {{ "%.1f"|format(rec.cpu_avg or 0) }}% avg CPU{% endif %}</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="Ask a question about this recommendation" title="Ask a question about this recommendation" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 3h11v8h-6l-3 2.5V11h-2z"/></svg></button><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">{% if rec.recommendation_type == 'stop_instance' %}CPU avg below {{ "%.1f"|format(rec.cpu_avg or 0) }}% for 7d{% elif rec.recommendation_type == 'terminate_instance' %}Stopped, still billing EBS{% else %}Underutilized — {{ "%.1f"|format(rec.cpu_avg or 0) }}% avg CPU{% endif %}</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
@@ -332,7 +332,7 @@
                             <td style="padding: 0.4rem 0.5rem; white-space: nowrap;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span> <span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not attached to any instance</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="Ask a question about this recommendation" title="Ask a question about this recommendation" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 3h11v8h-6l-3 2.5V11h-2z"/></svg></button><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not attached to any instance</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -384,7 +384,7 @@
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not associated to any instance</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="Ask a question about this recommendation" title="Ask a question about this recommendation" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 3h11v8h-6l-3 2.5V11h-2z"/></svg></button><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not associated to any instance</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -433,7 +433,7 @@
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Old snapshot — verify before deleting</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="Ask a question about this recommendation" title="Ask a question about this recommendation" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 3h11v8h-6l-3 2.5V11h-2z"/></svg></button><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Old snapshot — verify before deleting</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -483,7 +483,7 @@
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;">{{ rec.volume_name or rec.resource_id }}</code></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 420px; white-space: normal; vertical-align: middle;"><div class="insight-clamp"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.action_required }}</span>{% if rec.ai_insight %}<div style="font-size: 0.75rem; color: var(--gray-700); margin-top: 0.2rem;" title="{{ rec.ai_insight }}">{{ rec.ai_insight }}</div>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="Ask a question about this recommendation" title="Ask a question about this recommendation" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openAskModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 3h11v8h-6l-3 2.5V11h-2z"/></svg></button><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem; max-width: 420px; white-space: normal; vertical-align: middle;"><div class="insight-clamp"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.action_required }}</span>{% if rec.ai_insight %}<div style="font-size: 0.75rem; color: var(--gray-700); margin-top: 0.2rem;" title="{{ rec.ai_insight }}">{{ rec.ai_insight }}</div>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
@@ -533,23 +533,6 @@
     {% endif %}
 </div>
 {% endif %}
-
-<!-- Ask-a-question modal: one-shot Q&A about a single recommendation, no
-     conversation history — see src/core/llm.py::answer_question -->
-<div id="askModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
-    <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 480px; max-height: 80vh; overflow-y: auto;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
-            <h3 style="margin: 0; font-size: 1rem;">Ask about this recommendation</h3>
-            <button type="button" onclick="closeAskModal()" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
-        </div>
-        <p id="askModalLabel" style="font-size: 0.8rem; color: var(--gray-600); margin: 0 0 0.75rem;"></p>
-        <textarea id="askQuestion" rows="2" placeholder="e.g. Is this safe to delete? What happens if I approve it?" style="width: 100%; box-sizing: border-box; padding: 0.5rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.85rem; resize: vertical;"></textarea>
-        <div style="margin-top: 0.5rem; display: flex; justify-content: flex-end;">
-            <button type="button" id="askSubmitBtn" onclick="submitAskQuestion()" class="btn btn-primary" style="padding: 0.4rem 0.9rem;">Ask</button>
-        </div>
-        <div id="askAnswer" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--gray-700); white-space: pre-wrap;"></div>
-    </div>
-</div>
 
 <!-- Resource-history modal: CloudTrail LookupEvents for one resource (who
      created/touched it) — see /api/recommendations/{id}/resource-history -->
@@ -895,46 +878,6 @@
 
     function closeHistoryModal() {
         document.getElementById('historyModal').style.display = 'none';
-    }
-
-    // Ask-a-question modal: one-shot, no conversation history — a fresh
-    // question re-sends the recommendation's full context every time.
-    let askRecId = null;
-
-    function openAskModal(recId, label) {
-        askRecId = recId;
-        document.getElementById('askModalLabel').textContent = label;
-        document.getElementById('askQuestion').value = '';
-        document.getElementById('askAnswer').textContent = '';
-        document.getElementById('askModal').style.display = 'flex';
-        document.getElementById('askQuestion').focus();
-    }
-
-    function closeAskModal() {
-        document.getElementById('askModal').style.display = 'none';
-        askRecId = null;
-    }
-
-    async function submitAskQuestion() {
-        const question = document.getElementById('askQuestion').value.trim();
-        if (!question || askRecId === null) return;
-        const answerEl = document.getElementById('askAnswer');
-        const btn = document.getElementById('askSubmitBtn');
-        btn.disabled = true;
-        answerEl.textContent = 'Thinking…';
-        try {
-            const response = await fetch(`/api/recommendations/${askRecId}/ask`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question })
-            });
-            const data = await response.json();
-            answerEl.textContent = data.answer || data.error || 'No answer available.';
-        } catch (error) {
-            answerEl.textContent = 'Error: ' + error.message;
-        } finally {
-            btn.disabled = false;
-        }
     }
 
     // Estate chat (summary tile): one-shot question about ALL pending

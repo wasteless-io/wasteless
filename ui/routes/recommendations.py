@@ -1,7 +1,5 @@
-"""Recommendations page, its JSON API, the AI Q&A endpoint, and the
-approve/reject/dismiss/cancel/execute action endpoint."""
-
-import json
+"""Recommendations page, its JSON API, the estate-wide AI chat endpoint, and
+the approve/reject/dismiss/cancel/execute action endpoint."""
 
 from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -328,62 +326,6 @@ def resource_history(rec_id: int, conn=Depends(get_db)):
 
     _HISTORY_CACHE[resource_id] = (time.time() + _HISTORY_CACHE_TTL_SECONDS, payload)
     return payload
-
-
-@router.post("/api/recommendations/{rec_id}/ask")
-def ask_about_recommendation(rec_id: int, body: AskQuestionRequest, conn=Depends(get_db)):
-    """One-shot AI answer to a question about a specific recommendation.
-
-    Stateless (no conversation history) and scoped to this recommendation's
-    own data — same guardrails as the ai_insight generation it sits next to.
-    Sync route on purpose: the LLM call blocks up to 20s and must run in
-    the threadpool, not on the event loop.
-    """
-    # Backend is pip-installed editable into ui/venv (see pyproject.toml), so
-    # core.* imports directly — no sys.path juggling. Kept local because llm
-    # pulls in the optional litellm dependency.
-    from core.llm import answer_question
-
-    question = (body.question or "").strip()
-    if not question:
-        raise HTTPException(status_code=400, detail="question must not be empty")
-
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT r.action_required, r.estimated_monthly_savings_eur,
-               w.resource_type, w.confidence_score, w.metadata
-        FROM recommendations r
-        JOIN waste_detected w ON w.id = r.waste_id
-        WHERE r.id = %s
-    """,
-        (rec_id,),
-    )
-    row = cursor.fetchone()
-    cursor.close()
-
-    if row is None:
-        raise HTTPException(status_code=404, detail="recommendation not found")
-
-    metadata = row["metadata"] or {}
-    if isinstance(metadata, str):
-        metadata = json.loads(metadata)
-
-    answer = answer_question(
-        question,
-        row["action_required"],
-        row["resource_type"],
-        row["estimated_monthly_savings_eur"],
-        row["confidence_score"],
-        metadata,
-        conn=conn,
-    )
-    if answer is None:
-        return JSONResponse(
-            {"answer": None, "error": "AI is not configured or the request failed"},
-            status_code=503,
-        )
-    return JSONResponse({"answer": answer})
 
 
 @router.post("/api/recommendations/chat")
