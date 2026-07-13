@@ -117,8 +117,7 @@
                 <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
                 {% if last_sync %}
                     {% set now = now() if now is defined else last_sync %}
-                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #22c55e;"></span>
-                    Last sync: {{ last_sync.strftime('%d %b, %H:%M') }}
+                    Last scan: {{ last_sync.strftime('%d %b, %H:%M') }}
                 {% else %}
                     <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b;"></span>
                     No data — run <code style="background: rgba(0,0,0,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">wasteless collect</code>
