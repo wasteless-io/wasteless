@@ -864,7 +864,6 @@
         // increase pops the badges (CSS animation, disabled globally by
         // prefers-reduced-motion).
         let _pendingCount = null;
-        let _pendingSavings = 0;
 
         function _renderPendingBadges(n) {
             document.querySelectorAll('.js-pending-badge').forEach(badge => {
@@ -888,8 +887,7 @@
                 link.style.display = 'none';
             } else if (_pendingCount > 0) {
                 body.textContent = _pendingCount + ' recommendation' + (_pendingCount > 1 ? 's' : '')
-                    + ' awaiting your review — ' + _pendingSavings.toFixed(2)
-                    + ' €/mo recoverable if approved.';
+                    + ' awaiting your review.';
                 link.style.display = 'inline-block';
             } else {
                 body.textContent = 'Nothing to review — all clear.';
@@ -904,7 +902,6 @@
                 const data = await res.json();
                 _renderPendingBadges(data.pending_count || 0);
                 _pendingCount = data.pending_count || 0;
-                _pendingSavings = data.potential_savings || 0;
                 _renderNotifBody();
             } catch (e) {
                 // network hiccup: keep the current badges
