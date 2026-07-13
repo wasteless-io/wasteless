@@ -157,7 +157,7 @@
     <!-- What awaits a decision -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="What you recover each month by approving the recommendations awaiting your review"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span><span class="ring-unit">€/mo</span></span></span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="What you recover each month by approving the recommendations awaiting your review"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span><span class="ring-unit">€</span></span></span></div>
     </div>
 
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
