@@ -166,34 +166,55 @@
             to { opacity: 1; transform: none; }
         }
 
-        /* Execution-mode card (replaces the old pill) */
+        /* Execution-mode card: segmented Dry-Run | Production control —
+           both modes stay readable, the active one is highlighted, click
+           the other to switch (production always confirms). Same
+           /api/config key as the Settings page. */
         .mode-card {
             background: white;
             border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 12px;
-            padding: 0.6rem 0.75rem;
+            padding: 0.6rem 0.65rem;
             font-size: 0.8rem;
         }
 
-        .mode-card .mode-line {
+        .mode-seg {
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            gap: 0;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+            padding: 2px;
+        }
+
+        .mode-seg-btn {
+            flex: 1;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 0.72rem;
             font-weight: 600;
+            padding: 0.28rem 0.4rem;
+            border-radius: 6px;
+            color: #86868b;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .mode-seg-btn.active-dry {
+            background: white;
+            color: #256b2d;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .mode-seg-btn.active-prod {
+            background: white;
+            color: #b91c1c;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         }
 
         .mode-card .mode-sub {
             color: #86868b;
             font-size: 0.72rem;
-            margin-left: 1.05rem;
-            margin-top: 1px;
-        }
-
-        .mode-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            flex-shrink: 0;
+            margin: 5px 2px 0;
         }
 
         .nav-section {
@@ -555,12 +576,6 @@
         .mt-1 { margin-top: 0.5rem; }
         .hidden { display: none; }
 
-        /* Pulse animation for production mode */
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
         /* Load animations, shared by every page.
            - the page composes itself: top-level blocks fade up in sequence
            - .fill-bar: data bars draw themselves from the left
@@ -728,25 +743,20 @@
                         <span class="notif-badge js-pending-badge" style="display: none;">0</span>
                     </button>
                 </div>
-                {# Same semantics as the old pill: dry-run is the safe state
-                   (green), production means real AWS actions (red, pulsing) #}
-                {% if get_dry_run() %}
+                {# Same semantics as before — dry-run is the safe state
+                   (green), production means real AWS actions (red) — but
+                   clickable: pick the other mode to switch. #}
                 <div class="mode-card">
-                    <div class="mode-line" style="color:#256b2d;">
-                        <span class="mode-dot" style="background:#22c55e;"></span>
-                        Dry-Run
+                    <div class="mode-seg" role="group" aria-label="Execution mode">
+                        <button type="button" class="mode-seg-btn{% if get_dry_run() %} active-dry{% endif %}"
+                                aria-pressed="{{ 'true' if get_dry_run() else 'false' }}"
+                                onclick="setExecMode(true)">Dry-Run</button>
+                        <button type="button" class="mode-seg-btn{% if not get_dry_run() %} active-prod{% endif %}"
+                                aria-pressed="{{ 'false' if get_dry_run() else 'true' }}"
+                                onclick="setExecMode(false)">Production</button>
                     </div>
-                    <div class="mode-sub">Actions are simulated only</div>
+                    <div class="mode-sub">{% if get_dry_run() %}Actions are simulated only{% else %}Real AWS actions enabled{% endif %}</div>
                 </div>
-                {% else %}
-                <div class="mode-card">
-                    <div class="mode-line" style="color:#b91c1c;">
-                        <span class="mode-dot" style="background:#ef4444;animation:pulse 2s infinite;"></span>
-                        Production
-                    </div>
-                    <div class="mode-sub">Real AWS actions enabled</div>
-                </div>
-                {% endif %}
             </div>
 
             <nav class="nav-section">
@@ -872,6 +882,29 @@
         // Refresh data
         async function refreshData() {
             location.reload();
+        }
+
+        // Sidebar execution-mode segmented control — same /api/config key
+        // as the Settings page. Entering production always confirms; going
+        // back to dry-run is the safe direction and doesn't. Reload after:
+        // the mode changes what every page shows and does.
+        async function setExecMode(dryRun) {
+            const currentlyDryRun = document.querySelector('.mode-seg-btn.active-dry') !== null;
+            if (dryRun === currentlyDryRun) return; // already in that mode
+            if (!dryRun && !confirm(
+                'WARNING: switch to Production mode? Approved actions will make REAL changes on AWS.'
+            )) {
+                return;
+            }
+            try {
+                await api('/api/config', {
+                    method: 'POST',
+                    body: JSON.stringify({ key: 'dry_run', value: dryRun })
+                });
+                location.reload();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
         }
 
         // Shared pending-recommendations poller: feeds every element with
