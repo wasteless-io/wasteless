@@ -28,9 +28,15 @@ def _detector_with_mock_conn():
     return detector
 
 
-def _metric_row(instance_id="i-idle1", cpu_avg=1.0, datapoints=7, instance_type="t3.medium"):
-    # SELECT order: id, type, state, cpu_avg, cpu_max, cpu_min, datapoints
-    return (instance_id, instance_type, "running", cpu_avg, cpu_avg + 2.0, 0.1, datapoints)
+def _metric_row(
+    instance_id="i-idle1",
+    cpu_avg=1.0,
+    datapoints=7,
+    instance_type="t3.medium",
+    region="eu-west-1",
+):
+    # SELECT order: id, type, state, cpu_avg, cpu_max, cpu_min, datapoints, region
+    return (instance_id, instance_type, "running", cpu_avg, cpu_avg + 2.0, 0.1, datapoints, region)
 
 
 def _detect(rows, cpu_threshold=5.0, days=7):
@@ -94,6 +100,20 @@ class TestWasteEstimate:
         assert meta["datapoints"] == 7
         assert meta["detection_method"] == "cloudwatch_cpu_avg"
         assert "pricing_source" in meta  # stamp_pricing provenance
+
+    def test_metadata_region_comes_from_metrics_row(self):
+        # The remediator reads metadata->>'region' before falling back to
+        # AWS_REGION: the detection must carry the region the metrics
+        # were collected in, not the env var of the moment.
+        waste = _detect([_metric_row(region="us-east-1")])
+        assert waste[0]["metadata"]["region"] == "us-east-1"
+
+    def test_metadata_region_falls_back_to_env_for_legacy_rows(self, monkeypatch):
+        # Rows collected before multi-region support have region NULL —
+        # they all came from AWS_REGION.
+        monkeypatch.setenv("AWS_REGION", "eu-west-3")
+        waste = _detect([_metric_row(region=None)])
+        assert waste[0]["metadata"]["region"] == "eu-west-3"
 
     def test_no_idle_instances(self):
         assert _detect([]) == []

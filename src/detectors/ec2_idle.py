@@ -197,6 +197,9 @@ class EC2IdleDetector:
 
         try:
             # Query to find instances with low CPU
+            # region: MAX() over the window — an instance lives in one
+            # region, the aggregate just picks the non-NULL stamp (rows
+            # collected before multi-region support are NULL).
             query = """
             SELECT
                 instance_id,
@@ -205,7 +208,8 @@ class EC2IdleDetector:
                 AVG(cpu_avg) as cpu_avg_7d,
                 MAX(cpu_max) as cpu_max_7d,
                 MIN(cpu_avg) as cpu_min_7d,
-                COUNT(*) as datapoints
+                COUNT(*) as datapoints,
+                MAX(region) as region
             FROM ec2_metrics
             WHERE collection_date >= CURRENT_DATE - %s::interval
               AND cpu_avg IS NOT NULL
@@ -231,6 +235,7 @@ class EC2IdleDetector:
                     cpu_max,
                     cpu_min,
                     datapoints,
+                    region,
                 ) = instance
 
                 # Get monthly cost
@@ -267,6 +272,13 @@ class EC2IdleDetector:
                             "cpu_min_7d": float(cpu_min),
                             "instance_type": instance_type,
                             "instance_state": instance_state,
+                            # Region stamped by the collector on each
+                            # metrics row; the remediator reads
+                            # metadata->>'region' before falling back to
+                            # AWS_REGION at execution time. NULL only on
+                            # rows collected before multi-region support
+                            # — those all came from AWS_REGION.
+                            "region": region or os.getenv("AWS_REGION"),
                             "monthly_cost_eur": monthly_cost,
                             "waste_ratio": waste_ratio,
                             "datapoints": datapoints,
