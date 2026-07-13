@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 
+from constants import AWS_SCAN_REGIONS
 from core.database import get_db_connection, release_connection
 
 from core.pricing import stamp_pricing
@@ -48,7 +49,9 @@ EBS_PRICING_EUR_PER_GIB: Dict[str, float] = {
 }
 DEFAULT_EBS_PRICE = 0.0920
 
-REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
+# Périmètre de scan partagé avec le collecteur CloudWatch (et surchargeable
+# via AWS_REGIONS) — voir src/constants.py.
+REGIONS = AWS_SCAN_REGIONS
 
 
 def _ebs_cost(size_gb: int, vol_type: str) -> float:
