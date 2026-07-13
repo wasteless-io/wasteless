@@ -23,6 +23,8 @@ from core.database import get_db_connection, release_connection
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Optional
 
+from constants import AWS_SCAN_REGIONS
+
 # Load environment variables
 load_dotenv()
 
@@ -38,8 +40,14 @@ logger = logging.getLogger(__name__)
 class AWSCloudWatchCollector:
     """Collect CloudWatch metrics for EC2 instances."""
 
-    def __init__(self):
-        """Initialize CloudWatch collector with AWS clients."""
+    def __init__(self, region=None):
+        """Initialize CloudWatch collector with AWS clients.
+
+        Args:
+            region: AWS region to collect from. Defaults to AWS_REGION.
+                    main() runs one collector per entry of
+                    constants.AWS_SCAN_REGIONS.
+        """
         logger.info("Initializing AWS CloudWatch Collector")
 
         # Verify required environment variables
@@ -57,7 +65,7 @@ class AWSCloudWatchCollector:
         # 3. AWS credentials file (~/.aws/credentials)
         # 4. Container credentials (ECS tasks)
         try:
-            self.region = os.getenv("AWS_REGION")
+            self.region = region or os.getenv("AWS_REGION")
             self.account_id = os.getenv("AWS_ACCOUNT_ID")
 
             # EC2 client (for listing instances)
@@ -281,6 +289,7 @@ class AWSCloudWatchCollector:
                         instance_name,
                         metric["instance_state"],
                         metric["collection_date"],
+                        metric.get("region"),
                         metric.get("cpu_avg"),
                         metric.get("cpu_max"),
                         metric.get("network_in_mb"),
@@ -292,12 +301,13 @@ class AWSCloudWatchCollector:
             query = """
                 INSERT INTO ec2_metrics (
                     instance_id, instance_type, instance_name, instance_state,
-                    collection_date, cpu_avg, cpu_max,
+                    collection_date, region, cpu_avg, cpu_max,
                     network_in_mb, network_out_mb
                 )
                 VALUES %s
                 ON CONFLICT (instance_id, collection_date)
                 DO UPDATE SET
+                    region = EXCLUDED.region,
                     cpu_avg = EXCLUDED.cpu_avg,
                     cpu_max = EXCLUDED.cpu_max,
                     network_in_mb = EXCLUDED.network_in_mb,
@@ -350,6 +360,7 @@ class AWSCloudWatchCollector:
             "instance_state": instance["instance_state"],
             "launch_time": instance["launch_time"],
             "collection_date": today,
+            "region": self.region,
             "tags": instance["tags"],
         }
 
@@ -462,9 +473,19 @@ class AWSCloudWatchCollector:
 
 
 def main():
-    """Main execution."""
-    collector = AWSCloudWatchCollector()
-    collector.run(days=7, save_to_db=True)
+    """Main execution — one collection pass per scanned region.
+
+    AWS_SCAN_REGIONS comes from constants (AWS_REGIONS env var, or the
+    same four-region default as ec2_stopped and the Cloud Resources
+    page). A region that fails (not enabled on the account, missing
+    permission) must not cost the others their collection.
+    """
+    for region in AWS_SCAN_REGIONS:
+        try:
+            collector = AWSCloudWatchCollector(region=region)
+            collector.run(days=7, save_to_db=True)
+        except Exception as e:
+            logger.error(f"Collection failed for region {region}: {e}")
 
 
 if __name__ == "__main__":

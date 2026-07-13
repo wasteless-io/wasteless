@@ -8,8 +8,6 @@ from state import (
     templates,
     USD_TO_EUR,
     DAYS_PER_MONTH,
-    scheduler,
-    _aws_status,
     aws_connection_configured,
 )
 
@@ -139,12 +137,27 @@ def home(request: Request, conn=Depends(get_db)):
     """)
     recent_activity = cursor.fetchall()
 
-    # Last sync time
+    # Last collection time — shown in the KPI banner footer and drives
+    # the onboarding hint. collection_runs gets one row per "wasteless
+    # collect" run even when nothing is detected; waste_detected's
+    # updated_at only moves when a detector writes or re-confirms a
+    # finding (and is the only signal for manual single-detector runs,
+    # which don't record a collection_runs row).
+    # Staleness is decided in SQL, against the same clock that stamped
+    # the rows (Postgres runs in Docker and may not share the host's
+    # timezone). 15 min = 3 missed ticks of the 5-minute loop.
     cursor.execute("""
-        SELECT MAX(updated_at) as last_sync FROM waste_detected
+        SELECT last_sync, last_sync < NOW() - INTERVAL '15 minutes' as stale
+        FROM (
+            SELECT GREATEST(
+                (SELECT MAX(updated_at) FROM waste_detected),
+                (SELECT MAX(ran_at) FROM collection_runs)
+            ) as last_sync
+        ) t
     """)
     last_sync_row = cursor.fetchone()
     last_sync = last_sync_row["last_sync"] if last_sync_row else None
+    collection_stale = bool(last_sync_row["stale"]) if last_sync_row else False
 
     # Daily / Monthly costs (active detected waste)
     cursor.execute("""
@@ -245,12 +258,6 @@ def home(request: Request, conn=Depends(get_db)):
 
     cursor.close()
 
-    system_health = {
-        "db": True,  # we got here, so DB is connected
-        "aws": _aws_status.get("reachable"),
-        "scheduler": scheduler.running,
-    }
-
     from utils.reports import llm_narrative_available
 
     return templates.TemplateResponse(
@@ -261,8 +268,8 @@ def home(request: Request, conn=Depends(get_db)):
             "metrics": result,
             "waste_by_type": waste_by_type,
             "recent_activity": recent_activity,
-            "system_health": system_health,
             "last_sync": last_sync,
+            "collection_stale": collection_stale,
             "daily_cost": daily_cost,
             "monthly_cost": monthly_cost,
             "savings_trend": savings_trend,

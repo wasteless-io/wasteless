@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from psycopg2.extras import Json
 
-from state import get_db, templates, _config_manager
+from state import get_db, templates, _config_manager, _aws_status
 from schemas import ActionRequest, AskQuestionRequest
 from jobs import _execute_ec2_boto3
 from utils.action_registry import execution_mode
@@ -177,6 +177,10 @@ def recommendations(
         request,
         "recommendations.html",
         context={
+            # Server-local time (already Europe/Paris on this host), set by
+            # sync_aws_job every 5 min and by POST /api/sync-aws — not a DB
+            # timestamp, so no UTC conversion here.
+            "aws_sync_at": _aws_status.get("checked_at"),
             "has_waste_history": has_waste_history,
             "pr_open_recs": pr_open_recs,
             "pr_open_total_count": pr_open_total_count,
@@ -372,6 +376,59 @@ def ask_about_recommendation(rec_id: int, body: AskQuestionRequest, conn=Depends
         row["estimated_monthly_savings_eur"],
         row["confidence_score"],
         metadata,
+        conn=conn,
+    )
+    if answer is None:
+        return JSONResponse(
+            {"answer": None, "error": "AI is not configured or the request failed"},
+            status_code=503,
+        )
+    return JSONResponse({"answer": answer})
+
+
+@router.post("/api/recommendations/chat")
+def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
+    """One-shot AI answer to a question about ALL pending recommendations.
+
+    Powers the chat in the summary tile (not scoped to one row). Stateless;
+    sync route because the LLM call blocks and must run in the threadpool.
+    """
+    from core.llm import answer_estate_question
+
+    question = (body.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question must not be empty")
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT r.action_required,
+               COALESCE(r.estimated_monthly_savings_eur, 0) AS savings,
+               w.resource_type, w.resource_id,
+               COALESCE(w.confidence_score, 0) AS confidence
+        FROM recommendations r
+        JOIN waste_detected w ON w.id = r.waste_id
+        WHERE r.status = 'pending'
+        ORDER BY r.estimated_monthly_savings_eur DESC NULLS LAST
+        LIMIT 100
+        """)
+    rows = cursor.fetchall()
+    cursor.close()
+
+    count = len(rows)
+    total_savings = sum(float(r["savings"]) for r in rows)
+    avg_conf = (sum(float(r["confidence"]) for r in rows) / count * 100) if count else 0.0
+    lines = "\n".join(
+        f"- {r['action_required']} | {r['resource_type']} | {r['resource_id']} | "
+        f"{float(r['savings']):.2f} | {float(r['confidence']) * 100:.0f}%"
+        for r in rows
+    )
+
+    answer = answer_estate_question(
+        question,
+        count,
+        f"{total_savings:.2f}",
+        f"{avg_conf:.0f}",
+        lines,
         conn=conn,
     )
     if answer is None:

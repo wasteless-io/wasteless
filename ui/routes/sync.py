@@ -2,7 +2,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from state import get_db, SYNCABLE_STATUSES
+from datetime import datetime
+
+from state import get_db, SYNCABLE_STATUSES, _aws_status
 from jobs import _resolve_vanished, _sync_ec2_instance_states
 from utils.logger import get_logger
 
@@ -65,6 +67,13 @@ def api_sync_aws(conn=Depends(get_db)):
             resolved_count += ec2_resolved
 
         conn.commit()
+
+        # Same stamp as sync_aws_job: the "Last sync" subtitle under the
+        # Sync AWS button reads _aws_status, a manual click must move it
+        # exactly like the 5-minute job does. Reaching this line means
+        # the AWS calls above succeeded.
+        _aws_status["reachable"] = True
+        _aws_status["checked_at"] = datetime.now()
 
         return {
             "synced": synced_count,

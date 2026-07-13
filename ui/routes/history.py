@@ -19,7 +19,11 @@ def history(
     """Action history and audit trail."""
     cursor = conn.cursor()
 
-    where_clause = "WHERE a.action_date >= NOW() - INTERVAL '%s days'"
+    # Dry-run actions are simulations, not history: they never appear
+    # here. NULL dry_run (legacy rows) counts as a real action.
+    where_clause = (
+        "WHERE a.action_date >= NOW() - INTERVAL '%s days'" " AND NOT COALESCE(a.dry_run, FALSE)"
+    )
     params = [days_back]
 
     if status_filter != "All":
