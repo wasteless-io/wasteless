@@ -178,15 +178,46 @@
             font-size: 0.8rem;
         }
 
+        .mode-card.prod-card {
+            border-color: rgba(239, 68, 68, 0.35);
+        }
+
+        /* The white thumb physically slides between the two positions
+           (translateX of its own width); the track tints red in
+           production — the danger reads peripherally, without blinking. */
         .mode-seg {
+            position: relative;
             display: flex;
             gap: 0;
             background: rgba(0, 0, 0, 0.05);
             border-radius: 8px;
             padding: 2px;
+            transition: background 0.3s ease;
+        }
+
+        .mode-seg.prod {
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        .mode-thumb {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: calc(50% - 2px);
+            height: calc(100% - 4px);
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            transition: transform 0.2s ease;
+        }
+
+        .mode-seg.prod .mode-thumb {
+            transform: translateX(100%);
         }
 
         .mode-seg-btn {
+            position: relative; /* above the thumb */
+            z-index: 1;
             flex: 1;
             border: none;
             background: none;
@@ -196,19 +227,29 @@
             padding: 0.28rem 0.4rem;
             border-radius: 6px;
             color: #86868b;
-            transition: background 0.15s, color 0.15s;
+            transition: color 0.2s ease, transform 0.1s ease;
         }
 
-        .mode-seg-btn.active-dry {
-            background: white;
-            color: #256b2d;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        .mode-seg-btn:hover {
+            color: #1d1d1f;
         }
 
-        .mode-seg-btn.active-prod {
-            background: white;
-            color: #b91c1c;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        .mode-seg-btn:active {
+            transform: scale(0.97);
+        }
+
+        .mode-seg-btn:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: -2px;
+        }
+
+        .mode-seg-btn.dry.active { color: #256b2d; }
+        .mode-seg-btn.prod.active { color: #b91c1c; }
+
+        /* While the switch is in flight: no double-click, dimmed */
+        .mode-seg.switching {
+            pointer-events: none;
+            opacity: 0.6;
         }
 
         .mode-card .mode-sub {
@@ -746,12 +787,13 @@
                 {# Same semantics as before — dry-run is the safe state
                    (green), production means real AWS actions (red) — but
                    clickable: pick the other mode to switch. #}
-                <div class="mode-card">
-                    <div class="mode-seg" role="group" aria-label="Execution mode">
-                        <button type="button" class="mode-seg-btn{% if get_dry_run() %} active-dry{% endif %}"
+                <div class="mode-card{% if not get_dry_run() %} prod-card{% endif %}">
+                    <div class="mode-seg{% if not get_dry_run() %} prod{% endif %}" id="mode-seg" role="group" aria-label="Execution mode">
+                        <span class="mode-thumb" aria-hidden="true"></span>
+                        <button type="button" class="mode-seg-btn dry{% if get_dry_run() %} active{% endif %}"
                                 aria-pressed="{{ 'true' if get_dry_run() else 'false' }}"
                                 onclick="setExecMode(true)">Dry-Run</button>
-                        <button type="button" class="mode-seg-btn{% if not get_dry_run() %} active-prod{% endif %}"
+                        <button type="button" class="mode-seg-btn prod{% if not get_dry_run() %} active{% endif %}"
                                 aria-pressed="{{ 'false' if get_dry_run() else 'true' }}"
                                 onclick="setExecMode(false)">Production</button>
                     </div>
@@ -886,16 +928,25 @@
 
         // Sidebar execution-mode segmented control — same /api/config key
         // as the Settings page. Entering production always confirms; going
-        // back to dry-run is the safe direction and doesn't. Reload after:
-        // the mode changes what every page shows and does.
+        // back to dry-run is the safe direction and doesn't. The thumb
+        // slides OPTIMISTICALLY once confirmed (the network latency hides
+        // behind the 200ms animation, the reload lands after it); on error
+        // it slides back, since the config didn't actually change.
         async function setExecMode(dryRun) {
-            const currentlyDryRun = document.querySelector('.mode-seg-btn.active-dry') !== null;
+            const seg = document.getElementById('mode-seg');
+            const currentlyDryRun = !seg.classList.contains('prod');
             if (dryRun === currentlyDryRun) return; // already in that mode
             if (!dryRun && !confirm(
                 'WARNING: switch to Production mode? Approved actions will make REAL changes on AWS.'
             )) {
                 return;
             }
+            const slide = () => {
+                seg.classList.toggle('prod');
+                seg.querySelectorAll('.mode-seg-btn').forEach(b => b.classList.toggle('active'));
+            };
+            slide();
+            seg.classList.add('switching');
             try {
                 await api('/api/config', {
                     method: 'POST',
@@ -903,6 +954,8 @@
                 });
                 location.reload();
             } catch (error) {
+                slide(); // roll the control back — the config didn't change
+                seg.classList.remove('switching');
                 alert('Error: ' + error.message);
             }
         }
