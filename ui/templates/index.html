@@ -27,20 +27,24 @@
     /* Daily Briefing: the AI reads as always-on — shimmering status
        line while it writes, prose fades in. The refresh button is a
        round icon: tooltip via .kpi-hover, icon spins while writing. */
+    {# Same dress as .briefing-toggle: blue on a blue wash, gray on hover #}
     .briefing-refresh-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 26px;
         height: 26px;
-        border: 1px solid var(--hairline);
+        border: none;
         border-radius: 50%;
-        background: white;
-        color: var(--ink);
+        background: rgba(0, 113, 227, 0.09);
+        color: var(--primary);
         cursor: pointer;
-        transition: border-color 0.2s ease;
+        transition: color 0.15s ease, background 0.15s ease;
     }
-    .briefing-refresh-btn:hover { border-color: var(--ink); }
+    .briefing-refresh-btn:hover {
+        color: var(--gray-500);
+        background: rgba(0, 0, 0, 0.05);
+    }
     .briefing-refresh-btn:disabled { opacity: 0.5; cursor: default; }
     .briefing-refresh-btn.working svg { animation: refresh-spin 0.9s linear infinite; }
     @keyframes refresh-spin { to { transform: rotate(360deg); } }
@@ -56,48 +60,30 @@
     @keyframes shimmer {
         to { background-position: -200% 0; }
     }
-    /* KPI dials: each headline number sits inside a black ring drawn
-       as an SVG circle. On load the stroke traces itself clockwise
-       from 12 o'clock (stroke-dashoffset) while the number counts up
-       — both land together. The BASE state is the fully drawn ring
-       and the animation starts from a hidden stroke, so the global
-       reduced-motion kill-switch (animation: none) leaves the ring
-       visible. The ring IS the .kpi-hover element, so the swell +
-       tooltip keep working and the tooltip anchors to the dial. */
+    /* KPI figures: bare headline numbers (the rings are gone), the
+       vertical hairlines between the five blocks do the separating.
+       .kpi-ring keeps its name — it is still the .kpi-hover element
+       the tooltip anchors to and the number's swell lives on. */
     .kpi-ring {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+        display: inline-block;
         position: relative;
-        width: 104px;
-        height: 104px;
-        margin-top: 0.3rem;
+        margin-top: 0.55rem;
+        padding: 0.3rem 0.2rem;
     }
-    .kpi-ring .ring-svg {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        transform: rotate(-90deg);  /* start the trace at 12 o'clock */
-        pointer-events: none;
+    /* Pending Actions: the count blinks while something actually awaits
+       a decision (the class is only rendered when count > 0). Soft
+       opacity swing, not a hard on/off. */
+    @keyframes pending-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.25; }
     }
-    .kpi-ring .ring-svg circle {
-        fill: none;
-        stroke: var(--ink);
-        stroke-width: 5;
-        stroke-linecap: round;
-        stroke-dasharray: 307.9;    /* 2 * pi * r=49 */
-        stroke-dashoffset: 0;
-        /* 0.2s delay lets the card's fade-up cascade start first;
-           `backwards` holds the hidden stroke during the delay */
-        animation: ring-draw 0.8s ease-out 0.2s backwards;
+    .pending-blink { animation: pending-blink 1.6s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) {
+        .pending-blink { animation: none; }
     }
-    @keyframes ring-draw {
-        from { stroke-dashoffset: 307.9; }
-    }
-    /* Pending-recommendations pill, next to Last scan above the hero:
-       white pill, amber dot, ink border on hover like the cards. Only
-       rendered when something is actually pending. */
+    /* Pending-recommendations pill, above the hero: white pill, amber
+       dot, ink border on hover like the cards. Only rendered when
+       something is actually pending. */
     .pending-pill {
         display: inline-flex;
         align-items: center;
@@ -120,6 +106,140 @@
         color: var(--gray-500);
         margin-left: 0.25rem;
     }
+    /* Current month under the Monthly Waste figure — the dial claims a
+       monthly number, the label says which month it is talking about. */
+    .kpi-ring .ring-month {
+        display: block;
+        font-size: 0.58rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--gray-400);
+        text-align: center;
+        line-height: 1.2;
+    }
+
+    /* Hero card: chrome, not data — no ink border on hover, unlike the
+       data cards below. */
+    .card--no-hover:hover { border-color: transparent; }
+
+    /* Top Services column chart: thin columns growing from a shared
+       hairline baseline; 4px rounded at the data end, square at the
+       baseline; the value rides each cap (so no y-axis), the service
+       name sits under the slot. One series, one hue — the same amber
+       as the table view of this data. */
+    .col-chart {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .col-slot {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        cursor: default;
+    }
+    .col-track {
+        width: 100%;
+        height: 130px;
+        padding-top: 20px;           /* room for the tallest cap label */
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        border-bottom: 1px solid var(--gray-200);
+    }
+    .col-bar-wrap {
+        position: relative;
+        width: 20px;
+        min-height: 3px;   /* a 0.01 € service still shows a sliver */
+    }
+    .col-value {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 4px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--gray-800);
+        white-space: nowrap;
+    }
+    .col-bar {
+        height: 100%;
+        background: #d97706;
+        border-radius: 4px 4px 0 0;
+    }
+    @keyframes col-fill { from { transform: scaleY(0); } }
+    .fill-col {
+        transform-origin: bottom;
+        animation: col-fill 0.5s ease-out both;
+    }
+    .col-name {
+        font-size: 0.7rem;
+        color: var(--gray-500);
+        margin-top: 0.4rem;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Hairline under a card's title row, drawn left-to-right on load —
+       same cadence as the KPI rings' trace-in. A border can't animate
+       its length, so the rule is a scaled pseudo-element. Shared by the
+       briefing, Waste by Type, Recent Activity and Top Services cards. */
+    .title-rule { position: relative; }
+    .title-rule::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 1px;
+        background: var(--gray-400);
+        transform-origin: left;
+        animation: rule-draw 0.8s ease-out 0.3s backwards;
+    }
+    @keyframes rule-draw {
+        from { transform: scaleX(0); }
+    }
+
+    /* Show more / Show less link under the briefing: link-blue and
+       underlined at rest, muted gray on hover. */
+    .briefing-toggle {
+        display: inline-block;
+        margin-top: 0.4rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--primary);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        transition: color 0.15s ease;
+    }
+    .briefing-toggle:hover,
+    .briefing-toggle:focus-visible { color: var(--gray-500); }
+
+    /* Live clock at the end of the Waste Overview line: time first,
+       date under it, tabular digits so the tick never makes it jitter. */
+    .hero-clock {
+        text-align: right;
+        line-height: 1.25;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .hero-clock .hero-clock-time {
+        display: block;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #1d1d1f;
+        letter-spacing: -0.01em;
+    }
+    .hero-clock .hero-clock-date {
+        display: block;
+        font-size: 0.8rem;
+        color: #52514e;
+    }
 
     {# fade-up / .fade-in / .main cascade / .fill-bar / count-up /
        .kpi-hover tooltips: shared, defined in base.html #}
@@ -130,60 +250,122 @@
 
 {% block content %}
 <!-- Hero Section -->
-{# Last scan lives above the card, off the chrome: it stamps the data,
-   it is not part of the system-health line. The pending pill sits next
-   to it and jumps straight to the review page. #}
+{# Onboarding hint, only until a first scan has ever run #}
+{% if not last_sync %}
 <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; font-size: 0.75rem; color: var(--gray-500); margin-bottom: 0.35rem;">
-    {% if (metrics.pending_count or 0) > 0 %}
-    <a href="/recommendations" class="pending-pill">
-        {{ metrics.pending_count }} recommendation{{ 's' if metrics.pending_count > 1 }} pending
-    </a>
-    {% endif %}
     <span>
-    {% if last_sync %}
-    Last scan: {{ last_sync.strftime('%d %b, %H:%M') }}
-    {% else %}
     <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b;"></span>
     No data. Run <code style="background: rgba(0,0,0,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">wasteless collect</code>
-    {% endif %}
     </span>
 </div>
+{% endif %}
 {# Same plane as the sidebar's active pill (#efede8) — the hero belongs
-   to the chrome, not to the data #}
-<div class="card mb-1" style="padding: 1.25rem 1.5rem; background: #efede8; color: #1d1d1f;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-            <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: #1d1d1f; font-weight: 700;">Waste Overview</h1>
-            {# Status line: the system-health indicators that used to live
-               in a separate footer card #}
-            <p style="margin: 0; color: #52514e; font-size: 0.8rem; display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;">
-                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
-                    <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.db %}#22c55e{% else %}#ef4444{% endif %};"></span>
-                    DB {% if system_health.db %}Connected{% else %}Unreachable{% endif %}
-                </span>
-                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
-                    <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.aws == true %}#22c55e{% elif system_health.aws == false %}#ef4444{% else %}#d1d5db{% endif %};"></span>
-                    AWS {% if system_health.aws == true %}Reachable{% elif system_health.aws == false %}Unreachable{% else %}Not checked{% endif %}
-                </span>
-                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
-                    <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.scheduler %}#22c55e{% else %}#ef4444{% endif %};"></span>
-                    Scheduler {% if system_health.scheduler %}Active{% else %}Stopped{% endif %}
-                </span>
-            </p>
+   to the chrome, not to the data. Three zones: the pending pill on the
+   left (only when something awaits review), the page title dead-center
+   (1fr auto 1fr keeps it centered whatever the sides weigh), the live
+   clock on the right. #}
+<header class="card mb-1 card--no-hover" style="padding: 0.9rem 1.5rem; background: #efede8; color: #1d1d1f;">
+    <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;">
+        <div style="justify-self: start;">
+            {% if (metrics.pending_count or 0) > 0 %}
+            <a href="/recommendations" class="pending-pill">
+                {{ metrics.pending_count }} recommendation{{ 's' if metrics.pending_count > 1 }} pending
+            </a>
+            {% endif %}
         </div>
+        <h1 style="margin: 0; font-size: 1.3rem; font-weight: 700; color: #1d1d1f; text-align: center;">Wasteless Overview</h1>
+        {# Live clock, Europe/Paris — same wall clock as the DB stamps.
+           Temporal API when the browser ships it, Intl otherwise; the
+           semantic <time> carries the machine-readable datetime. #}
+        <time id="hero-clock" class="hero-clock" style="justify-self: end;">
+            <span class="hero-clock-time" id="hero-clock-time"></span>
+            <span class="hero-clock-date" id="hero-clock-date"></span>
+        </time>
+    </div>
+</header>
+
+{# Section title for the dials #}
+<h2 style="margin: 0.5rem 0 0.75rem 0.25rem; font-size: 1.05rem; font-weight: 700; color: #1d1d1f;">Analytics</h2>
+
+<!-- KPI Banner: numbers before prose — three distinct dimensions,
+     not one figure at three time scales. Standalone card, square
+     corners on purpose (the one card on the page that isn't rounded). -->
+<!-- Daily / Monthly Waste Banner -->
+<div class="card mb-1" style="padding: 0.85rem 1.25rem; border-radius: 0;">
+    <div style="display: flex; justify-content: space-around; align-items: center;">
+
+    <!-- What leaks: current waste + how it moved -->
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="What your idle and orphaned resources cost every month if nothing changes"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span><span class="ring-unit">€</span><span class="ring-month">{{ now().strftime('%B') }}</span></span></span></div>
+    </div>
+
+    <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
+
+    <!-- What awaits a decision -->
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Actions</div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--gray-800){% else %}var(--gray-400){% endif %};"><a class="kpi-hover kpi-ring" href="/recommendations" data-tip="How many actions are awaiting your approval. Click to review them"><span class="kpi-zoom"><span class="countup{% if (metrics.pending_count or 0) > 0 %} pending-blink{% endif %}">{{ metrics.pending_count or 0 }}</span></span></a></div>
+    </div>
+
+    <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
+
+    <!-- What is proven: the number that justifies the tool -->
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Savings actually measured on your bill after applied actions, verified rather than estimated"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span><span class="ring-unit">€</span></span></span></div>
+    </div>
+
+    {# Real AWS bill (Cost Explorer) — only earns a slot once collected.
+       The waste share moves to the sub-line: the headline is the fact. #}
+    {% if aws_spend_30d_eur is not none %}
+    <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Spend</div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><a class="kpi-hover kpi-ring" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Your real AWS bill for the past month, straight from Cost Explorer. Click to open the console"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(aws_spend_30d_eur) }}</span><span class="ring-unit">€</span>{% if aws_spend_vs_avg == 'above' %}<span style="font-size: 0.55rem; color: var(--danger); vertical-align: 8px;" aria-hidden="true">&#9650;</span><span class="sr-only">above monthly average</span>{% elif aws_spend_vs_avg == 'below' %}<span style="font-size: 0.55rem; color: var(--success); vertical-align: 8px;" aria-hidden="true">&#9660;</span><span class="sr-only">below monthly average</span>{% endif %}<span class="ring-month">{{ now().strftime('%B') }}</span></span></a></div>
+    </div>
+
+    {# Billed-services count, same source and window as AWS Spend #}
+    {% if aws_service_count > 0 %}
+    <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
+    <div style="text-align: center;">
+        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Services</div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" role="button" style="cursor: pointer;" data-tip="How many distinct AWS services generated charges this past month. Click to see the breakdown" onclick="document.getElementById('top-services-card')?.scrollIntoView({behavior:'smooth',block:'center'})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('top-services-card')?.scrollIntoView({behavior:'smooth',block:'center'});}"><span class="kpi-zoom"><span class="countup">{{ aws_service_count }}</span></span></span></div>
+    </div>
+    {% endif %}
+    {% endif %}
+    </div>
+
+    {# Collection provenance under the rings — same footer treatment as
+       the AI-caution line of the briefing card. The healthy line shows
+       only the timestamp; the 5-minute cadence lives in its hover tip,
+       and is only claimed while it is actually being honoured: next to
+       a stale timestamp it would contradict itself. #}
+    <div style="font-size: 0.72rem; color: var(--gray-400); margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100);">
+        {% if not last_sync %}
+        No collection has run yet &mdash; run <code style="background: rgba(0,0,0,0.06); padding: 0.05rem 0.3rem; border-radius: 3px;">wasteless collect</code> to populate these figures.
+        {% elif collection_stale %}
+        Last collection: {{ last_sync|localtime }} &mdash; the 5-minute auto-collection loop is not currently running.
+        {% else %}
+        <span class="kpi-hover" tabindex="0" data-tip="Waste figures are collected automatically every 5 minutes">Last collection: {{ last_sync|localtime }}</span>
+        {% endif %}
     </div>
 </div>
 
 {% if llm_enabled %}
-<!-- AI Daily Briefing: leads the page — the narrative first, the dials
-     right under it. Collapsed to its first paragraph by default. -->
+<!-- AI Daily Briefing: the numbers first, the narrative right under
+     them. Collapsed to its first paragraph by default. -->
 <div class="card mb-1" id="briefing-card" style="padding: 1rem 1.25rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+    {# Hairline under the title row — same treatment as the card's own
+       footer rule, so header and footer frame the narrative. The rule
+       draws itself left-to-right on load (.title-rule), echoing the
+       KPI rings' trace-in. #}
+    <div class="title-rule" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; padding-bottom: 0.55rem;">
         <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
             <span class="kpi-hover" tabindex="0" data-tip="The AI comments the numbers. The numbers themselves are always computed from the database"><span class="kpi-zoom">Daily Briefing</span></span>
         </h3>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <span id="briefing-meta" style="font-size: 0.72rem; color: var(--gray-400);"></span>
+            <span id="briefing-meta" class="kpi-hover" tabindex="0" data-tip="When the AI last wrote this briefing from your data" style="font-size: 0.72rem; color: var(--gray-400);"></span>
             <button id="briefing-refresh" onclick="loadBriefing(true)" class="kpi-hover briefing-refresh-btn" data-tip="Ask the AI to write a fresh briefing from today's data" aria-label="Generate a fresh briefing" style="display: none;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
             </button>
@@ -198,73 +380,13 @@
 </div>
 {% endif %}
 
-<!-- KPI Banner: numbers before prose — three distinct dimensions,
-     not one figure at three time scales -->
-<!-- Daily / Monthly Waste Banner -->
-<div class="card mb-1" style="padding: 0.85rem 1.25rem; display: flex; justify-content: space-around; align-items: center;">
-
-    <!-- What leaks: current waste + how it moved -->
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="What your idle and orphaned resources cost every month if nothing changes"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span><span class="ring-unit">€</span></span></span></div>
-    </div>
-
-    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
-
-    <!-- What awaits a decision -->
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><a class="kpi-hover kpi-ring" href="/recommendations" data-tip="What you recover each month by approving the recommendations awaiting your review. Click to review them"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span><span class="ring-unit">€</span></span></a></div>
-    </div>
-
-    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
-
-    <!-- What is proven: the number that justifies the tool -->
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Savings actually measured on your bill after applied actions, verified rather than estimated"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span><span class="ring-unit">€</span></span></span></div>
-    </div>
-
-    {# Real AWS bill (Cost Explorer) — only earns a slot once collected.
-       The waste share moves to the sub-line: the headline is the fact. #}
-    {% if aws_spend_30d_eur is not none %}
-    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Spend</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><a class="kpi-hover kpi-ring" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Your real AWS bill for the past month, straight from Cost Explorer. Click to open the console"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(aws_spend_30d_eur) }}</span><span class="ring-unit">€</span>{% if aws_spend_vs_avg == 'above' %}<span style="font-size: 0.8rem; color: var(--danger); vertical-align: 2px; margin-left: 0.1rem;" aria-hidden="true">&#9650;</span><span class="sr-only">above monthly average</span>{% elif aws_spend_vs_avg == 'below' %}<span style="font-size: 0.8rem; color: var(--success); vertical-align: 2px; margin-left: 0.1rem;" aria-hidden="true">&#9660;</span><span class="sr-only">below monthly average</span>{% endif %}</span></a></div>
-    </div>
-
-    {# Billed-services count, same source and window as AWS Spend #}
-    {% if aws_service_count > 0 %}
-    <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Services</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" role="button" style="cursor: pointer;" data-tip="How many distinct AWS services generated charges this past month. Click to see the list" onclick="switchWasteCard('services')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();switchWasteCard('services');}"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ aws_service_count }}</span></span></span></div>
-    </div>
-    {% endif %}
-    {% endif %}
-</div>
-
 <!-- Recent Activity -->
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-    <!-- Waste by Type / Top AWS Services (toggle) -->
+    <!-- Waste by Type -->
     <div class="card" style="padding: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; gap: 0.75rem;">
-            <h3 id="waste-card-title" style="margin: 0; font-size: 0.95rem; font-weight: 600;">Waste by Type</h3>
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                {% if top_services %}
-                {# Segmented toggle: waste stays the default view, the real
-                   bill by service is one click away #}
-                <div style="display: flex; gap: 0; background: rgba(0,0,0,0.05); border-radius: 7px; padding: 2px;">
-                    <button type="button" id="waste-card-tab-waste" onclick="switchWasteCard('waste')" style="border: none; cursor: pointer; font-size: 0.72rem; font-weight: 500; padding: 0.15rem 0.55rem; border-radius: 5px; background: white; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.08);">Waste</button>
-                    <button type="button" id="waste-card-tab-services" onclick="switchWasteCard('services')" style="border: none; cursor: pointer; font-size: 0.72rem; font-weight: 500; padding: 0.15rem 0.55rem; border-radius: 5px; background: none; color: var(--ink-secondary);">Services</button>
-                </div>
-                {% endif %}
-                <a href="/recommendations" id="waste-view-all" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
-                {% if top_services %}
-                <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" id="services-view-all" style="font-size: 0.8rem; color: var(--primary); text-decoration: none; display: none;">Cost Explorer &rarr;</a>
-                {% endif %}
-            </div>
+        <div class="title-rule" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.55rem; gap: 0.75rem;">
+            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Waste by Type</h3>
+            <a href="/recommendations" aria-label="View all recommendations" style="font-size: 1rem; line-height: 1; color: var(--primary); text-decoration: none;">&rarr;</a>
         </div>
         <div id="waste-panel">
         {% if waste_by_type %}
@@ -311,51 +433,16 @@
         {% else %}
         <div style="padding: 2rem; text-align: center;">
             <p class="text-muted" style="margin: 0;">No waste detected yet</p>
-            <p style="font-size: 0.8rem; color: var(--gray-500); margin: 0.5rem 0 0 0;">Run <code>wasteless collect</code> to start</p>
         </div>
         {% endif %}
         </div>
-
-        {% if top_services %}
-        {# Top services by real spend (Cost Explorer, last 30 days) — same
-           window as the AWS Spend KPI. Flat amber bars: length already
-           encodes the amount. #}
-        <div id="services-panel" style="display: none;">
-            {% set smax = top_services[0].total_eur %}
-            <div class="scroll-list">
-                <table style="font-size: 0.8rem; width: 100%;">
-                    <thead>
-                        <tr>
-                            <th style="padding: 0.35rem 0.5rem; text-align: left;">Service</th>
-                            <th style="padding: 0.35rem 0.5rem; text-align: right;">EUR (30d)</th>
-                            <th style="padding: 0.35rem 0.5rem; text-align: right; min-width: 80px;"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in top_services %}
-                        {% set spct = ((item.total_eur / smax) * 100) if smax > 0 else 0 %}
-                        <tr>
-                            <td style="padding: 0.35rem 0.5rem;"><span style="display: inline-block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;" title="{{ item.service }}">{{ item.service | replace('Amazon ', '') | replace('AWS ', '') }}</span></td>
-                            <td style="padding: 0.35rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
-                            <td style="padding: 0.35rem 0.5rem;">
-                                <div style="width: 100%; height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden;">
-                                    <div class="fill-bar" style="height: 100%; width: {{ spct }}%; background: #d97706; border-radius: 3px; animation-delay: {{ loop.index0 * 90 }}ms;"></div>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% endif %}
     </div>
 
     <!-- Recent Activity -->
     <div class="card" style="padding: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div class="title-rule" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.55rem;">
             <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Recent Activity</h3>
-            <a href="/history" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
+            <a href="/history" aria-label="View full history" style="font-size: 1rem; line-height: 1; color: var(--primary); text-decoration: none;">&rarr;</a>
         </div>
         {% if recent_activity %}
         <div class="scroll-list" style="display: flex; flex-direction: column; gap: 0.1rem;">
@@ -391,7 +478,7 @@
                 <span style="font-size: 0.78rem; color: var(--danger); font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.25rem;" title="{{ item.error_message or '' }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Failed</span>
                 {% endif %}
                 {% endif %}
-                <span style="font-size: 0.72rem; color: var(--gray-400); flex-shrink: 0;">{{ item.event_time.strftime('%d/%m %H:%M') if item.event_time else '' }}</span>
+                <span style="font-size: 0.72rem; color: var(--gray-400); flex-shrink: 0;">{{ item.event_time|localtime('%d/%m %H:%M') if item.event_time else '' }}</span>
             </div>
             {% endfor %}
         </div>
@@ -399,35 +486,43 @@
         <div style="padding: 2rem; text-align: center; color: var(--gray-400);">
             <div style="margin-bottom: 0.5rem;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
             <p style="margin: 0; font-weight: 500; color: var(--gray-600);">No activity yet</p>
-            <p style="font-size: 0.8rem; color: var(--gray-500); margin: 0.35rem 0 1rem 0;">Run <code>wasteless collect</code> to start</p>
         </div>
         {% endif %}
     </div>
 </div>
 
+{% if top_services %}
+{# Top Services — standalone column chart of the real bill (Cost
+   Explorer, last 30 days), independent from the Waste/Services toggle
+   card above (whose Services tab remains the table view of the same
+   data). One series → one hue, no legend; every cap carries its value
+   so the chart needs no y-axis. #}
+<div class="card" id="top-services-card" style="padding: 1rem 1.25rem;">
+    <div class="title-rule" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.1rem; padding-bottom: 0.55rem; gap: 0.75rem;">
+        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Top Services</h3>
+        <span style="font-size: 0.72rem; color: var(--gray-400);">Real spend, last 30 days &mdash; Cost Explorer</span>
+    </div>
+    {% set smax = top_services[0].total_eur %}
+    <div class="col-chart" role="img" aria-label="Column chart of AWS spend by service over the last 30 days">
+        {% for item in top_services %}
+        {% set spct = ((item.total_eur / smax) * 100) if smax > 0 else 0 %}
+        <div class="col-slot kpi-hover" tabindex="0" data-tip="{{ item.service }} — {{ '%.2f'|format(item.total_eur) }} € over the last 30 days">
+            <div class="col-track">
+                <div class="col-bar-wrap" style="height: {{ spct }}%;">
+                    <span class="col-value">{{ "%.2f"|format(item.total_eur) }} €</span>
+                    <div class="col-bar fill-col" style="animation-delay: {{ loop.index0 * 90 }}ms;"></div>
+                </div>
+            </div>
+            <span class="col-name">{{ item.service | replace('Amazon ', '') | replace('AWS ', '') }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
-<script>
-// Waste/Services toggle on the breakdown card — both views are rendered
-// server-side, this only switches visibility (same pattern as the
-// Cloud Resources tabs).
-function switchWasteCard(view) {
-    document.getElementById('waste-panel').style.display = view === 'waste' ? '' : 'none';
-    document.getElementById('services-panel').style.display = view === 'services' ? '' : 'none';
-    document.getElementById('waste-view-all').style.display = view === 'waste' ? '' : 'none';
-    document.getElementById('services-view-all').style.display = view === 'services' ? '' : 'none';
-    document.getElementById('waste-card-title').textContent =
-        view === 'waste' ? 'Waste by Type' : 'Top AWS Services';
-    ['waste', 'services'].forEach(v => {
-        const btn = document.getElementById('waste-card-tab-' + v);
-        if (!btn) return;
-        btn.style.background = v === view ? 'white' : 'none';
-        btn.style.boxShadow = v === view ? '0 1px 3px rgba(0,0,0,0.08)' : 'none';
-        btn.style.color = v === view ? 'var(--ink)' : 'var(--ink-secondary)';
-    });
-}
-</script>
 {% if llm_enabled %}
 <script>
 // Daily briefing: fetched async so the page never waits for the LLM.
@@ -496,7 +591,7 @@ async function loadBriefing(refresh) {
             const toggle = document.createElement('a');
             toggle.href = '#';
             toggle.textContent = 'Show more';
-            toggle.style.cssText = 'display: inline-block; margin-top: 0.4rem; font-size: 0.78rem; font-weight: 600; color: var(--gray-500); text-decoration: none;';
+            toggle.className = 'briefing-toggle';
             toggle.onclick = (e) => {
                 e.preventDefault();
                 const expand = toggle.textContent === 'Show more';
@@ -524,4 +619,37 @@ async function loadBriefing(refresh) {
 loadBriefing(false);
 </script>
 {% endif %}
+
+<script>
+// Hero clock. Temporal.Now.zonedDateTimeISO is the modern path — an
+// exact, timezone-aware wall-clock reading; browsers without Temporal
+// get the identical output from Intl.DateTimeFormat. Europe/Paris is
+// pinned so the clock agrees with the Last-collection stamp whatever
+// the machine's timezone. Ticks are aligned to the minute boundary:
+// no seconds shown, so no per-second wakeups.
+(function () {
+    const root = document.getElementById('hero-clock');
+    const timeEl = document.getElementById('hero-clock-time');
+    const dateEl = document.getElementById('hero-clock-date');
+    const TZ = 'Europe/Paris';
+    const timeFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
+    const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ });
+    function render() {
+        if (typeof Temporal !== 'undefined') {
+            const now = Temporal.Now.zonedDateTimeISO(TZ);
+            root.dateTime = now.toString({ timeZoneName: 'never', smallestUnit: 'minute' });
+            timeEl.textContent = now.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            dateEl.textContent = now.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+        } else {
+            const now = new Date();
+            root.dateTime = now.toISOString();
+            timeEl.textContent = timeFmt.format(now);
+            dateEl.textContent = dateFmt.format(now);
+        }
+        // Re-render just after the next minute flips.
+        setTimeout(render, 60250 - (Date.now() % 60000));
+    }
+    render();
+})();
+</script>
 {% endblock %}
