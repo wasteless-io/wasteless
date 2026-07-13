@@ -112,13 +112,6 @@
         transition: border-color 0.2s ease;
     }
     .pending-pill:hover { border-color: var(--ink); }
-    .pending-pill .dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--warning);
-        flex-shrink: 0;
-    }
 
     .kpi-ring .ring-unit {
         font-size: 0.8rem;
@@ -143,7 +136,6 @@
 <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; font-size: 0.75rem; color: var(--gray-500); margin-bottom: 0.35rem;">
     {% if (metrics.pending_count or 0) > 0 %}
     <a href="/recommendations" class="pending-pill">
-        <span class="dot" aria-hidden="true"></span>
         {{ metrics.pending_count }} recommendation{{ 's' if metrics.pending_count > 1 }} pending
     </a>
     {% endif %}
@@ -222,7 +214,7 @@
     <!-- What awaits a decision -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Savings</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="What you recover each month by approving the recommendations awaiting your review"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span><span class="ring-unit">€</span></span></span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--warning){% else %}var(--gray-400){% endif %};"><a class="kpi-hover kpi-ring" href="/recommendations" data-tip="What you recover each month by approving the recommendations awaiting your review. Click to review them"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.pending_eur or 0) }}</span><span class="ring-unit">€</span></span></a></div>
     </div>
 
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
@@ -247,7 +239,7 @@
     <div style="width: 1px; height: 40px; background: var(--gray-200);"></div>
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Services</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="How many distinct AWS services generated charges this past month, the footprint wasteless watches"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ aws_service_count }}</span></span></span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" role="button" style="cursor: pointer;" data-tip="How many distinct AWS services generated charges this past month. Click to see the list" onclick="switchWasteCard('services')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();switchWasteCard('services');}"><svg class="ring-svg" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="49"/></svg><span class="kpi-zoom"><span class="countup">{{ aws_service_count }}</span></span></span></div>
     </div>
     {% endif %}
     {% endif %}
