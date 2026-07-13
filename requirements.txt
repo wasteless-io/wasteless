@@ -18,6 +18,13 @@ click>=8.1.7
 # and all AI features vanished from the UI without an error anywhere.
 litellm>=1.40
 
+# anyio est transitif (httpx, openai via litellm) mais doit rester aligne
+# avec le lock UI, ou starlette (fastapi) le plafonne a 4.14.1 : la CI
+# installe requirements.lock ET ui/requirements.lock dans le meme env, et
+# deux versions d'anyio y sont irreconciliables. Sans starlette ici, la
+# racine choisirait sinon 4.14.2 toute seule.
+anyio<4.14.2
+
 # Testing
 pytest>=8.0.0
 pytest-cov>=4.1.0
