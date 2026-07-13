@@ -105,24 +105,25 @@
 
 {% block content %}
 <!-- Hero Section -->
+{# Last scan lives above the card, off the chrome: it stamps the data,
+   it is not part of the system-health line #}
+<div style="text-align: right; font-size: 0.75rem; color: var(--gray-500); margin-bottom: 0.35rem;">
+    {% if last_sync %}
+    Last scan: {{ last_sync.strftime('%d %b, %H:%M') }}
+    {% else %}
+    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b;"></span>
+    No data. Run <code style="background: rgba(0,0,0,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">wasteless collect</code>
+    {% endif %}
+</div>
 {# Same plane as the sidebar's active pill (#efede8) — the hero belongs
    to the chrome, not to the data #}
 <div class="card mb-1" style="padding: 1.25rem 1.5rem; background: #efede8; color: #1d1d1f;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
             <h1 style="margin: 0 0 0.2rem 0; font-size: 1.3rem; color: #1d1d1f; font-weight: 700;">Waste Overview</h1>
-            {# Status line: last sync + the system-health indicators that
-               used to live in a separate footer card #}
+            {# Status line: the system-health indicators that used to live
+               in a separate footer card #}
             <p style="margin: 0; color: #52514e; font-size: 0.8rem; display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;">
-                <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
-                {% if last_sync %}
-                    {% set now = now() if now is defined else last_sync %}
-                    Last scan: {{ last_sync.strftime('%d %b, %H:%M') }}
-                {% else %}
-                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b;"></span>
-                    No data — run <code style="background: rgba(0,0,0,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">wasteless collect</code>
-                {% endif %}
-                </span>
                 <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
                     <span style="width: 7px; height: 7px; border-radius: 50%; background: {% if system_health.db %}#22c55e{% else %}#ef4444{% endif %};"></span>
                     DB {% if system_health.db %}Connected{% else %}Unreachable{% endif %}
