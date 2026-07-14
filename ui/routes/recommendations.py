@@ -307,6 +307,9 @@ def resource_history(rec_id: int, conn=Depends(get_db)):
                 "time": event["EventTime"].isoformat(),
                 "name": event.get("EventName", ""),
                 "username": event.get("Username", ""),
+                # EventId lets the UI deep-link to this exact event in the
+                # CloudTrail console (no extra API call, URL is deterministic).
+                "event_id": event.get("EventId", ""),
             }
             for event in response.get("Events", [])
         ]
