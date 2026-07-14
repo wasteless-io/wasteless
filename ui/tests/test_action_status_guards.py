@@ -145,6 +145,17 @@ class TestActionStatusGuards(unittest.TestCase):
         self.assertTrue(resp.json()["results"][0]["success"])
         self.assertEqual(self._status(rec_id), "rejected")
 
+    def test_reject_approved_manual_succeeds(self):
+        """Skip on a To-do item (approved_manual) sends it back to Skipped —
+        the user marked it to-do but changed their mind."""
+        rec_id = self._insert_rec("i-guard-manual-skip", status="approved_manual")
+        resp = self.client.post(
+            "/api/actions", json={"recommendation_ids": [rec_id], "action": "reject"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["results"][0]["success"])
+        self.assertEqual(self._status(rec_id), "rejected")
+
     def test_reject_approved_is_rejected_by_guard(self):
         """An already-approved recommendation must not flip back to rejected."""
         rec_id = self._insert_rec("i-guard-approved-reject", status="approved")

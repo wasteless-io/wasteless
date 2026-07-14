@@ -306,7 +306,8 @@ def recommendations(
     cursor.execute("""
         SELECT r.id, r.recommendation_type, r.applied_at,
                r.estimated_monthly_savings_eur,
-               w.resource_id, w.resource_type
+               w.resource_id, w.resource_type,
+               COALESCE(w.metadata->>'region', w.metadata->>'az', 'eu-west-1') AS region
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         WHERE r.status = 'approved_manual'
@@ -511,6 +512,295 @@ def resource_history(rec_id: int, conn=Depends(get_db)):
     return payload
 
 
+_RESOURCE_DETAILS_CACHE: dict = {}
+
+
+def _date_field(label, dt):
+    return {"label": label, "value": dt.isoformat(), "date": True} if dt else None
+
+
+def _describe_instance(ec2, resource_id, region):
+    inst = ec2.describe_instances(InstanceIds=[resource_id])["Reservations"][0]["Instances"][0]
+    return (
+        "Instance",
+        f"#InstanceDetails:instanceId={resource_id}",
+        inst.get("Tags", []),
+        [
+            {"label": "State", "value": inst.get("State", {}).get("Name")},
+            {"label": "Type", "value": inst.get("InstanceType")},
+            {
+                "label": "Availability zone",
+                "value": inst.get("Placement", {}).get("AvailabilityZone"),
+            },
+            # Honest label: LaunchTime resets on every stop/start — the true
+            # creation is CloudTrail's RunInstances (the modal's Created box).
+            _date_field("Last launched", inst.get("LaunchTime")),
+            {"label": "Private IP", "value": inst.get("PrivateIpAddress")},
+            {"label": "Public IP", "value": inst.get("PublicIpAddress")},
+            {"label": "AMI", "value": inst.get("ImageId")},
+            {"label": "VPC", "value": inst.get("VpcId")},
+            {"label": "Subnet", "value": inst.get("SubnetId")},
+            {"label": "Key pair", "value": inst.get("KeyName")},
+            {"label": "Platform", "value": inst.get("PlatformDetails")},
+            {"label": "Architecture", "value": inst.get("Architecture")},
+        ],
+    )
+
+
+def _describe_volume(ec2, resource_id, region):
+    vol = ec2.describe_volumes(VolumeIds=[resource_id])["Volumes"][0]
+    attachments = ", ".join(a.get("InstanceId", "?") for a in vol.get("Attachments", []))
+    return (
+        "Volume",
+        f"#VolumeDetails:volumeId={resource_id}",
+        vol.get("Tags", []),
+        [
+            {"label": "State", "value": vol.get("State")},
+            {"label": "Size", "value": f"{vol['Size']} GiB" if vol.get("Size") else None},
+            {"label": "Type", "value": vol.get("VolumeType")},
+            {"label": "IOPS", "value": vol.get("Iops")},
+            {"label": "Throughput", "value": vol.get("Throughput")},
+            {"label": "Availability zone", "value": vol.get("AvailabilityZone")},
+            _date_field("Created", vol.get("CreateTime")),
+            {"label": "Attached to", "value": attachments or "— (unattached)"},
+            {"label": "Encrypted", "value": "yes" if vol.get("Encrypted") else "no"},
+        ],
+    )
+
+
+def _describe_address(ec2, resource_id, region):
+    addr = ec2.describe_addresses(AllocationIds=[resource_id])["Addresses"][0]
+    associated = addr.get("InstanceId") or addr.get("NetworkInterfaceId")
+    return (
+        "Elastic IP",
+        f"#ElasticIpDetails:AllocationId={resource_id}",
+        addr.get("Tags", []),
+        [
+            {"label": "Public IP", "value": addr.get("PublicIp")},
+            {"label": "Scope", "value": addr.get("Domain")},
+            {"label": "Associated to", "value": associated or "— (unassociated)"},
+            {"label": "Network border group", "value": addr.get("NetworkBorderGroup")},
+            {"label": "Reverse DNS", "value": addr.get("PtrRecord")},
+        ],
+    )
+
+
+def _describe_snapshot(ec2, resource_id, region):
+    snap = ec2.describe_snapshots(SnapshotIds=[resource_id])["Snapshots"][0]
+    return (
+        "Snapshot",
+        f"#SnapshotDetails:snapshotId={resource_id}",
+        snap.get("Tags", []),
+        [
+            {"label": "State", "value": snap.get("State")},
+            {"label": "Source volume", "value": snap.get("VolumeId")},
+            {
+                "label": "Volume size",
+                "value": f"{snap['VolumeSize']} GiB" if snap.get("VolumeSize") else None,
+            },
+            _date_field("Created", snap.get("StartTime")),
+            {"label": "Storage tier", "value": snap.get("StorageTier")},
+            {"label": "Encrypted", "value": "yes" if snap.get("Encrypted") else "no"},
+            {"label": "Description", "value": snap.get("Description")},
+        ],
+    )
+
+
+_RESOURCE_DESCRIBERS = {
+    "i-": _describe_instance,
+    "vol-": _describe_volume,
+    "eipalloc-": _describe_address,
+    "snap-": _describe_snapshot,
+}
+
+
+@router.get("/api/recommendations/{rec_id}/resource-details")
+def resource_details(rec_id: int, conn=Depends(get_db)):
+    """Live characteristics of this recommendation's resource (EC2 instance,
+    EBS volume, Elastic IP or snapshot, dispatched on the id prefix) — the
+    recap shown when clicking a resource id, alongside the CloudTrail
+    creation info the resource-history endpoint already provides.
+
+    Same degrade-gracefully contract as resource-history: available=False
+    plus an actionable hint instead of a 500.
+    """
+    import os
+    import time
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT w.resource_id, w.resource_type, w.metadata
+        FROM recommendations r
+        JOIN waste_detected w ON w.id = r.waste_id
+        WHERE r.id = %s
+    """,
+        (rec_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="recommendation not found")
+    resource_id = row["resource_id"]
+    describe = next(
+        (fn for prefix, fn in _RESOURCE_DESCRIBERS.items() if resource_id.startswith(prefix)),
+        None,
+    )
+    if describe is None:
+        raise HTTPException(status_code=400, detail="no details view for this resource type")
+
+    cached = _RESOURCE_DETAILS_CACHE.get(resource_id)
+    if cached and cached[0] > time.time():
+        return cached[1]
+
+    metadata = row["metadata"] or {}
+    region = metadata.get("region") or os.getenv("AWS_REGION", "eu-west-1")
+
+    from utils.aws_clients import get_client
+
+    try:
+        ec2 = get_client("ec2", region=region)
+        kind, console_fragment, tags, fields = describe(ec2, resource_id, region)
+        payload = {
+            "available": True,
+            "region": region,
+            "kind": kind,
+            "console_url": (
+                f"https://console.aws.amazon.com/ec2/v2/home?region={region}{console_fragment}"
+            ),
+            "name": next((t["Value"] for t in tags if t["Key"] == "Name"), None),
+            "fields": [f for f in fields if f and f.get("value") not in (None, "")],
+            "tags": [{"key": t["Key"], "value": t["Value"]} for t in tags],
+        }
+    except Exception as e:
+        if "NotFound" in str(e) or ".Malformed" in str(e):
+            hint = "Resource not found on AWS — it may have been deleted since detection."
+        elif "AccessDenied" in str(e) or "UnauthorizedOperation" in str(e):
+            hint = (
+                "The wasteless-readonly role lacks the ec2:Describe* permission "
+                "for this resource in this region — check your onboarding stack."
+            )
+        else:
+            hint = str(e)
+        payload = {"available": False, "hint": hint}
+
+    _RESOURCE_DETAILS_CACHE[resource_id] = (time.time() + _HISTORY_CACHE_TTL_SECONDS, payload)
+    return payload
+
+
+def _deletion_status(ec2, resource_id):
+    """Live check: is this resource actually gone from AWS?
+
+    Returns (deleted, state):
+    - deleted True  → confirmed gone (describe raised *.NotFound, or — for an
+      instance — its state is 'terminated', which lingers ~1h post-terminate);
+    - deleted False → still there; state is its current lifecycle state so the
+      UI can say "still running/available/…";
+    - raises on anything else (access denied, throttling) so the caller can
+      report "couldn't verify" rather than wrongly confirming a deletion.
+
+    Never returns True on an ambiguous error — we only mark a to-do done when
+    we can positively see the resource is gone.
+    """
+    try:
+        if resource_id.startswith("i-"):
+            reservations = ec2.describe_instances(InstanceIds=[resource_id])["Reservations"]
+            if not reservations or not reservations[0]["Instances"]:
+                return True, None
+            state = reservations[0]["Instances"][0]["State"]["Name"]
+            return (state == "terminated"), state
+        if resource_id.startswith("vol-"):
+            vols = ec2.describe_volumes(VolumeIds=[resource_id])["Volumes"]
+            return (not vols), (vols[0]["State"] if vols else None)
+        if resource_id.startswith("eipalloc-"):
+            addrs = ec2.describe_addresses(AllocationIds=[resource_id])["Addresses"]
+            if not addrs:
+                return True, None
+            return False, ("associated" if addrs[0].get("InstanceId") else "allocated")
+        if resource_id.startswith("snap-"):
+            snaps = ec2.describe_snapshots(SnapshotIds=[resource_id])["Snapshots"]
+            return (not snaps), (snaps[0]["State"] if snaps else None)
+    except Exception as e:
+        # The *.NotFound error IS the confirmation the resource was deleted.
+        if "NotFound" in str(e):
+            return True, None
+        raise
+    return None, None
+
+
+@router.get("/api/recommendations/manual-todos")
+def manual_todos(conn=Depends(get_db)):
+    """Manual-review recommendations the user marked as to-do (status
+    approved_manual) — JSON for the shared notifications popover, which lives
+    on every page and so can't read the recommendations route's template
+    context. Newest first, capped like the pending list."""
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT r.id, r.recommendation_type,
+               r.estimated_monthly_savings_eur,
+               w.resource_id,
+               COALESCE(w.metadata->>'region', w.metadata->>'az', 'eu-west-1') AS region
+        FROM recommendations r
+        JOIN waste_detected w ON w.id = r.waste_id
+        WHERE r.status = 'approved_manual'
+        ORDER BY r.applied_at DESC
+        LIMIT 5
+    """)
+    return {
+        "manual_todos": [
+            {
+                "id": row["id"],
+                "recommendation_type": row["recommendation_type"],
+                "resource_id": row["resource_id"],
+                "estimated_monthly_savings_eur": float(row["estimated_monthly_savings_eur"] or 0),
+                "region": row["region"],
+            }
+            for row in cursor.fetchall()
+        ]
+    }
+
+
+@router.get("/api/recommendations/{rec_id}/deletion-status")
+def deletion_status(rec_id: int, conn=Depends(get_db)):
+    """Whether this to-do's resource has actually been deleted on AWS — gates
+    the "Done" button so a resource can't be marked done while it's still
+    running. Live (uncached): the user just acted in the console.
+    """
+    import os
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT w.resource_id,
+               COALESCE(w.metadata->>'region', w.metadata->>'az') AS region
+        FROM recommendations r
+        JOIN waste_detected w ON w.id = r.waste_id
+        WHERE r.id = %s
+    """,
+        (rec_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="recommendation not found")
+    resource_id = row["resource_id"]
+    region = row["region"] or os.getenv("AWS_REGION", "eu-west-1")
+    # az value ('eu-west-1a') → region ('eu-west-1') for the API client.
+    if region and region[-1].isalpha():
+        region = region[:-1]
+
+    from utils.aws_clients import get_client
+
+    try:
+        ec2 = get_client("ec2", region=region)
+        deleted, state = _deletion_status(ec2, resource_id)
+        return {"deleted": deleted, "state": state}
+    except Exception as e:
+        if "AccessDenied" in str(e) or "UnauthorizedOperation" in str(e):
+            hint = "The wasteless-readonly role can't describe this resource — can't verify."
+        else:
+            hint = f"Couldn't verify on AWS: {e}"
+        return {"deleted": None, "hint": hint}
+
+
 def _fmt_rec_line(r) -> str:
     """One pending recommendation as a single `key=value | …` line for the
     estate chat prompt. Every column the UI shows is included; type-specific
@@ -673,16 +963,18 @@ def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db)):
     for rec_id in action_request.recommendation_ids:
         try:
             if action_request.action == "reject":
-                # Reject recommendation. Restricted to 'pending' — the only
-                # state the UI ever exposes these buttons for — so a stray
-                # or future call can't silently overwrite a resolved status
-                # (approved/applied/obsolete/pr_open) with 'rejected' and
-                # make an already-remediated resource reappear as active waste.
+                # Reject/skip a recommendation. Allowed from 'pending' (the tabs'
+                # Skip button) and from 'approved_manual' (the To-do bell's Skip:
+                # the user marked it to-do but changed their mind — it goes to
+                # Skipped, still counted as waste, restorable). Still barred from
+                # resolved states (approved/applied/obsolete/pr_open/dismissed)
+                # so a stray call can't resurrect an already-handled resource as
+                # active waste.
                 cursor.execute(
                     """
                     UPDATE recommendations
                     SET status = 'rejected', applied_at = NOW()
-                    WHERE id = %s AND status = 'pending'
+                    WHERE id = %s AND status IN ('pending', 'approved_manual')
                     RETURNING id
                 """,
                     (rec_id,),
@@ -692,7 +984,7 @@ def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db)):
                     "recommendation_id": rec_id,
                     "success": result is not None,
                     "action": "rejected",
-                    **({} if result else {"error": "not in pending state"}),
+                    **({} if result else {"error": "not in a skippable state"}),
                 }
                 results.append(reject_result)
                 log_remediation_action("reject", [rec_id], reject_result, dry_run=False)
@@ -949,22 +1241,20 @@ def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db)):
                     )
 
                     # Update recommendation status.
-                    # Dry-run is checked FIRST so it's a uniform no-op: it
-                    # touches no AWS resource, so nothing is re-statused (stays
-                    # 'pending', still counted as active waste). Manual-review
-                    # types used to commit to 'approved_manual' even under
-                    # dry-run — a persisted approval demanding a real AWS
-                    # deletion, shown beneath the Dry-run banner. That was
-                    # incoherent; now dry-run changes nothing for any type.
-                    # Outside dry-run, manual review records the human decision
-                    # as 'approved_manual' (not 'approved'): nothing touched the
-                    # resource yet — the human still deletes it themselves — so
-                    # it stays counted in active_waste until a sync confirms
-                    # it's actually gone.
-                    if dry_run:
-                        new_status = None
-                    elif manual_review:
+                    # Manual review is checked FIRST: "Mark as to-do" is a
+                    # personal reminder that never touches AWS, so it's recorded
+                    # as 'approved_manual' even under dry-run — dry-run only
+                    # suppresses real AWS actions, and a to-do list of manual
+                    # deletions is exactly the intended dry-run/manual workflow
+                    # (nothing touched the resource; the human still deletes it
+                    # themselves, so it stays counted in active_waste until a
+                    # sync confirms it's gone). Automated types (boto3/
+                    # remediator) stay a uniform no-op in dry-run: they DO touch
+                    # AWS, so under dry-run they simulate and don't re-status.
+                    if manual_review:
                         new_status = "approved_manual"
+                    elif dry_run:
+                        new_status = None
                     else:
                         new_status = "approved" if aws_success else "pending"
 
@@ -982,7 +1272,10 @@ def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db)):
                         "recommendation_id": rec_id,
                         "instance_id": instance_id,
                         "success": dry_run or aws_success,
-                        "dry_run": dry_run,
+                        # A manual to-do is a real bookkeeping change, not a
+                        # simulated no-op — don't flag it as dry-run, so the UI
+                        # removes the row / reloads and doesn't say "no change".
+                        "dry_run": dry_run and not manual_review,
                         "manual": manual_review,
                         "action": rec_type,
                     }

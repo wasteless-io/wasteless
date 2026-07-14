@@ -313,7 +313,7 @@
     <!-- What leaks: current waste + how it moved -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="What your idle and orphaned resources cost every month if nothing changes"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span><span class="ring-unit">€</span><span class="ring-month">{{ now().strftime('%B') }}</span></span></span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Active waste — what your still-existing, not-yet-remediated idle and orphaned resources cost per month if nothing changes (includes any you've declined or queued). This is smaller than the Reports page's 'Waste detected', which also counts items since resolved or gone (obsolete)."><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span><span class="ring-unit">€</span><span class="ring-month">{{ now().strftime('%B') }}</span></span></span></div>
     </div>
 
     <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>

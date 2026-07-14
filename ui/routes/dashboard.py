@@ -421,7 +421,8 @@ def api_metrics(conn=Depends(get_db)):
             SELECT
                 COALESCE(SUM(estimated_monthly_savings_eur)
                          FILTER (WHERE status = 'pending'), 0) as potential_savings,
-                COUNT(*) FILTER (WHERE status = 'pending') as pending_count
+                COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
+                COUNT(*) FILTER (WHERE status = 'approved_manual') as manual_todo_count
             FROM recommendations
         ),
         actions AS (
@@ -429,7 +430,7 @@ def api_metrics(conn=Depends(get_db)):
             FROM actions_log
             WHERE action_status = 'success'
         )
-        SELECT m.potential_savings, m.pending_count, a.success_count
+        SELECT m.potential_savings, m.pending_count, m.manual_todo_count, a.success_count
         FROM metrics m CROSS JOIN actions a;
     """)
     result = cursor.fetchone()
@@ -438,5 +439,6 @@ def api_metrics(conn=Depends(get_db)):
     return {
         "potential_savings": float(result["potential_savings"]),
         "pending_count": int(result["pending_count"]),
+        "manual_todo_count": int(result["manual_todo_count"]),
         "actions_count": int(result["success_count"]),
     }

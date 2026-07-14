@@ -31,11 +31,49 @@
         pointer-events: none;
     }
     #reasonTip strong { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--gray-800); }
-    /* Boutons d'action par ligne : position fixe (colonne dediee), taille
-       constante, icones SVG inline — pas d'emojis. */
-    .row-action-btn { padding: 0.15rem 0.4rem; border: 1px solid var(--gray-300); border-radius: 4px; background: white; cursor: pointer; color: var(--gray-600); vertical-align: middle; line-height: 0; }
-    .row-action-btn + .row-action-btn { margin-left: 0.25rem; }
-    .row-action-btn:hover { color: var(--primary); border-color: var(--primary); }
+    /* Copy-id button: borderless glyph next to each resource id, quiet
+       until hover; flips to a green check for a beat after copying. */
+    .copy-id-btn { border: none; background: none; padding: 0.1rem; margin-left: 4px; cursor: pointer; color: var(--gray-400); vertical-align: middle; line-height: 0; }
+    .copy-id-btn:hover { color: var(--primary); }
+
+    /* Hero banner (chrome, not data): no ink border on hover. */
+    .card--no-hover:hover { border-color: transparent; }
+    /* Live clock at the end of the banner: time first, date under it,
+       tabular digits so the minute tick never makes it jitter. */
+    .hero-clock { text-align: right; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .hero-clock .hero-clock-time { display: block; font-size: 1.3rem; font-weight: 700; color: #1d1d1f; letter-spacing: -0.01em; }
+    .hero-clock .hero-clock-date { display: block; font-size: 0.8rem; color: #52514e; }
+    /* Blink for the To-do bell while manual work is pending. */
+    @keyframes pending-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .pending-blink { animation: pending-blink 1.6s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .pending-blink { animation: none; } }
+
+    /* To-do bell: pill button on the banner's left. Muted when the list is
+       empty, amber-accented and blinking while something awaits action. */
+    .todo-bell { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.75rem; border: 1px solid var(--hairline, #d9d6d0); border-radius: 999px; background: white; color: var(--gray-500); font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: border-color 0.2s ease, color 0.2s ease; }
+    .todo-bell:hover { border-color: var(--ink, #1d1d1f); color: var(--ink, #1d1d1f); }
+    .todo-bell--active { color: var(--primary); border-color: rgba(0,113,227,0.35); }
+    .todo-bell--active .todo-count { background: var(--primary); }
+    .todo-count { display: inline-flex; align-items: center; justify-content: center; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--warning); color: white; font-size: 0.72rem; }
+    .todo-bell[data-empty] .todo-count { background: var(--gray-400); }
+
+    /* Notification-style dropdown anchored under the bell. */
+    .todo-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 1500; width: 340px; max-height: 60vh; overflow-y: auto; background: white; border: 1px solid var(--gray-200); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+    .todo-panel-head { padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--gray-100); display: flex; flex-direction: column; gap: 0.15rem; }
+    .todo-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--gray-100); }
+    .todo-row:last-child { border-bottom: none; }
+    .todo-res-id { font-family: monospace; font-size: 0.82rem; color: var(--gray-800); text-decoration: none; cursor: pointer; border-bottom: 1px solid transparent; transition: color 0.15s ease, border-color 0.15s ease; word-break: break-all; }
+    .todo-res-id:hover { color: var(--primary); border-bottom-color: var(--primary); }
+    .todo-row-meta { font-size: 0.72rem; color: var(--gray-500); margin-top: 0.1rem; }
+    .todo-row-added { font-size: 0.68rem; color: var(--gray-400); margin-top: 0.05rem; }
+    .todo-row-actions { flex-shrink: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+    .todo-done-btn, .todo-skip-btn { border: 1px solid var(--gray-300); background: white; color: var(--gray-600); border-radius: 6px; padding: 0.2rem 0.55rem; font-size: 0.75rem; cursor: pointer; transition: all 0.15s ease; }
+    .todo-done-btn:hover { border-color: var(--success); color: var(--success); }
+    .todo-skip-btn:hover { border-color: var(--gray-500); color: var(--gray-800); }
+    /* Blocked: resource still present on AWS — red, non-actionable for a beat. */
+    .todo-done-btn--blocked { border-color: var(--danger); color: var(--danger); cursor: not-allowed; }
+    .todo-done-btn--blocked:hover { border-color: var(--danger); color: var(--danger); }
+    .todo-empty { padding: 1.5rem 1rem; text-align: center; font-size: 0.82rem; color: var(--gray-500); }
 
     /* Summary KPIs — same bare style as the current overview dials:
        label above, number below, thin vertical separators between
@@ -70,18 +108,78 @@
     .mode-pill--soft { background: rgba(0,0,0,0.04); color: var(--gray-600); }
     .policy-banner .dot { font-size: 0.7rem; line-height: 1; }
 </style>
-<div class="page-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-    <h1 style="margin-bottom: 0;">Recommendations</h1>
-    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
-        <button type="button" onclick="syncWithAWS()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" id="syncBtn">
-            <span id="syncIcon">&#8635;</span> Sync AWS
-        </button>
-        {# Stamped by the 5-min job; a manual click updates it in place
-           from syncWithAWS (the button does not always reload the page).
-           Always rendered so the JS has a target even before the first
-           sync after a server start. #}
-        <span id="lastSyncStamp" style="font-size: 0.7rem; color: var(--gray-400);{% if not aws_sync_at %} display: none;{% endif %}">Last sync: {% if aws_sync_at %}{{ aws_sync_at.strftime('%d %b, %H:%M') }}{% endif %}</span>
+{# Hero banner, same chrome plane (#efede8) as the Overview header. Three
+   zones (1fr auto 1fr keeps the title centered whatever the sides weigh):
+   the manual-to-do bell on the left, the page title dead-center, the live
+   clock on the right. #}
+{# position/z-index: lift the whole banner's stacking context above the
+   cards below, so the To-do dropdown (absolute, inside) isn't painted
+   under the summary card that follows it in the DOM. #}
+<header class="card mb-1 card--no-hover" style="padding: 0.9rem 1.5rem; background: #efede8; color: #1d1d1f; overflow: visible; position: relative; z-index: 50;">
+    <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;">
+        <div style="justify-self: start; position: relative;">
+            {# Manual-to-do button: blinks only while resources await manual
+               execution. Click toggles the notification-style list below. #}
+            <button type="button" id="todoBell" onclick="toggleTodoPanel(event)"
+                    class="todo-bell{% if approved_manual_total_count > 0 %} todo-bell--active pending-blink{% endif %}"
+                    aria-haspopup="true" aria-expanded="false"
+                    {% if approved_manual_total_count == 0 %}data-empty="1"{% endif %}>
+                <span>To-do</span>
+                <span id="todoCount" class="todo-count"{% if approved_manual_total_count == 0 %} style="display:none;"{% endif %}>{{ approved_manual_total_count }}</span>
+            </button>
+
+            {# Notification-style dropdown, hidden until the bell is clicked #}
+            <div id="todoPanel" class="todo-panel" style="display: none;">
+                <div class="todo-panel-head">
+                    <strong>Execute manually on AWS</strong>
+                    <span style="font-size: 0.72rem; color: var(--gray-500);">Click an id to open it in the console, then mark it done.</span>
+                </div>
+                <div id="todoPanelList">
+                    {% for m in approved_manual_recs %}
+                    <div class="todo-row" id="todoRow-{{ m.id }}">
+                        <div style="min-width: 0;">
+                            <a class="todo-res-id" data-res-id="{{ m.resource_id }}" data-region="{{ m.region }}"
+                               target="_blank" rel="noopener" data-tip-card="Open in the AWS Console">{{ m.resource_id }}</a>
+                            <div class="todo-row-meta">{{ m.recommendation_type.replace('_', ' ') }} · {{ "%.2f"|format(m.estimated_monthly_savings_eur or 0) }} €/mo</div>
+                            <div class="todo-row-added">added {{ m.applied_at.strftime('%Y-%m-%d %H:%M') if m.applied_at else '-' }}</div>
+                        </div>
+                        {# Native title (not the styled kpi-hover tooltip): the
+                           panel is a scroll container that would clip a CSS
+                           ::after tooltip. #}
+                        <div class="todo-row-actions">
+                            <button type="button" class="todo-done-btn"
+                                    data-tip-card="I deleted this on AWS — verify it's gone, then stop counting it as waste"
+                                    onclick="markTodoDone({{ m.id }}, this)">Done</button>
+                            <button type="button" class="todo-skip-btn"
+                                    data-tip-card="Skip for now — take it off the to-do list; it stays counted as waste and moves to Skipped"
+                                    onclick="skipTodo({{ m.id }}, this)">Skip</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {# Logical next step once the list is cleared: a calm empty
+                   state instead of a blank panel. Toggled by JS as rows leave. #}
+                <div id="todoEmpty" class="todo-empty"{% if approved_manual_total_count > 0 %} style="display:none;"{% endif %}>
+                    <div style="font-size: 1.4rem; margin-bottom: 0.2rem;">✓</div>
+                    Nothing to execute manually
+                </div>
+            </div>
+        </div>
+        <h1 style="margin: 0; font-size: 1.3rem; font-weight: 700; color: #1d1d1f; text-align: center;">Wasteless Recommendations</h1>
+        {# Live clock, Europe/Paris — same wall clock as the DB stamps. #}
+        <time id="hero-clock" class="hero-clock" style="justify-self: end;">
+            <span class="hero-clock-time" id="hero-clock-time"></span>
+            <span class="hero-clock-date" id="hero-clock-date"></span>
+        </time>
     </div>
+</header>
+
+{# Sync AWS + last-sync stamp, moved out of the old page title row #}
+<div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-bottom: 1rem;">
+    <span id="lastSyncStamp" style="font-size: 0.7rem; color: var(--gray-400);{% if not aws_sync_at %} display: none;{% endif %}">Last sync: {% if aws_sync_at %}{{ aws_sync_at.strftime('%d %b, %H:%M') }}{% endif %}</span>
+    <button type="button" onclick="syncWithAWS()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" id="syncBtn">
+        <span id="syncIcon">&#8635;</span> Sync AWS
+    </button>
 </div>
 
 <!-- Summary + chat -->
@@ -91,12 +189,15 @@
         <div class="summary-rings">
             <div class="summary-kpi">
                 <div class="summary-ring-label">Recommendations</div>
-                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Total pending recommendations"><span class="kpi-zoom"><span id="kpiCount" class="countup{% if (total_count or 0) > 0 %} pending-blink{% endif %}">{{ total_count }}</span></span></span></div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip-card="Total pending recommendations"><span class="kpi-zoom"><span id="kpiCount" class="countup{% if (total_count or 0) > 0 %} pending-blink{% endif %}">{{ total_count }}</span></span></span></div>
             </div>
             <div class="summary-sep"></div>
             <div class="summary-kpi">
-                <div class="summary-ring-label">Savings / mo</div>
-                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Total estimated monthly savings (on-demand list prices). When this exceeds your real cloud spend, the realistic capped figure is shown below — you can't save more than you spend."><span class="kpi-zoom"><span id="kpiSavings" class="countup">{{ "%.2f"|format(total_savings) }}</span><span class="ring-unit">€</span></span></span></div>
+                <div class="summary-ring-label">Savings</div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip-card="Total estimated monthly savings for the pending recommendations only (on-demand list prices). The Overview's 'Monthly Waste' also counts items you've declined or queued, so it can be higher. When this exceeds your real cloud spend, the realistic capped figure is shown below — you can't save more than you spend."><span class="kpi-zoom"><span id="kpiSavings" class="countup">{{ "%.2f"|format(total_savings) }}</span><span class="ring-unit">€</span></span></span></div>
+                {# Which month the estimate refers to — same now() convention as
+                   the overview's Monthly Waste / AWS Spend month labels. #}
+                <div style="font-size: 0.58rem; color: var(--gray-400); font-weight: 500; margin-top: 0.1rem; text-transform: uppercase; letter-spacing: 0.08em;">{{ now().strftime('%B') }}</div>
                 {# Shown when the raw estimate exceeds the real bill: the value
                    above is the list-price estimate, the realistic (capped to
                    real per-service spend) figure is disclosed here. Toggled
@@ -106,13 +207,13 @@
             <div class="summary-sep"></div>
             <div class="summary-kpi">
                 <div class="summary-ring-label">Wasted so far</div>
-                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="What these resources have already cost since their creation — monthly cost prorated per day of age. Grows every day they stay unresolved."><span class="kpi-zoom"><span id="kpiWasted" class="countup">{{ "%.2f"|format(wasted_so_far_total) }}</span><span class="ring-unit">€</span></span></span></div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip-card="What these resources have already cost since their creation — monthly cost prorated per day of age. Grows every day they stay unresolved."><span class="kpi-zoom"><span id="kpiWasted" class="countup">{{ "%.2f"|format(wasted_so_far_total) }}</span><span class="ring-unit">€</span></span></span></div>
                 <div style="font-size: 0.58rem; color: var(--gray-500); font-weight: 600; margin-top: 0.1rem;">since created</div>
             </div>
             <div class="summary-sep"></div>
             <div class="summary-kpi">
                 <div class="summary-ring-label">Avg confidence</div>
-                <div id="kpiConfidenceRing" class="ring-value" style="color: {% if avg_confidence >= 0.8 %}var(--success){% elif avg_confidence >= 0.5 %}var(--warning){% else %}var(--danger){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="Average detection confidence across these recommendations"><span class="kpi-zoom"><span id="kpiConfidence" class="countup">{{ "%.0f"|format(avg_confidence * 100) }}</span><span class="ring-unit">%</span></span></span></div>
+                <div id="kpiConfidenceRing" class="ring-value" style="color: {% if avg_confidence >= 0.8 %}var(--success){% elif avg_confidence >= 0.5 %}var(--warning){% else %}var(--danger){% endif %};"><span class="kpi-hover" tabindex="0" data-tip-card="Average detection confidence across these recommendations"><span class="kpi-zoom"><span id="kpiConfidence" class="countup">{{ "%.0f"|format(avg_confidence * 100) }}</span><span class="ring-unit">%</span></span></span></div>
             </div>
         </div>
 
@@ -200,44 +301,8 @@
 </div>
 {% endif %}
 
-{% if approved_manual_recs %}
-<!-- Manual-review recommendations the human confirmed but hasn't deleted
-     yet — wasteless never touches AWS for these, so this is the only
-     place they're still visible as "still on you" instead of just
-     vanishing into History. -->
-<div class="card mb-1" style="padding: 0.75rem; border-left: 3px solid var(--gray-400);">
-    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-        <strong style="font-size: 0.9rem;">Approved — awaiting manual deletion</strong>
-        <span class="badge badge-info">
-            {% if approved_manual_total_count > approved_manual_recs|length %}{{ approved_manual_recs|length }} of {{ approved_manual_total_count }}{% else %}{{ approved_manual_recs|length }}{% endif %}
-        </span>
-        <span style="font-size: 0.75rem; color: var(--gray-600, #6b7280);">
-            You confirmed these — delete them yourself in the AWS Console. They keep counting as active waste until a sync confirms they're gone.
-        </span>
-    </div>
-    <div class="table-container">
-        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
-            <tbody>
-                {% for m in approved_manual_recs %}
-                <tr style="border-top: 1px solid var(--gray-200, #e5e7eb);">
-                    <td style="padding: 0.4rem 0.6rem; font-family: monospace;">{{ m.resource_id }}</td>
-                    <td style="padding: 0.4rem 0.6rem;">{{ m.recommendation_type }}</td>
-                    <td style="padding: 0.4rem 0.6rem;">EUR {{ "%.2f"|format(m.estimated_monthly_savings_eur or 0) }}/mo</td>
-                    <td style="padding: 0.4rem 0.6rem;">
-                        approved {{ m.applied_at.strftime('%Y-%m-%d %H:%M') if m.applied_at else '-' }}
-                    </td>
-                    <td style="padding: 0.4rem 0.6rem; text-align: right;">
-                        <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;"
-                                title="Changed your mind? Stop counting this resource as active waste for good"
-                                onclick="dismissApprovedManual({{ m.id }})">Ignore</button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
+<!-- The manual-to-do list now lives in the To-do bell dropdown in the hero
+     banner (its own panel + count); the standalone card here was redundant. -->
 
 <!-- Tabs -->
 <div class="card" style="padding: 0.75rem;">
@@ -271,7 +336,7 @@
             {% if get_dry_run() %}
             <span class="mode-pill mode-pill--dry"><span class="dot">●</span> Dry-run</span>
             {% else %}
-            <span class="mode-pill mode-pill--live kpi-hover" tabindex="0" data-tip="Production mode — approving a recommendation executes the action for real on AWS (stop, terminate, delete). Switch to dry-run in Settings to simulate without touching any resource."><span class="dot">●</span> Production</span>
+            <span class="mode-pill mode-pill--live kpi-hover" tabindex="0" data-tip-card="Production mode — approving a recommendation executes the action for real on AWS (stop, terminate, delete). Switch to dry-run in Settings to simulate without touching any resource."><span class="dot">●</span> Production</span>
             {% endif %}
             {% if get_grace_period_days() > 0 %}
             <span class="mode-pill mode-pill--soft">Grace period: {{ get_grace_period_days() }} day{{ 's' if get_grace_period_days() > 1 }}</span>
@@ -288,13 +353,13 @@
             <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
             {# Button group hidden until at least one row is selected (shown by updateSelectedCount) #}
             <div id="approveActions" style="display: none; gap: 0.5rem;">
-                <button type="button" id="approveBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-primary kpi-hover" style="padding: 0.4rem 0.75rem; cursor: pointer;" data-tip="Apply the fix now — stops or deletes the resource on AWS (or schedules it / opens a Terraform PR, per your settings)">
+                <button type="button" id="approveBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-primary kpi-hover" style="padding: 0.4rem 0.75rem; cursor: pointer;" data-tip-card="Apply the fix now — stops or deletes the resource on AWS (or schedules it / opens a Terraform PR, per your settings)">
                     Apply
                 </button>
-                <button type="button" id="rejectBtn" onclick="executeAction('reject')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; cursor: pointer;" data-tip="Decline this recommendation for now — the resource stays counted as active waste so you can revisit it">
+                <button type="button" id="rejectBtn" onclick="executeAction('reject')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; cursor: pointer;" data-tip-card="Decline this recommendation for now — the resource stays counted as active waste so you can revisit it">
                     Skip
                 </button>
-                <button type="button" id="dismissBtn" onclick="executeAction('dismiss')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; cursor: pointer;" data-tip="Mark as not waste — stop counting this resource for good; it won't come back in your totals">
+                <button type="button" id="dismissBtn" onclick="executeAction('dismiss')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; cursor: pointer;" data-tip-card="Mark as not waste — stop counting this resource for good; it won't come back in your totals">
                     Ignore
                 </button>
             </div>
@@ -304,13 +369,16 @@
             <span id="manualSelectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
             {# Button group hidden until at least one row is selected (shown by updateSelectedCount) #}
             <div id="manualActions" style="display: none; gap: 0.5rem;">
-                <button type="button" id="approveManualBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-primary kpi-hover" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer;" data-tip="Confirm the recommendation — the decision is recorded, but you still have to delete the resource yourself on AWS">
-                    Approve
+                {# Outline, not primary: solid blue is reserved for buttons
+                   that really act on AWS (Apply) — this one only records the
+                   decision, the deletion stays on the user's plate. #}
+                <button type="button" id="approveManualBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-primary kpi-hover" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer;" data-tip-card="Add this to your to-do list — the decision is recorded, but you still delete the resource yourself on AWS">
+                    Mark as to-do
                 </button>
-                <button type="button" id="rejectManualBtn" onclick="executeAction('reject')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer;" data-tip="Decline this recommendation for now — the resource stays counted as active waste so you can revisit it">
+                <button type="button" id="rejectManualBtn" onclick="executeAction('reject')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer;" data-tip-card="Decline this recommendation for now — the resource stays counted as active waste so you can revisit it">
                     Skip
                 </button>
-                <button type="button" id="dismissManualBtn" onclick="executeAction('dismiss')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer;" data-tip="Mark as not waste — stop counting this resource for good; it won't come back in your totals">
+                <button type="button" id="dismissManualBtn" onclick="executeAction('dismiss')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer;" data-tip-card="Mark as not waste — stop counting this resource for good; it won't come back in your totals">
                     Ignore
                 </button>
             </div>
@@ -358,7 +426,7 @@
                         {% endif %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#InstanceDetails:instanceId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why act?" data-reason="{{ reason }}">{{ rec.resource_id[:20] }}</code> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Why act?" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id[:20] }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 {% if rec.recommendation_type == 'stop_instance' %}
@@ -373,10 +441,10 @@
                             <td style="padding: 0.4rem 0.5rem;">
                                 <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
                             </td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong>
                                     <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>
                                 </div>
                             </td>
@@ -422,15 +490,15 @@
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ebs" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Not attached to any instance' %}
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why delete?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" target="_blank" onclick="event.stopPropagation()" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Why delete?" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_name or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; white-space: nowrap;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span> <span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -472,11 +540,11 @@
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-eip" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Not associated to any instance' %}
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why release?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" target="_blank" onclick="event.stopPropagation()" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Why release?" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
@@ -519,15 +587,15 @@
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-snap" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Old snapshot — verify before deleting' %}
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why review?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" target="_blank" onclick="event.stopPropagation()" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Why review?" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.snap_description or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -568,12 +636,12 @@
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-other" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.action_required %}{% if rec.ai_insight %}{% set reason = reason ~ ' — ' ~ rec.ai_insight %}{% endif %}
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.volume_name or rec.resource_id }}</code> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.volume_name or rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
                                                         <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong>
                                     <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span>
                                 </div>
                             </td>
@@ -647,7 +715,7 @@
                     <td style="padding: 0.4rem 0.6rem;">skipped {{ rj.applied_at.strftime('%Y-%m-%d %H:%M') if rj.applied_at else '-' }}</td>
                     <td style="padding: 0.4rem 0.6rem; text-align: right;">
                         <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;"
-                                title="Send this recommendation back to the pending list so you can act on it again"
+                                data-tip-card="Send this recommendation back to the pending list so you can act on it again"
                                 onclick="restoreSkipped({{ rj.id }})">Restore</button>
                     </td>
                 </tr>
@@ -658,19 +726,17 @@
 </details>
 {% endif %}
 
-<!-- Resource-history modal: CloudTrail LookupEvents for one resource (who
-     created/touched it) — see /api/recommendations/{id}/resource-history -->
-<div id="historyModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
+<!-- Resource-details modal: live ec2:Describe* recap + CloudTrail creation
+     info, opened by clicking a resource id (EC2 / EBS / EIP / Snapshots
+     tabs) — see /api/recommendations/{id}/resource-details -->
+<div id="resourceModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
     <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
-            <h3 style="margin: 0; font-size: 1rem;">Resource history (CloudTrail)</h3>
-            <button type="button" onclick="closeHistoryModal()" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
+            <h3 id="resourceModalTitle" style="margin: 0; font-size: 1rem;">Resource details</h3>
+            <button type="button" onclick="closeResourceModal()" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
         </div>
-        <p id="historyModalLabel" style="font-size: 0.8rem; color: var(--gray-600); margin: 0 0 0.75rem;"></p>
-        <div id="historyContent" style="font-size: 0.85rem; color: var(--gray-700);"></div>
-        <p style="font-size: 0.72rem; color: var(--gray-500); margin: 0.75rem 0 0;">
-            Last 90 days of management events, from CloudTrail event history.
-        </p>
+        <p id="resourceModalLabel" style="font-size: 0.8rem; color: var(--gray-600); margin: 0 0 0.75rem; font-family: monospace;"></p>
+        <div id="resourceContent" style="font-size: 0.85rem; color: var(--gray-700);"></div>
     </div>
 </div>
 
@@ -855,16 +921,23 @@
             return;
         }
 
+        // Manual tabs never touch AWS: "approve" there only queues a human
+        // to-do, so the whole confirm flow words it that way (and skips the
+        // production warning below).
+        const isManualApprove = action === 'approve' && !AUTOMATED_TABS.includes(currentTab);
         const actionText = action === 'approve'
-            ? (AUTOMATED_TABS.includes(currentTab) ? 'apply' : 'approve')
+            ? (AUTOMATED_TABS.includes(currentTab) ? 'apply' : 'mark as to-do')
             : action === 'dismiss' ? 'ignore (stop counting as active waste)'
             : 'skip';
-        const confirmLabel = { apply: 'Apply', approve: 'Approve', skip: 'Skip' }[actionText] || 'Ignore';
+        const confirmLabel = { apply: 'Apply', 'mark as to-do': 'Mark as to-do', skip: 'Skip' }[actionText] || 'Ignore';
         const noun = ids.length === 1 ? 'recommendation' : 'recommendations';
         // AWS-sourced ids/urls go into innerHTML below, so escape them.
         const esc = s => String(s).replace(/[&<>"']/g,
             c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        let html = esc('You are about to ' + actionText + ' ' + ids.length + ' ' + noun + '.');
+        let html = esc(isManualApprove
+            ? 'You are about to mark ' + ids.length + ' ' + noun + ' as to-do — you still delete the '
+              + (ids.length === 1 ? 'resource' : 'resources') + ' yourself on AWS.'
+            : 'You are about to ' + actionText + ' ' + ids.length + ' ' + noun + '.');
 
         // Show exactly which resources are affected — each id in blue, linking
         // to its AWS console page when we have a deep link. Capped so a big
@@ -882,9 +955,10 @@
                 + (resources.length === 1 ? 'Resource: ' : 'Resources: ') + shown + extra + '</div>';
         }
 
-        // Production reminder: applying here touches AWS for real. Only relevant
-        // when this is an Apply/Approve in live mode (dryRun is false).
-        if (action === 'approve' && !dryRun) {
+        // Production reminder: applying here touches AWS for real. Only
+        // relevant for an Apply in live mode (dryRun is false) on an
+        // automated tab — a manual to-do never executes anything.
+        if (action === 'approve' && !dryRun && !isManualApprove) {
             html += '<div style="margin-top: 0.75rem; color: var(--danger); font-weight: 600;">'
                 + '⚠ Production mode — this executes the action for real on AWS.</div>';
         }
@@ -892,9 +966,10 @@
         const proceed = await confirmDialog(null, {
             html: html,
             confirmText: confirmLabel,
-            // Red confirm button for anything that isn't a plain dry-run apply:
-            // real production actions and the negative skip/ignore paths.
-            danger: action !== 'approve' || !dryRun,
+            // Red confirm button for anything that isn't a plain dry-run apply
+            // or a manual to-do (which never touches AWS): real production
+            // actions and the negative skip/ignore paths.
+            danger: isManualApprove ? false : (action !== 'approve' || !dryRun),
         });
         if (!proceed) {
             return;
@@ -969,7 +1044,7 @@
             } else {
                 msg = successCount + '/' + ids.length + ' actions completed successfully!';
                 if (manualCount > 0) {
-                    msg += ' (' + manualCount + ' approved — execute manually on AWS)';
+                    msg += ' (' + manualCount + ' marked as to-do — execute manually on AWS)';
                 }
                 if (scheduledCount > 0) {
                     msg += ' (' + scheduledCount + ' scheduled — grace period, cancellable from this page)';
@@ -988,33 +1063,16 @@
             if (scheduledCount > 0) {
                 // Reload so the "Scheduled executions" panel reflects reality
                 setTimeout(() => window.location.reload(), 1500);
+            } else if (manualCount > 0) {
+                // Reload so the To-do bell, its dropdown and the "To-do —
+                // execute manually" panel pick up the newly marked rows (all
+                // server-rendered, not updated in JS)
+                setTimeout(() => window.location.reload(), 1000);
+            } else if (action === 'reject' && successCount > 0) {
+                // Reload so the "Skipped recommendations" panel picks up the
+                // newly skipped rows (it's server-rendered, not updated in JS)
+                setTimeout(() => window.location.reload(), 1000);
             }
-        } catch (error) {
-            showToast('Error: ' + error.message, 'error');
-        }
-    }
-
-    async function dismissApprovedManual(recId) {
-        const proceed = await confirmDialog(
-            'Use this if you changed your mind and are not going to delete it. It will no longer be counted as active waste.',
-            { title: 'Stop counting as active waste?', confirmText: 'Ignore', danger: true }
-        );
-        if (!proceed) {
-            return;
-        }
-        try {
-            const response = await api('/api/actions', {
-                method: 'POST',
-                body: JSON.stringify({
-                    recommendation_ids: [recId],
-                    action: 'dismiss'
-                })
-            });
-            const ok = response.results[0] && response.results[0].success;
-            showToast(ok ? 'Ignored — no longer counted as active waste.'
-                         : 'Failed: ' + (response.results[0].error || 'unknown'),
-                      ok ? 'success' : 'error');
-            if (ok) setTimeout(() => window.location.reload(), 1000);
         } catch (error) {
             showToast('Error: ' + error.message, 'error');
         }
@@ -1184,100 +1242,132 @@
         }
     }
 
-    // Resource-history modal: read-only fetch, rendered as a simple list.
-    // The endpoint caches per resource, so reopening is free.
-    function openHistoryModal(recId, label) {
-        document.getElementById('historyModalLabel').textContent = label;
-        const content = document.getElementById('historyContent');
+    // Resource-details modal: live recap of the resource (ec2:Describe*,
+    // dispatched server-side on the id prefix) plus its CloudTrail creation
+    // event, fetched in parallel. Both endpoints cache per resource
+    // server-side, so reopening is free.
+    function openResourceModal(recId, label) {
+        document.getElementById('resourceModalTitle').textContent = 'Resource details';
+        document.getElementById('resourceModalLabel').textContent = label;
+        const content = document.getElementById('resourceContent');
         content.textContent = 'Loading…';
-        document.getElementById('historyModal').style.display = 'flex';
-        fetch('/api/recommendations/' + recId + '/resource-history')
-            .then(r => r.json())
-            .then(data => {
-                if (!data.available) {
-                    content.textContent = data.hint || 'Resource history unavailable.';
-                    return;
-                }
-                if (!data.events.length) {
-                    content.textContent = 'No management events found in the last 90 days '
-                        + '(region ' + data.region + ') — the resource predates the CloudTrail '
-                        + 'event-history window, or is only referenced by ARN.';
-                    return;
-                }
-                // Les noms d'evenements/utilisateurs viennent de CloudTrail :
-                // echappes avant innerHTML (les usernames federes sont libres)
-                const esc = s => String(s).replace(/[&<>"']/g,
-                    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-                const fmtDate = t => {
-                    const d = new Date(t);
-                    return isNaN(d) ? esc(t.replace('T', ' ').slice(0, 16))
-                        : d.toLocaleString('en-GB', { day: '2-digit', month: 'short',
-                            year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                };
-                // Deterministic deep-link to one event in the CloudTrail
-                // console (no extra API call). encodeURIComponent keeps the
-                // id/region safe inside the href attribute.
-                const eventUrl = id => 'https://' + encodeURIComponent(data.region)
+        document.getElementById('resourceModal').style.display = 'flex';
+
+        const esc = s => String(s).replace(/[&<>"']/g,
+            c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const fmtDate = t => {
+            const d = new Date(t);
+            return isNaN(d) ? esc(String(t).replace('T', ' ').slice(0, 16))
+                : d.toLocaleString('en-GB', { day: '2-digit', month: 'short',
+                    year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        };
+
+        Promise.all([
+            fetch('/api/recommendations/' + recId + '/resource-details').then(r => r.json()),
+            // Creation info is best-effort: a CloudTrail failure must not
+            // block the characteristics recap.
+            fetch('/api/recommendations/' + recId + '/resource-history')
+                .then(r => r.json()).catch(() => ({ available: false }))
+        ]).then(([details, history]) => {
+            if (!details.available) {
+                content.textContent = details.hint || 'Resource details unavailable.';
+                return;
+            }
+            document.getElementById('resourceModalTitle').textContent
+                = details.kind + ' details';
+
+            // Creation box, from the resource's true CloudTrail creation
+            // event (for instances, LaunchTime resets on stop/start — it only
+            // appears as "Last launched" in the recap below).
+            let creationBox = '';
+            const CREATION_EVENTS = ['RunInstances', 'CreateVolume',
+                'AllocateAddress', 'CreateSnapshot', 'CopySnapshot'];
+            const created = history.available
+                ? (history.events || []).find(e => CREATION_EVENTS.includes(e.name)) : null;
+            if (created) {
+                const eventUrl = 'https://' + encodeURIComponent(history.region)
                     + '.console.aws.amazon.com/cloudtrailv2/home?region='
-                    + encodeURIComponent(data.region) + '#/events/' + encodeURIComponent(id);
-                // Creation summary: the reassuring headline (when + who created
-                // the resource). LookupEvents returns newest-first, so the true
-                // creation event is one of these names; if it predates the
-                // 90-day window we fall back to the oldest event we can see and
-                // label it honestly rather than claiming it's the creation.
-                const CREATION_EVENTS = ['RunInstances', 'CreateVolume',
-                    'AllocateAddress', 'CreateSnapshot'];
-                const created = data.events.find(e => CREATION_EVENTS.includes(e.name));
-                const origin = created || data.events[data.events.length - 1];
-                const originLabel = created ? 'Created' : 'Earliest recorded activity';
-                const summary =
+                    + encodeURIComponent(history.region) + '#/events/'
+                    + encodeURIComponent(created.event_id);
+                creationBox =
                     '<div style="background:var(--gray-200); border:1px solid var(--gray-300); '
                     + 'border-radius:8px; padding:0.75rem 0.9rem; margin-bottom:0.9rem;">'
                     + '<div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; '
-                    + 'color:var(--gray-500); margin-bottom:0.3rem;">' + originLabel + '</div>'
+                    + 'color:var(--gray-500); margin-bottom:0.3rem;">Created</div>'
                     + '<div style="font-size:0.95rem; font-weight:600; color:var(--gray-800);">'
-                    + fmtDate(origin.time) + '</div>'
+                    + fmtDate(created.time) + '</div>'
                     + '<div style="font-size:0.82rem; color:var(--gray-600); margin-top:0.15rem;">by '
-                    + esc(origin.username || 'unknown') + ' · ' + esc(origin.name) + '</div>'
-                    + (origin.event_id ? '<div style="margin-top:0.5rem;"><a href="'
-                        + eventUrl(origin.event_id) + '" target="_blank" rel="noopener" '
-                        + 'style="font-size:0.78rem; color:var(--primary); text-decoration:none;">'
-                        + 'View this event in CloudTrail ↗</a></div>' : '')
+                    + esc(created.username || 'unknown') + '</div>'
+                    + (created.event_id ? '<div style="margin-top:0.5rem;"><a href="' + eventUrl
+                        + '" target="_blank" rel="noopener" style="font-size:0.78rem; '
+                        + 'color:var(--primary); text-decoration:none;">'
+                        + 'View creation event in CloudTrail ↗</a></div>' : '')
                     + '</div>';
-                // Full history as a 3-column table: Date | Execution | User.
-                // Fixed first-column width keeps header and rows aligned (a
-                // plain flex row would misalign the middle/right columns).
-                const fullHistory =
-                    '<div style="display:flex; gap:0.6rem; padding:0.3rem 0; font-size:0.7rem; '
-                    + 'text-transform:uppercase; letter-spacing:0.04em; color:var(--gray-500); '
-                    + 'border-bottom:1px solid var(--gray-200);">'
-                    + '<span style="flex:0 0 150px; white-space:nowrap;">Date</span>'
-                    + '<span style="flex:1;">Execution</span>'
-                    + '<span style="flex:0 0 auto;">User</span>'
-                    + '</div>'
-                    + data.events.map(e => {
-                        const inner =
-                            '<span style="flex:0 0 150px; color:var(--gray-500); white-space:nowrap;">' + esc(e.time.replace('T', ' ').slice(0, 16)) + '</span>'
-                            + '<strong style="flex:1;' + (e.event_id ? ' color:var(--primary);' : '') + '">' + esc(e.name) + '</strong>'
-                            + '<span style="flex:0 0 auto; color:var(--gray-600);">' + esc(e.username || '?') + '</span>';
-                        const base = 'display:flex; gap:0.6rem; padding:0.3rem 0; border-bottom:1px solid var(--gray-100);';
-                        // Whole row links to the event; the blue Execution name
-                        // is the affordance, hover shades the row.
-                        return e.event_id
-                            ? '<a href="' + eventUrl(e.event_id) + '" target="_blank" rel="noopener" '
-                              + 'title="Open this event in the CloudTrail console" '
-                              + 'style="' + base + ' text-decoration:none; color:inherit;" '
-                              + 'onmouseover="this.style.background=\'var(--gray-100)\'" '
-                              + 'onmouseout="this.style.background=\'transparent\'">' + inner + '</a>'
-                            : '<div style="' + base + '">' + inner + '</div>';
-                    }).join('');
-                content.innerHTML = summary + fullHistory;
-            })
-            .catch(err => { content.textContent = 'Request failed: ' + err; });
+            }
+
+            // Characteristics: one bordered row per field the server kept
+            // (nulls already dropped there); Name first when tagged.
+            const rows = (details.name ? [{ label: 'Name', value: details.name }] : [])
+                .concat(details.fields || []);
+            const recap = rows.map(f =>
+                '<div style="display:flex; gap:0.6rem; padding:0.3rem 0; border-bottom:1px solid var(--gray-100);">'
+                + '<span style="flex:0 0 130px; color:var(--gray-500);">' + esc(f.label) + '</span>'
+                + '<span style="flex:1; color:var(--gray-700); word-break:break-all;">'
+                + (f.date ? fmtDate(f.value) : esc(f.value)) + '</span>'
+                + '</div>').join('');
+
+            const tags = (details.tags || []).filter(t => t.key !== 'Name');
+            const tagsBlock = tags.length
+                ? '<div style="margin-top:0.75rem;"><div style="font-size:0.7rem; text-transform:uppercase; '
+                  + 'letter-spacing:0.04em; color:var(--gray-500); margin-bottom:0.3rem;">Tags</div>'
+                  + tags.map(t => '<span style="display:inline-block; background:var(--gray-100); '
+                      + 'border:1px solid var(--gray-200); border-radius:4px; padding:0.1rem 0.45rem; '
+                      + 'font-size:0.75rem; margin:0 0.3rem 0.3rem 0;">'
+                      + esc(t.key) + ': ' + esc(t.value) + '</span>').join('')
+                  + '</div>'
+                : '';
+
+            const consoleLink =
+                '<div style="margin-top: 0.9rem;"><a href="' + esc(details.console_url)
+                + '" target="_blank" rel="noopener" style="font-size:0.82rem; '
+                + 'color:var(--primary); text-decoration:none; font-weight:600;">'
+                + 'Open this ' + esc(details.kind.toLowerCase()) + ' in the AWS Console ↗</a></div>';
+
+            content.innerHTML = creationBox + recap + tagsBlock + consoleLink;
+        }).catch(err => { content.textContent = 'Request failed: ' + err; });
     }
 
-    function closeHistoryModal() {
-        document.getElementById('historyModal').style.display = 'none';
+    function closeResourceModal() {
+        document.getElementById('resourceModal').style.display = 'none';
+    }
+
+    // Copy a resource id to the clipboard from the little glyph next to it.
+    // Feedback stays local (icon flips to a green check for a beat) — no
+    // toast for something this small. execCommand fallback covers non-secure
+    // origins where navigator.clipboard is unavailable.
+    function copyResourceId(btn) {
+        const done = () => {
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="var(--success)" stroke-width="1.8" aria-hidden="true"><path d="M3 8.5l3.5 3.5L13 4.5"/></svg>';
+            btn.disabled = true;
+            setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 1200);
+        };
+        const id = btn.dataset.id;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(id).then(done).catch(() => fallbackCopy(id, done));
+        } else {
+            fallbackCopy(id, done);
+        }
+    }
+
+    function fallbackCopy(text, done) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); } finally { ta.remove(); }
     }
 
     // Estate chat (summary tile): one-shot question about ALL pending
@@ -1384,6 +1474,180 @@
             el.addEventListener('mouseleave', hideTip);
         });
     })();
+
+    // Live banner clock, Europe/Paris — same wall clock as the DB stamps and
+    // the Overview header. Temporal when the browser ships it, Intl otherwise;
+    // ticks align to the minute boundary (no seconds, no per-second wakeups).
+    (function () {
+        const root = document.getElementById('hero-clock');
+        if (!root) return;
+        const timeEl = document.getElementById('hero-clock-time');
+        const dateEl = document.getElementById('hero-clock-date');
+        const TZ = 'Europe/Paris';
+        const timeFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
+        const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ });
+        function render() {
+            if (typeof Temporal !== 'undefined') {
+                const now = Temporal.Now.zonedDateTimeISO(TZ);
+                root.dateTime = now.toString({ timeZoneName: 'never', smallestUnit: 'minute' });
+                timeEl.textContent = now.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                dateEl.textContent = now.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+            } else {
+                const now = new Date();
+                root.dateTime = now.toISOString();
+                timeEl.textContent = timeFmt.format(now);
+                dateEl.textContent = dateFmt.format(now);
+            }
+            setTimeout(render, 60250 - (Date.now() % 60000));
+        }
+        render();
+    })();
+
+    // Manual-to-do bell + notification dropdown.
+    // Deep-link each resource id to its AWS console page (same fragments as
+    // the resource-details modal). Region may carry an AZ suffix ('eu-west-1a')
+    // — strip a single trailing letter so the console's region param is valid.
+    function awsConsoleUrl(resourceId, region) {
+        region = (region || 'eu-west-1').replace(/([0-9])[a-z]$/, '$1');
+        const frag = resourceId.startsWith('i-') ? '#InstanceDetails:instanceId=' + resourceId
+            : resourceId.startsWith('vol-') ? '#VolumeDetails:volumeId=' + resourceId
+            : resourceId.startsWith('eipalloc-') ? '#ElasticIpDetails:AllocationId=' + resourceId
+            : resourceId.startsWith('snap-') ? '#SnapshotDetails:snapshotId=' + resourceId
+            : '';
+        return 'https://console.aws.amazon.com/ec2/v2/home?region=' + encodeURIComponent(region) + frag;
+    }
+    // Set each id's href up-front so it works with middle-click / new-tab too.
+    document.querySelectorAll('#todoPanel .todo-res-id').forEach((a) => {
+        a.href = awsConsoleUrl(a.dataset.resId, a.dataset.region);
+    });
+
+    function toggleTodoPanel(event) {
+        event.stopPropagation();
+        const panel = document.getElementById('todoPanel');
+        const bell = document.getElementById('todoBell');
+        const open = panel.style.display === 'block';
+        panel.style.display = open ? 'none' : 'block';
+        bell.setAttribute('aria-expanded', String(!open));
+    }
+    // Click-away closes the panel.
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('todoPanel');
+        if (!panel || panel.style.display !== 'block') return;
+        if (!panel.contains(e.target) && e.target.closest('#todoBell') === null) {
+            panel.style.display = 'none';
+            document.getElementById('todoBell').setAttribute('aria-expanded', 'false');
+        }
+    });
+
+    // "Done" is deletion-gated: we won't stop counting a resource as waste on
+    // the user's word alone — we first ask AWS whether it's actually gone. If
+    // it's still there, the button reports its live state ("Still running") and
+    // refuses; only a confirmed deletion clears the row.
+    async function markTodoDone(recId, btn) {
+        btn.disabled = true;
+        btn.textContent = 'Checking…';
+        let status;
+        try {
+            status = await (await fetch('/api/recommendations/' + recId + '/deletion-status')).json();
+        } catch (error) {
+            btn.disabled = false;
+            btn.textContent = 'Done';
+            showToast('Check failed: ' + error.message, 'error');
+            return;
+        }
+
+        // Still present on AWS: report the live state on the button and refuse.
+        if (status.deleted === false) {
+            btn.classList.add('todo-done-btn--blocked');
+            btn.textContent = 'Still ' + (status.state || 'present');
+            showToast('This resource is still ' + (status.state || 'present')
+                + ' on AWS — delete it there first, then click Done.', 'error');
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = 'Done';
+                btn.classList.remove('todo-done-btn--blocked');
+            }, 3000);
+            return;
+        }
+        // Couldn't verify (no permission / API error): don't guess, don't clear.
+        if (status.deleted !== true) {
+            btn.disabled = false;
+            btn.textContent = 'Done';
+            showToast(status.hint || "Couldn't verify the deletion on AWS — try again.", 'error');
+            return;
+        }
+
+        // Confirmed gone: stop counting it as active waste (same 'dismiss' path
+        // as the To-do section's Ignore button).
+        btn.textContent = '…';
+        try {
+            const response = await api('/api/actions', {
+                method: 'POST',
+                body: JSON.stringify({ recommendation_ids: [recId], action: 'dismiss' })
+            });
+            const ok = response.results && response.results[0] && response.results[0].success;
+            if (!ok) {
+                btn.disabled = false;
+                btn.textContent = 'Done';
+                showToast('Failed: ' + ((response.results[0] || {}).error || 'unknown'), 'error');
+                return;
+            }
+            _removeTodoRow(recId);
+            showToast('Confirmed deleted on AWS — no longer counted as active waste.', 'success');
+        } catch (error) {
+            btn.disabled = false;
+            btn.textContent = 'Done';
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    // Skip a to-do: take it off the list without touching AWS. Same 'reject'
+    // path as the tabs' Skip button — it stays counted as waste and shows up
+    // in "Skipped recommendations" (visible after the next page load).
+    async function skipTodo(recId, btn) {
+        const row = document.getElementById('todoRow-' + recId);
+        const doneBtn = row ? row.querySelector('.todo-done-btn') : null;
+        if (doneBtn) doneBtn.disabled = true;
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+            const response = await api('/api/actions', {
+                method: 'POST',
+                body: JSON.stringify({ recommendation_ids: [recId], action: 'reject' })
+            });
+            const ok = response.results && response.results[0] && response.results[0].success;
+            if (!ok) {
+                btn.disabled = false;
+                btn.textContent = 'Skip';
+                if (doneBtn) doneBtn.disabled = false;
+                showToast('Failed: ' + ((response.results[0] || {}).error || 'unknown'), 'error');
+                return;
+            }
+            _removeTodoRow(recId);
+            showToast('Skipped — off the to-do list, still counted as waste.', 'success');
+        } catch (error) {
+            btn.disabled = false;
+            btn.textContent = 'Skip';
+            if (doneBtn) doneBtn.disabled = false;
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    // Remove a to-do row and resync the bell (count, blink, empty state).
+    function _removeTodoRow(recId) {
+        const row = document.getElementById('todoRow-' + recId);
+        if (row) row.remove();
+        const remaining = document.querySelectorAll('#todoPanelList .todo-row').length;
+        const countEl = document.getElementById('todoCount');
+        const bell = document.getElementById('todoBell');
+        countEl.textContent = remaining;
+        if (remaining === 0) {
+            countEl.style.display = 'none';
+            document.getElementById('todoEmpty').style.display = 'block';
+            bell.classList.remove('todo-bell--active', 'pending-blink');
+            bell.setAttribute('data-empty', '1');
+        }
+    }
 </script>
 <style>
     @keyframes spin {
