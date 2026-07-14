@@ -4,10 +4,33 @@
 
 {% block content %}
 <style>
-    /* Insight IA borne a 2 lignes : le texte complet reste dans le title
-       (tooltip). Sans clamp, une seule ligne de table pouvait occuper
-       7 lignes d'ecran. */
-    .insight-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    /* "Why act?" reason moved out of a table column into a hover card on the
+       resource id. The card is a single #reasonTip element positioned with
+       JS (position: fixed) because the tables live inside
+       .table-container { overflow-x: auto }, which would clip an absolutely
+       positioned tooltip. */
+    .reason-hover { cursor: help; border-bottom: 1px dotted var(--gray-400); transition: color 0.25s ease, border-color 0.25s ease; }
+    .reason-hover:hover { color: var(--primary); border-color: var(--primary); }
+    /* Column-header descriptions: same #reasonTip card, lighter affordance —
+       a dotted underline under the label text only, no color change. */
+    .col-hint { cursor: help; text-decoration: underline dotted var(--gray-400); text-underline-offset: 3px; }
+    #reasonTip {
+        position: fixed;
+        z-index: 2000;
+        display: none;
+        max-width: 300px;
+        padding: 0.6rem 0.75rem;
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        font-size: 0.78rem;
+        line-height: 1.45;
+        color: var(--gray-600);
+        white-space: normal;
+        pointer-events: none;
+    }
+    #reasonTip strong { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--gray-800); }
     /* Boutons d'action par ligne : position fixe (colonne dediee), taille
        constante, icones SVG inline — pas d'emojis. */
     .row-action-btn { padding: 0.15rem 0.4rem; border: 1px solid var(--gray-300); border-radius: 4px; background: white; cursor: pointer; color: var(--gray-600); vertical-align: middle; line-height: 0; }
@@ -60,11 +83,18 @@
             </div>
         </div>
 
-        {# AI chat over the whole set of pending recommendations — field
-           and Ask button on one line, on the right of the tile #}
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem; flex: 1 1 300px; max-width: 560px;">
-            <input id="estateAskInput" type="text" placeholder="Ask the AI about these recommendations…" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitEstateQuestion();}" style="flex: 1; min-width: 0; padding: 0.5rem 0.7rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.85rem;">
-            <button type="button" id="estateAskBtn" onclick="submitEstateQuestion()" class="btn btn-primary" style="padding: 0.5rem 1rem;">Ask</button>
+        {# AI chat over the whole set of pending recommendations — prompt
+           heading on top, field and send button on one line below, on the
+           right of the tile #}
+        <div style="margin-left: auto; display: flex; flex-direction: column; gap: 0.35rem; flex: 1 1 300px; max-width: 560px;">
+            <div style="font-size: 0.85rem; font-weight: 600; color: var(--gray-700);">Comment puis-je vous aider&nbsp;?</div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input id="estateAskInput" type="text" placeholder="Écrire un message…" oninput="toggleEstateSendBtn()" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitEstateQuestion();}" style="flex: 1; min-width: 0; padding: 0.5rem 0.7rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.85rem;">
+                {# Send button: square, rounded, up-arrow. Hidden until the field
+                   has content (toggleEstateSendBtn on input), so it only shows
+                   once the user has typed something to send. #}
+                <button type="button" id="estateAskBtn" onclick="submitEstateQuestion()" aria-label="Envoyer" title="Envoyer" style="display: none; flex-shrink: 0; width: 34px; height: 34px; padding: 0; border: none; border-radius: 8px; background: var(--primary); color: white; cursor: pointer; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+            </div>
         </div>
     </div>
     <div id="estateAnswer" style="display: none; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--gray-100); font-size: 0.85rem; color: var(--gray-700); white-space: pre-wrap; line-height: 1.5;"></div>
@@ -245,14 +275,13 @@
                         <tr>
                             <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-ec2" onclick="toggleAll('ec2')"></th>
                             <th style="padding: 0.5rem;">Instance</th>
-                            <th style="padding: 0.5rem;">Type</th>
-                            <th style="padding: 0.5rem;">Action</th>
-                            <th style="padding: 0.5rem;">Why act?</th><th style="padding: 0.5rem;" aria-label="Actions"></th>
-                            <th style="padding: 0.5rem;">Running for</th>
-                            <th style="padding: 0.5rem;">Avg CPU</th>
-                            <th style="padding: 0.5rem;">Monthly cost</th>
-                            <th style="padding: 0.5rem;">Savings</th>
-                            <th style="padding: 0.5rem;">Confidence</th>
+                            <th style="padding: 0.5rem;"><span class="col-hint" data-reason="EC2 instance type — size and family (e.g. t3.medium)">Type</span></th>
+                            <th style="padding: 0.5rem;"><span class="col-hint" data-reason="Recommended remediation for this instance">Action</span></th>
+                            <th style="padding: 0.5rem;"><span class="col-hint" data-reason="How long the instance has been running">Running for</span></th>
+                            <th style="padding: 0.5rem;"><span class="col-hint" data-reason="Average CPU utilization over the last 7 days">Avg CPU</span></th>
+                            <th style="padding: 0.5rem;"><span class="col-hint" data-reason="Current estimated monthly cost, in EUR">Monthly cost</span></th>
+                            <th style="padding: 0.5rem;"><span class="col-hint" data-reason="Estimated monthly savings if remediated, in EUR">Savings</span></th>
+                            <th style="padding: 0.5rem;"><span class="col-hint" data-reason="How confident the detector is that this is waste (0–100%)">Confidence</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -260,21 +289,27 @@
                         {% set current_cost = rec.monthly_cost or 0 %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         {% set savings_pct = (savings / current_cost * 100) if current_cost > 0 else 100 %}
+                        {% set reason = rec.ai_insight %}
+                        {% if not reason %}
+                          {% if rec.recommendation_type == 'stop_instance' %}{% set reason = 'CPU avg below ' ~ '%.1f'|format(rec.cpu_avg or 0) ~ '% for 7d' %}
+                          {% elif rec.recommendation_type == 'terminate_instance' %}{% set reason = 'Stopped, still billing EBS' %}
+                          {% else %}{% set reason = 'Underutilized — ' ~ '%.1f'|format(rec.cpu_avg or 0) ~ '% avg CPU' %}
+                          {% endif %}
+                        {% endif %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" onclick="event.stopPropagation(); updateSelectedCount();"></td>
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id[:20] }}</code></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why act?" data-reason="{{ reason }}">{{ rec.resource_id[:20] }}</code> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 {% if rec.recommendation_type == 'stop_instance' %}
-                                <span class="badge badge-warning">Stop</span>
+                                <span class="badge badge-warning" style="border: none;">Stop</span>
                                 {% elif rec.recommendation_type == 'terminate_instance' %}
-                                <span class="badge badge-danger">Terminate</span>
+                                <span class="badge badge-danger" style="border: none;">Terminate</span>
                                 {% else %}
-                                <span class="badge badge-info">Downsize</span>
+                                <span class="badge badge-info" style="border: none;">Downsize</span>
                                 {% endif %}
                             </td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">{% if rec.recommendation_type == 'stop_instance' %}CPU avg below {{ "%.1f"|format(rec.cpu_avg or 0) }}% for 7d{% elif rec.recommendation_type == 'terminate_instance' %}Stopped, still billing EBS{% else %}Underutilized — {{ "%.1f"|format(rec.cpu_avg or 0) }}% avg CPU{% endif %}</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
-                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
+                                                        <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
                             </td>
@@ -282,7 +317,7 @@
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
-                                    <span style="font-size: 0.7rem; color: var(--success);">({{ "%.0f"|format(savings_pct) }}%)</span>
+                                    <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>
                                 </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
@@ -316,7 +351,6 @@
                             <th style="padding: 0.5rem;">Size / Type</th>
                             <th style="padding: 0.5rem;">Unattached for</th>
                             <th style="padding: 0.5rem;">Region</th>
-                            <th style="padding: 0.5rem;">Why delete?</th><th style="padding: 0.5rem;" aria-label="Actions"></th>
                             <th style="padding: 0.5rem;">Monthly cost</th>
                             <th style="padding: 0.5rem;">Savings</th>
                             <th style="padding: 0.5rem;">Confidence</th>
@@ -327,18 +361,16 @@
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ebs" onclick="event.stopPropagation(); updateSelectedCount();"></td>
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a></td>
+                            {% set reason = rec.ai_insight or 'Not attached to any instance' %}
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why delete?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_name or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; white-space: nowrap;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span> <span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not attached to any instance</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
-                                    <span style="font-size: 0.7rem; color: var(--success);">(100%)</span>
-                                </div>
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -370,7 +402,6 @@
                             <th style="padding: 0.5rem;">Public IP</th>
                             <th style="padding: 0.5rem;">Idle for</th>
                             <th style="padding: 0.5rem;">Region</th>
-                            <th style="padding: 0.5rem;">Why release?</th><th style="padding: 0.5rem;" aria-label="Actions"></th>
                             <th style="padding: 0.5rem;">Monthly cost</th>
                             <th style="padding: 0.5rem;">Confidence</th>
                         </tr>
@@ -380,12 +411,12 @@
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-eip" onclick="event.stopPropagation(); updateSelectedCount();"></td>
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a></td>
+                            {% set reason = rec.ai_insight or 'Not associated to any instance' %}
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why release?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Not associated to any instance</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
@@ -417,7 +448,6 @@
                             <th style="padding: 0.5rem;">Size</th>
                             <th style="padding: 0.5rem;">Snapshot age</th>
                             <th style="padding: 0.5rem;">Region</th>
-                            <th style="padding: 0.5rem;">Why review?</th><th style="padding: 0.5rem;" aria-label="Actions"></th>
                             <th style="padding: 0.5rem;">Monthly cost</th>
                             <th style="padding: 0.5rem;">Savings</th>
                             <th style="padding: 0.5rem;">Confidence</th>
@@ -428,18 +458,16 @@
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-snap" onclick="event.stopPropagation(); updateSelectedCount();"></td>
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a></td>
+                            {% set reason = rec.ai_insight or 'Old snapshot — verify before deleting' %}
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why review?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.snap_description or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
-                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{{ rec.age_days }}d</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
+                            <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 260px; white-space: normal; vertical-align: middle;"><div class="insight-clamp">{% if rec.ai_insight %}<span style="font-size: 0.8rem; color: var(--gray-700);" title="{{ rec.ai_insight }}">{{ rec.ai_insight[:90] }}{% if rec.ai_insight|length > 90 %}…{% endif %}</span>{% else %}<span style="font-size: 0.8rem; color: var(--gray-600);">Old snapshot — verify before deleting</span>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
-                                    <span style="font-size: 0.7rem; color: var(--success);">(100%)</span>
-                                </div>
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -470,7 +498,6 @@
                             <th style="padding: 0.5rem;">Resource</th>
                             <th style="padding: 0.5rem;">Type</th>
                             <th style="padding: 0.5rem;">Region</th>
-                            <th style="padding: 0.5rem;">Recommended action</th><th style="padding: 0.5rem;" aria-label="Actions"></th>
                             <th style="padding: 0.5rem;">Savings</th>
                             <th style="padding: 0.5rem;">Confidence</th>
                         </tr>
@@ -480,11 +507,11 @@
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-other" onclick="event.stopPropagation(); updateSelectedCount();"></td>
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;">{{ rec.volume_name or rec.resource_id }}</code></td>
+                            {% set reason = rec.action_required %}{% if rec.ai_insight %}{% set reason = reason ~ ' — ' ~ rec.ai_insight %}{% endif %}
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.volume_name or rec.resource_id }}</code> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                            <td style="padding: 0.4rem 0.5rem; max-width: 420px; white-space: normal; vertical-align: middle;"><div class="insight-clamp"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.action_required }}</span>{% if rec.ai_insight %}<div style="font-size: 0.75rem; color: var(--gray-700); margin-top: 0.2rem;" title="{{ rec.ai_insight }}">{{ rec.ai_insight }}</div>{% endif %}</div></td><td style="padding: 0.4rem 0.4rem; white-space: nowrap; text-align: center; vertical-align: middle;"><button type="button" class="row-action-btn" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }} — {{ rec.recommendation_type }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
-                            <td style="padding: 0.4rem 0.5rem;">
+                                                        <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
                                     <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span>
@@ -549,6 +576,10 @@
         </p>
     </div>
 </div>
+
+{# Shared hover card for the "Why act?" reason, positioned with JS (see the
+   #reasonTip note in the style block). One element, reused by every row. #}
+<div id="reasonTip"></div>
 
 {% endblock %}
 
@@ -866,12 +897,70 @@
                 // echappes avant innerHTML (les usernames federes sont libres)
                 const esc = s => String(s).replace(/[&<>"']/g,
                     c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-                content.innerHTML = data.events.map(e =>
-                    '<div style="display:flex; gap:0.6rem; padding:0.3rem 0; border-bottom:1px solid var(--gray-100);">'
-                    + '<span style="color:var(--gray-500); white-space:nowrap;">' + esc(e.time.replace('T', ' ').slice(0, 16)) + '</span>'
-                    + '<strong>' + esc(e.name) + '</strong>'
-                    + '<span style="color:var(--gray-600); margin-left:auto;">' + esc(e.username || '?') + '</span>'
-                    + '</div>').join('');
+                const fmtDate = t => {
+                    const d = new Date(t);
+                    return isNaN(d) ? esc(t.replace('T', ' ').slice(0, 16))
+                        : d.toLocaleString('en-GB', { day: '2-digit', month: 'short',
+                            year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                };
+                // Deterministic deep-link to one event in the CloudTrail
+                // console (no extra API call). encodeURIComponent keeps the
+                // id/region safe inside the href attribute.
+                const eventUrl = id => 'https://' + encodeURIComponent(data.region)
+                    + '.console.aws.amazon.com/cloudtrailv2/home?region='
+                    + encodeURIComponent(data.region) + '#/events/' + encodeURIComponent(id);
+                // Creation summary: the reassuring headline (when + who created
+                // the resource). LookupEvents returns newest-first, so the true
+                // creation event is one of these names; if it predates the
+                // 90-day window we fall back to the oldest event we can see and
+                // label it honestly rather than claiming it's the creation.
+                const CREATION_EVENTS = ['RunInstances', 'CreateVolume',
+                    'AllocateAddress', 'CreateSnapshot'];
+                const created = data.events.find(e => CREATION_EVENTS.includes(e.name));
+                const origin = created || data.events[data.events.length - 1];
+                const originLabel = created ? 'Created' : 'Earliest recorded activity';
+                const summary =
+                    '<div style="background:var(--gray-200); border:1px solid var(--gray-300); '
+                    + 'border-radius:8px; padding:0.75rem 0.9rem; margin-bottom:0.9rem;">'
+                    + '<div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; '
+                    + 'color:var(--gray-500); margin-bottom:0.3rem;">' + originLabel + '</div>'
+                    + '<div style="font-size:0.95rem; font-weight:600; color:var(--gray-800);">'
+                    + fmtDate(origin.time) + '</div>'
+                    + '<div style="font-size:0.82rem; color:var(--gray-600); margin-top:0.15rem;">by '
+                    + esc(origin.username || 'unknown') + ' · ' + esc(origin.name) + '</div>'
+                    + (origin.event_id ? '<div style="margin-top:0.5rem;"><a href="'
+                        + eventUrl(origin.event_id) + '" target="_blank" rel="noopener" '
+                        + 'style="font-size:0.78rem; color:var(--primary); text-decoration:none;">'
+                        + 'View this event in CloudTrail ↗</a></div>' : '')
+                    + '</div>';
+                // Full history as a 3-column table: Date | Execution | User.
+                // Fixed first-column width keeps header and rows aligned (a
+                // plain flex row would misalign the middle/right columns).
+                const fullHistory =
+                    '<div style="display:flex; gap:0.6rem; padding:0.3rem 0; font-size:0.7rem; '
+                    + 'text-transform:uppercase; letter-spacing:0.04em; color:var(--gray-500); '
+                    + 'border-bottom:1px solid var(--gray-200);">'
+                    + '<span style="flex:0 0 150px; white-space:nowrap;">Date</span>'
+                    + '<span style="flex:1;">Execution</span>'
+                    + '<span style="flex:0 0 auto;">User</span>'
+                    + '</div>'
+                    + data.events.map(e => {
+                        const inner =
+                            '<span style="flex:0 0 150px; color:var(--gray-500); white-space:nowrap;">' + esc(e.time.replace('T', ' ').slice(0, 16)) + '</span>'
+                            + '<strong style="flex:1;' + (e.event_id ? ' color:var(--primary);' : '') + '">' + esc(e.name) + '</strong>'
+                            + '<span style="flex:0 0 auto; color:var(--gray-600);">' + esc(e.username || '?') + '</span>';
+                        const base = 'display:flex; gap:0.6rem; padding:0.3rem 0; border-bottom:1px solid var(--gray-100);';
+                        // Whole row links to the event; the blue Execution name
+                        // is the affordance, hover shades the row.
+                        return e.event_id
+                            ? '<a href="' + eventUrl(e.event_id) + '" target="_blank" rel="noopener" '
+                              + 'title="Open this event in the CloudTrail console" '
+                              + 'style="' + base + ' text-decoration:none; color:inherit;" '
+                              + 'onmouseover="this.style.background=\'var(--gray-100)\'" '
+                              + 'onmouseout="this.style.background=\'transparent\'">' + inner + '</a>'
+                            : '<div style="' + base + '">' + inner + '</div>';
+                    }).join('');
+                content.innerHTML = summary + fullHistory;
             })
             .catch(err => { content.textContent = 'Request failed: ' + err; });
     }
@@ -882,6 +971,15 @@
 
     // Estate chat (summary tile): one-shot question about ALL pending
     // recommendations, answered inline under the tile.
+
+    // Send button appears only while the field has content, disappears when
+    // it is emptied — flex (not block) so the up-arrow icon stays centered.
+    function toggleEstateSendBtn() {
+        const input = document.getElementById('estateAskInput');
+        const btn = document.getElementById('estateAskBtn');
+        btn.style.display = input.value.trim() ? 'flex' : 'none';
+    }
+
     async function submitEstateQuestion() {
         const input = document.getElementById('estateAskInput');
         const question = input.value.trim();
@@ -898,7 +996,16 @@
                 body: JSON.stringify({ question })
             });
             const data = await response.json();
-            answerEl.textContent = data.answer || data.error || 'No answer available.';
+            if (data.answer) {
+                answerEl.textContent = data.answer;
+                // Disclaimer appended to every AI-generated message.
+                const note = document.createElement('div');
+                note.textContent = 'AI can make mistakes. Please verify its responses.';
+                note.style.cssText = 'margin-top: 0.5rem; font-size: 0.72rem; color: var(--gray-400);';
+                answerEl.appendChild(note);
+            } else {
+                answerEl.textContent = data.error || 'No answer available.';
+            }
         } catch (error) {
             answerEl.textContent = 'Error: ' + error.message;
         } finally {
@@ -918,6 +1025,54 @@
     }
     applyTabHash();
     window.addEventListener('hashchange', applyTabHash);
+
+    // Styled hover card, shared by the resource-id "Why act?" reason and the
+    // column-header descriptions. One #reasonTip element is moved next to the
+    // hovered target with position: fixed, so it escapes the .table-container
+    // overflow clip and never gets cut off. The bold title is optional (column
+    // headers show the description only). textContent (not innerHTML) keeps
+    // AWS-sourced reason text inert.
+    (function () {
+        const tip = document.getElementById('reasonTip');
+        if (!tip) return;
+        function showTip(el) {
+            const reason = el.dataset.reason;
+            if (!reason) return;
+            tip.innerHTML = '';
+            const title = el.dataset.reasonTitle;
+            if (title) {
+                const h = document.createElement('strong');
+                h.textContent = title;
+                tip.appendChild(h);
+            }
+            const body = document.createElement('span');
+            body.textContent = reason;
+            tip.appendChild(body);
+            tip.style.display = 'block';
+            const r = el.getBoundingClientRect();
+            let left = r.left;
+            if (left + tip.offsetWidth > window.innerWidth - 8) {
+                left = window.innerWidth - tip.offsetWidth - 8;
+            }
+            // Column headers: card sits above the header (not over the column
+            // below it). Resource ids: card drops below, flipping up only when
+            // there is no room.
+            const above = el.classList.contains('col-hint');
+            let top = above ? r.top - tip.offsetHeight - 6 : r.bottom + 6;
+            if (above && top < 8) {
+                top = r.bottom + 6; // no room above → fall back below
+            } else if (!above && top + tip.offsetHeight > window.innerHeight - 8) {
+                top = r.top - tip.offsetHeight - 6;
+            }
+            tip.style.left = Math.max(8, left) + 'px';
+            tip.style.top = Math.max(8, top) + 'px';
+        }
+        function hideTip() { tip.style.display = 'none'; }
+        document.querySelectorAll('.reason-hover[data-reason], .col-hint[data-reason]').forEach((el) => {
+            el.addEventListener('mouseenter', () => showTip(el));
+            el.addEventListener('mouseleave', hideTip);
+        });
+    })();
 </script>
 <style>
     @keyframes spin {
