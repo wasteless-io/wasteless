@@ -10,7 +10,7 @@ the app is assembled.
 |---|---|---|
 | `home.py` | `GET /`, `GET /landing` | Home overview KPIs + public landing page. |
 | `dashboard.py` | `GET /dashboard`, `GET /api/dashboard/trend`, `GET /api/dashboard/waste-by-resource`, `GET /api/metrics` | Owns `fetch_waste_trend()` / `fetch_waste_by_resource()` — the HTML page and its two AJAX endpoints share the same query logic so the chart and the server-rendered page never disagree. |
-| `recommendations.py` | `GET /recommendations`, `GET /api/recommendations`, `POST /api/recommendations/{id}/ask`, `POST /api/actions` | The biggest one: `/api/actions` handles approve/reject/dismiss/cancel/execute, including grace-period scheduling and Terraform-PR routing. Imports `_execute_ec2_boto3` from `ui/jobs.py` (shared with the grace-period executor job). |
+| `recommendations.py` | `GET /recommendations`, `GET /api/recommendations`, `POST /api/recommendations/chat`, `POST /api/actions` | The biggest one: `/api/actions` handles approve/reject/dismiss/cancel/execute, including grace-period scheduling and Terraform-PR routing. Imports `_execute_ec2_boto3` from `ui/jobs.py` (shared with the grace-period executor job). |
 | `history.py` | `GET /history` | Action audit trail. |
 | `reports.py` | `GET /reports`, `GET /api/reports/download`, `POST /api/reports/narrative`, `GET /api/briefing/today` | Owns `_resolve_report_period()`, shared by all three report routes. |
 | `logs.py` | `GET /logs`, `GET /api/logs` | In-memory debug log viewer. |
