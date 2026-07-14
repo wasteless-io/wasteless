@@ -651,32 +651,65 @@
         .notif-item {
             display: flex;
             align-items: baseline;
-            gap: 0.5rem;
+            gap: 0.4rem;
             padding: 0.45rem 0;
             border-top: 1px solid var(--hairline);
             font-size: 0.78rem;
             color: var(--ink);
             text-decoration: none;
         }
-        .notif-item:hover .notif-item-action { color: var(--primary); }
+        /* Resource id first in the row, clickable — it redirects to where the
+           action is taken (review tab, or the AWS console for manual to-dos).
+           Blue affordance on hover so it reads as a link. */
+        .notif-item-resource {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: var(--ink);
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 0 1 auto;
+            max-width: 150px;
+            min-width: 0;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+        .notif-item-resource:hover { color: var(--primary); border-bottom-color: var(--primary); }
+        /* Copy-id glyph, quiet until hover. */
+        .notif-copy {
+            border: none; background: none; padding: 0; margin: 0;
+            cursor: pointer; color: var(--ink-secondary); line-height: 0;
+            flex-shrink: 0; align-self: center;
+        }
+        .notif-copy:hover { color: var(--primary); }
         .notif-item-action {
             font-weight: 600;
             text-transform: capitalize;
             white-space: nowrap;
-        }
-        .notif-item-resource {
-            font-family: var(--font-mono);
-            font-size: 0.7rem;
-            color: var(--ink-secondary);
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
-            flex: 1;
+            flex: 1 1 auto;
             min-width: 0;
+        }
+        /* Manual-to-do rows carry a small amber tag before the action. */
+        .notif-item-tag {
+            font-size: 0.62rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--warning);
+            border: 1px solid rgba(180,83,9,0.35);
+            border-radius: 4px;
+            padding: 0 0.25rem;
+            white-space: nowrap;
+            flex-shrink: 0;
+            align-self: center;
         }
         .notif-item-savings {
             font-weight: 600;
             white-space: nowrap;
+            flex-shrink: 0;
         }
         .notif-more {
             padding-top: 0.4rem;
@@ -692,6 +725,10 @@
         .kpi-hover:focus-visible .kpi-zoom {
             transform: scale(1.12);
         }
+        /* kpi-hover elements moved to the shared card tooltip (data-tip-card)
+           keep their hover-zoom but no longer carry data-tip — suppress the
+           empty CSS pill for them. */
+        .kpi-hover:not([data-tip])::after { content: none; }
         .kpi-hover::after {
             content: attr(data-tip);
             position: absolute;
@@ -820,6 +857,13 @@
         {# Bell popover: summary of what awaits a decision. Fixed-positioned
            next to the (fixed) sidebar so the sidebar's overflow-y can't
            clip it. Filled by the shared poller. #}
+        {# Shared card tooltip: one styled tooltip for the whole app. Fixed
+           position so it escapes any overflow-clipping ancestor (scrolling
+           dropdowns, tables). Bound by delegation to [data-tip-card] (body)
+           + optional [data-tip-card-title] (bold heading), so it also covers
+           dynamically-inserted rows (the notifications list). #}
+        <div id="appTip" style="position: fixed; z-index: 3000; display: none; max-width: 300px; padding: 0.6rem 0.75rem; background: white; border: 1px solid var(--gray-200); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); font-size: 0.78rem; line-height: 1.45; color: var(--gray-600); white-space: normal; pointer-events: none;"></div>
+
         <div id="notif-popover" class="notif-popover" role="dialog" aria-label="Notifications">
             <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem;">Notifications</div>
             <div id="notif-body" style="font-size: 0.82rem; color: var(--ink-secondary); line-height: 1.5; white-space: nowrap;">Loading…</div>
@@ -877,6 +921,10 @@
         // increase pops the badges (CSS animation, disabled globally by
         // prefers-reduced-motion).
         let _pendingCount = null;
+        // Manual to-dos (status approved_manual) also demand attention, so the
+        // bell counts them alongside pending reviews. Kept separate so the
+        // popover can label the two kinds distinctly.
+        let _manualCount = 0;
 
         function _renderPendingBadges(n) {
             document.querySelectorAll('.js-pending-badge').forEach(badge => {
@@ -899,9 +947,19 @@
             if (_pendingCount === null) {
                 body.textContent = 'Loading…';
                 link.style.display = 'none';
-            } else if (_pendingCount > 0) {
-                body.textContent = _pendingCount + ' recommendation' + (_pendingCount > 1 ? 's' : '')
-                    + ' awaiting your review.';
+                return;
+            }
+            const parts = [];
+            if (_pendingCount > 0) {
+                parts.push(_pendingCount + ' recommendation' + (_pendingCount > 1 ? 's' : '')
+                    + ' awaiting your review');
+            }
+            if (_manualCount > 0) {
+                parts.push(_manualCount + ' to execute manually on AWS');
+            }
+            if (parts.length) {
+                // Sentence-case the joined summary ("… and …").
+                body.textContent = parts.join(' · ') + '.';
                 link.style.display = 'inline-block';
             } else {
                 body.textContent = 'Nothing to review — all clear.';
@@ -914,8 +972,10 @@
                 const res = await fetch('/api/metrics');
                 if (!res.ok) return;
                 const data = await res.json();
-                _renderPendingBadges(data.pending_count || 0);
                 _pendingCount = data.pending_count || 0;
+                _manualCount = data.manual_todo_count || 0;
+                // Badge = both kinds of pending attention.
+                _renderPendingBadges(_pendingCount + _manualCount);
                 _renderNotifBody();
             } catch (e) {
                 // network hiccup: keep the current badges
@@ -926,43 +986,136 @@
         // polling full rows every 60s for a closed panel. Rows are built
         // via textContent (resource ids come from AWS APIs — never
         // interpolate them into HTML).
+        // Same bucketing as the recommendations page: tabs group by resource,
+        // gp2 migrations and network resources land in Other.
+        const _tabByType = {
+            stop_instance: 'ec2', terminate_instance: 'ec2', downsize_instance: 'ec2',
+            delete_volume: 'ebs', release_ip: 'eip', delete_snapshot: 'snap'
+        };
+
+        // Deep-link a resource id to its AWS console page (region may carry an
+        // AZ suffix 'eu-west-1a' → strip a single trailing letter).
+        function _awsConsoleUrl(resourceId, region) {
+            region = (region || 'eu-west-1').replace(/([0-9])[a-z]$/, '$1');
+            const frag = resourceId.startsWith('i-') ? '#InstanceDetails:instanceId=' + resourceId
+                : resourceId.startsWith('vol-') ? '#VolumeDetails:volumeId=' + resourceId
+                : resourceId.startsWith('eipalloc-') ? '#ElasticIpDetails:AllocationId=' + resourceId
+                : resourceId.startsWith('snap-') ? '#SnapshotDetails:snapshotId=' + resourceId
+                : '';
+            return 'https://console.aws.amazon.com/ec2/v2/home?region=' + encodeURIComponent(region) + frag;
+        }
+
+        function _notifCopyId(text, btn) {
+            const flip = () => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="#16a34a" stroke-width="1.8" aria-hidden="true"><path d="M3 8.5l3.5 3.5L13 4.5"/></svg>';
+                setTimeout(() => { btn.innerHTML = orig; }, 1200);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(flip).catch(() => flip());
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select();
+                try { document.execCommand('copy'); flip(); } finally { ta.remove(); }
+            }
+        }
+
+        // One notification row: resource id first (clickable → the action) with
+        // a copy button, then the action label (and a MANUAL tag for to-dos),
+        // then the monthly savings. Ids come from AWS APIs → textContent only.
+        function _buildNotifRow({ resourceId, actionLabel, savings, href, newTab, manual }) {
+            const row = document.createElement('div');
+            row.className = 'notif-item';
+
+            const idLink = document.createElement('a');
+            idLink.className = 'notif-item-resource';
+            idLink.href = href;
+            idLink.textContent = resourceId;
+            idLink.setAttribute('data-tip-card', resourceId + ' — open the action');
+            if (newTab) { idLink.target = '_blank'; idLink.rel = 'noopener'; }
+
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'notif-copy';
+            copyBtn.setAttribute('aria-label', 'Copy id');
+            copyBtn.setAttribute('data-tip-card', 'Copy id');
+            copyBtn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg>';
+            copyBtn.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                _notifCopyId(resourceId, copyBtn);
+            });
+
+            const action = document.createElement('span');
+            action.className = 'notif-item-action';
+            action.textContent = actionLabel;
+
+            const savingsEl = document.createElement('span');
+            savingsEl.className = 'notif-item-savings';
+            savingsEl.textContent = Number(savings || 0).toFixed(2) + ' €';
+
+            row.append(idLink, copyBtn);
+            if (manual) {
+                const tag = document.createElement('span');
+                tag.className = 'notif-item-tag';
+                tag.textContent = 'Manual';
+                row.append(tag);
+            }
+            row.append(action, savingsEl);
+            return row;
+        }
+
+        // The item list is only fetched when the popover opens: no point
+        // polling full rows every 60s for a closed panel.
         async function _renderNotifList() {
             const list = document.getElementById('notif-list');
             if (!list) return;
             list.textContent = '';
-            if (!_pendingCount) return;
+            if (!_pendingCount && !_manualCount) return;
             try {
-                const res = await fetch('/api/recommendations?limit=5');
-                if (!res.ok) return;
-                const data = await res.json();
-                // Same bucketing as the recommendations page: tabs group by
-                // resource, gp2 migrations and network resources land in Other.
-                const tabByType = {
-                    stop_instance: 'ec2', terminate_instance: 'ec2', downsize_instance: 'ec2',
-                    delete_volume: 'ebs', release_ip: 'eip', delete_snapshot: 'snap'
-                };
-                for (const rec of data.recommendations || []) {
-                    const row = document.createElement('a');
-                    row.className = 'notif-item';
-                    row.href = '/recommendations#tab=' + (tabByType[rec.recommendation_type] || 'other');
-                    const action = document.createElement('span');
-                    action.className = 'notif-item-action';
-                    action.textContent = String(rec.recommendation_type || '').replace(/_/g, ' ');
-                    const resource = document.createElement('span');
-                    resource.className = 'notif-item-resource';
-                    resource.textContent = rec.resource_id || '';
-                    resource.title = rec.resource_id || '';
-                    const savings = document.createElement('span');
-                    savings.className = 'notif-item-savings';
-                    savings.textContent = Number(rec.estimated_monthly_savings_eur || 0).toFixed(2) + ' €';
-                    row.append(action, resource, savings);
-                    list.appendChild(row);
+                // Manual to-dos on top (they need a real-world action), then
+                // pending reviews. Both fetched in parallel.
+                const [pendingRes, manualRes] = await Promise.all([
+                    _pendingCount ? fetch('/api/recommendations?limit=5') : Promise.resolve(null),
+                    _manualCount ? fetch('/api/recommendations/manual-todos') : Promise.resolve(null)
+                ]);
+
+                if (manualRes && manualRes.ok) {
+                    const md = await manualRes.json();
+                    for (const t of md.manual_todos || []) {
+                        list.appendChild(_buildNotifRow({
+                            resourceId: t.resource_id || '',
+                            actionLabel: String(t.recommendation_type || '').replace(/_/g, ' '),
+                            savings: t.estimated_monthly_savings_eur,
+                            // The action for a to-do is the deletion on AWS.
+                            href: _awsConsoleUrl(t.resource_id || '', t.region),
+                            newTab: true,
+                            manual: true
+                        }));
+                    }
                 }
-                const shown = (data.recommendations || []).length;
-                if (_pendingCount > shown && shown > 0) {
+
+                let shownPending = 0;
+                if (pendingRes && pendingRes.ok) {
+                    const data = await pendingRes.json();
+                    for (const rec of data.recommendations || []) {
+                        list.appendChild(_buildNotifRow({
+                            resourceId: rec.resource_id || '',
+                            actionLabel: String(rec.recommendation_type || '').replace(/_/g, ' '),
+                            savings: rec.estimated_monthly_savings_eur,
+                            // The action for a pending rec is on its review tab.
+                            href: '/recommendations#tab=' + (_tabByType[rec.recommendation_type] || 'other'),
+                            newTab: false,
+                            manual: false
+                        }));
+                    }
+                    shownPending = (data.recommendations || []).length;
+                }
+
+                if (_pendingCount > shownPending && shownPending > 0) {
                     const more = document.createElement('div');
                     more.className = 'notif-more';
-                    more.textContent = 'and ' + (_pendingCount - shown) + ' more…';
+                    more.textContent = 'and ' + (_pendingCount - shownPending) + ' more…';
                     list.appendChild(more);
                 }
             } catch (e) {
@@ -1027,6 +1180,52 @@
                 }
                 requestAnimationFrame(frame);
             });
+        })();
+
+        // Shared card tooltip driver (#appTip). Delegated hover/focus on any
+        // [data-tip-card] element; positioned fixed above the target (flips
+        // below when there's no room), clamped to the viewport. textContent
+        // keeps AWS-sourced strings inert.
+        (function () {
+            const tip = document.getElementById('appTip');
+            if (!tip) return;
+            function show(el) {
+                const body = el.getAttribute('data-tip-card');
+                if (!body) return;
+                tip.innerHTML = '';
+                const title = el.getAttribute('data-tip-card-title');
+                if (title) {
+                    const h = document.createElement('strong');
+                    h.style.cssText = 'display:block; margin-bottom:0.25rem; font-size:0.8rem; color:var(--gray-800);';
+                    h.textContent = title;
+                    tip.appendChild(h);
+                }
+                const b = document.createElement('span');
+                b.textContent = body;
+                tip.appendChild(b);
+                tip.style.display = 'block';
+                const r = el.getBoundingClientRect();
+                let left = r.left + r.width / 2 - tip.offsetWidth / 2;
+                left = Math.max(8, Math.min(left, window.innerWidth - tip.offsetWidth - 8));
+                let top = r.top - tip.offsetHeight - 8;
+                if (top < 8) top = r.bottom + 8;   // no room above → below
+                tip.style.left = left + 'px';
+                tip.style.top = top + 'px';
+            }
+            function hide() { tip.style.display = 'none'; }
+            document.addEventListener('mouseover', (e) => {
+                const el = e.target.closest('[data-tip-card]');
+                if (el) show(el);
+            });
+            document.addEventListener('mouseout', (e) => {
+                if (e.target.closest('[data-tip-card]')) hide();
+            });
+            document.addEventListener('focusin', (e) => {
+                const el = e.target.closest('[data-tip-card]');
+                if (el) show(el);
+            });
+            document.addEventListener('focusout', hide);
+            window.addEventListener('scroll', hide, true);
         })();
     </script>
     {% block extra_js %}{% endblock %}

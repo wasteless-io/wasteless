@@ -489,7 +489,24 @@ class EC2IdleDetector:
                         recommendation_type = EXCLUDED.recommendation_type,
                         action_required = EXCLUDED.action_required,
                         status = 'pending',
-                        applied_at = NULL
+                        applied_at = NULL,
+                        -- The AI insight quotes generation-time figures: drop
+                        -- it when the resynced savings drifts beyond
+                        -- max(10 pct of old, 0.50 EUR) so enrich_recommendations()
+                        -- rewrites it with fresh numbers on the next run. Also
+                        -- dropped when the recommended action itself changed
+                        -- (stop vs downsize) or the reco revives from obsolete
+                        -- (the instance left and came back — old story).
+                        ai_insight = CASE
+                            WHEN recommendations.status = 'obsolete'
+                              OR recommendations.recommendation_type
+                                 IS DISTINCT FROM EXCLUDED.recommendation_type
+                              OR abs(recommendations.estimated_monthly_savings_eur
+                                     - EXCLUDED.estimated_monthly_savings_eur)
+                                 > GREATEST(recommendations.estimated_monthly_savings_eur * 0.10, 0.50)
+                            THEN NULL
+                            ELSE recommendations.ai_insight
+                        END
                     WHERE recommendations.status IN ('pending', 'obsolete');
                 """,
                     (waste_id, recommendation_type, action, monthly_waste, "pending"),
