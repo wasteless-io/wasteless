@@ -268,7 +268,7 @@
     <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;">
         <div style="justify-self: start;">
             {% if (metrics.pending_count or 0) > 0 %}
-            <a href="/recommendations" class="pending-pill">
+            <a href="/recommendations" class="pending-pill pending-blink">
                 {{ metrics.pending_count }} recommendation{{ 's' if metrics.pending_count > 1 }} pending
             </a>
             {% endif %}
@@ -283,6 +283,22 @@
         </time>
     </div>
 </header>
+
+{# Coherence banner: total estimated waste exceeds the real cloud bill.
+   Surfaced (not hidden) so the list-price overstatement is honest — see
+   the waste_percentage invariant wired in routes/home.py. #}
+{% if waste_exceeds_spend %}
+<div class="card mb-1 card--no-hover" style="padding: 0.7rem 1rem; border-left: 3px solid var(--warning); background: rgba(180,83,9,0.05); display: flex; align-items: flex-start; gap: 0.6rem; font-size: 0.82rem; color: var(--gray-700); line-height: 1.5;">
+    <span aria-hidden="true" style="font-size: 1rem; line-height: 1.2;">&#9888;</span>
+    <span>
+        <strong>Estimated waste exceeds your real spend.</strong>
+        Active waste is estimated at <strong>{{ "%.2f"|format(waste_exceeds_spend.waste) }} &euro;/mo</strong>,
+        more than your actual cloud bill of <strong>{{ "%.2f"|format(waste_exceeds_spend.spend) }} &euro;</strong>
+        over the last 30 days &mdash; you can&rsquo;t save more than you spend. Detector estimates use
+        on-demand list prices (24/7), so treat these as an upper bound, not the bill.
+    </span>
+</div>
+{% endif %}
 
 {# Section title for the dials #}
 <h2 style="margin: 0.5rem 0 0.75rem 0.25rem; font-size: 1.05rem; font-weight: 700; color: #1d1d1f;">Analytics</h2>

@@ -47,6 +47,28 @@
     .summary-kpi .ring-value { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
     .summary-kpi .ring-unit { font-size: 0.72rem; font-weight: 400; color: var(--gray-500); margin-left: 0.1rem; }
     .summary-sep { width: 1px; height: 42px; background: var(--gray-400); }
+    /* Recommendations count blinks while something actually awaits review,
+       same soft opacity swing as the overview's Pending Actions dial. Only
+       rendered when count > 0; honours prefers-reduced-motion. */
+    @keyframes pending-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.25; }
+    }
+    .pending-blink { animation: pending-blink 1.6s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) {
+        .pending-blink { animation: none; }
+    }
+    /* Action-bar buttons: raw square corners, not the default pill radius. */
+    #actions-automated .btn,
+    #actions-manual .btn { border-radius: 0; }
+    /* Read-only policy status banner (dry-run / grace / auto-remediation).
+       Editing lives on /settings; this only mirrors the active mode. */
+    .policy-banner { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.75rem; font-size: 0.8rem; color: var(--gray-600); }
+    .mode-pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; }
+    .mode-pill--dry  { background: rgba(0,113,227,0.08); color: var(--primary); }
+    .mode-pill--live { background: rgba(220,38,38,0.08); color: var(--danger); border-color: rgba(220,38,38,0.28); }
+    .mode-pill--soft { background: rgba(0,0,0,0.04); color: var(--gray-600); }
+    .policy-banner .dot { font-size: 0.7rem; line-height: 1; }
 </style>
 <div class="page-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
     <h1 style="margin-bottom: 0;">Recommendations</h1>
@@ -69,17 +91,21 @@
         <div class="summary-rings">
             <div class="summary-kpi">
                 <div class="summary-ring-label">Recommendations</div>
-                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Total pending recommendations"><span class="kpi-zoom"><span class="countup">{{ total_count }}</span></span></span></div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Total pending recommendations"><span class="kpi-zoom"><span id="kpiCount" class="countup{% if (total_count or 0) > 0 %} pending-blink{% endif %}">{{ total_count }}</span></span></span></div>
             </div>
             <div class="summary-sep"></div>
             <div class="summary-kpi">
                 <div class="summary-ring-label">Savings / mo</div>
-                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Total estimated monthly savings across these recommendations"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(total_savings) }}</span><span class="ring-unit">€</span></span></span></div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Estimated monthly savings, capped at your real cloud spend — you can't save more than you spend. Detector estimates use on-demand list prices."><span class="kpi-zoom"><span id="kpiSavings" class="countup">{{ "%.2f"|format(savings_display) }}</span><span class="ring-unit">€</span></span></span></div>
+                {# Shown when the raw estimate exceeds the real bill: the value
+                   above is capped, the estimate is disclosed here. Toggled live
+                   by renderSummary after each action. #}
+                <div id="savingsCapNote" style="font-size: 0.58rem; color: var(--warning); font-weight: 600; margin-top: 0.1rem;{% if not savings_over_spend %} display: none;{% endif %}">capped · est. {{ "%.2f"|format(total_savings) }} €</div>
             </div>
             <div class="summary-sep"></div>
             <div class="summary-kpi">
                 <div class="summary-ring-label">Avg confidence</div>
-                <div class="ring-value" style="color: {% if avg_confidence >= 0.8 %}var(--success){% elif avg_confidence >= 0.5 %}var(--warning){% else %}var(--danger){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="Average detection confidence across these recommendations"><span class="kpi-zoom"><span class="countup">{{ "%.0f"|format(avg_confidence * 100) }}</span><span class="ring-unit">%</span></span></span></div>
+                <div id="kpiConfidenceRing" class="ring-value" style="color: {% if avg_confidence >= 0.8 %}var(--success){% elif avg_confidence >= 0.5 %}var(--warning){% else %}var(--danger){% endif %};"><span class="kpi-hover" tabindex="0" data-tip="Average detection confidence across these recommendations"><span class="kpi-zoom"><span id="kpiConfidence" class="countup">{{ "%.0f"|format(avg_confidence * 100) }}</span><span class="ring-unit">%</span></span></span></div>
             </div>
         </div>
 
@@ -87,13 +113,13 @@
            heading on top, field and send button on one line below, on the
            right of the tile #}
         <div style="margin-left: auto; display: flex; flex-direction: column; gap: 0.35rem; flex: 1 1 300px; max-width: 560px;">
-            <div style="font-size: 0.85rem; font-weight: 600; color: var(--gray-700);">Comment puis-je vous aider&nbsp;?</div>
+            <div style="font-size: 0.85rem; font-weight: 600; color: var(--gray-700);">How can I help you?</div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input id="estateAskInput" type="text" placeholder="Écrire un message…" oninput="toggleEstateSendBtn()" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitEstateQuestion();}" style="flex: 1; min-width: 0; padding: 0.5rem 0.7rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.85rem;">
+                <input id="estateAskInput" type="text" placeholder="Write a message…" oninput="toggleEstateSendBtn()" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitEstateQuestion();}" style="flex: 1; min-width: 0; padding: 0.5rem 0.7rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.85rem;">
                 {# Send button: square, rounded, up-arrow. Hidden until the field
                    has content (toggleEstateSendBtn on input), so it only shows
                    once the user has typed something to send. #}
-                <button type="button" id="estateAskBtn" onclick="submitEstateQuestion()" aria-label="Envoyer" title="Envoyer" style="display: none; flex-shrink: 0; width: 34px; height: 34px; padding: 0; border: none; border-radius: 8px; background: var(--primary); color: white; cursor: pointer; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                <button type="button" id="estateAskBtn" onclick="submitEstateQuestion()" aria-label="Send" title="Send" style="display: none; flex-shrink: 0; width: 34px; height: 34px; padding: 0; border: none; border-radius: 8px; background: var(--primary); color: white; cursor: pointer; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
             </div>
         </div>
     </div>
@@ -195,7 +221,8 @@
                     </td>
                     <td style="padding: 0.4rem 0.6rem; text-align: right;">
                         <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;"
-                                onclick="dismissApprovedManual({{ m.id }})">Dismiss</button>
+                                title="Changed your mind? Stop counting this resource as active waste for good"
+                                onclick="dismissApprovedManual({{ m.id }})">Ignore</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -208,7 +235,7 @@
 <!-- Tabs -->
 <div class="card" style="padding: 0.75rem;">
     <!-- Tab nav -->
-    <div style="display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1rem;">
+    <div style="display: flex; align-items: flex-end; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1rem;">
         <button id="tab-btn-ec2" onclick="switchTab('ec2')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--gray-800); margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-800);">EC2 Instances <span style="background: var(--gray-800); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ec2_recs|length }}</span></span>
             <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-800); opacity: 0.7; margin-top: 2px;">AUTOMATED</span>
@@ -219,7 +246,7 @@
         </button>
         <button id="tab-btn-eip" onclick="switchTab('eip')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Elastic IPs <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ eip_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL</span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
         </button>
         <button id="tab-btn-snap" onclick="switchTab('snap')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Snapshots <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ snap_recs|length }}</span></span>
@@ -231,41 +258,67 @@
             <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
         </button>
         {% endif %}
+
+        <!-- Active policy status, inline on the tab row (edit on /settings) -->
+        <div class="policy-banner" style="margin: 0 0 0 1rem; padding-bottom: 0.5rem;">
+            {% if get_dry_run() %}
+            <span class="mode-pill mode-pill--dry"><span class="dot">●</span> Dry-run</span>
+            {% else %}
+            <span class="mode-pill mode-pill--live kpi-hover" tabindex="0" data-tip="Production mode — approving a recommendation executes the action for real on AWS (stop, terminate, delete). Switch to dry-run in Settings to simulate without touching any resource."><span class="dot">●</span> Production</span>
+            {% endif %}
+            {% if get_grace_period_days() > 0 %}
+            <span class="mode-pill mode-pill--soft">Grace period: {{ get_grace_period_days() }} day{{ 's' if get_grace_period_days() > 1 }}</span>
+            {% endif %}
+            {% if not get_auto_remediation_enabled() %}
+            <span class="mode-pill mode-pill--soft">Auto-remediation off</span>
+            {% endif %}
+        </div>
+
+        <!-- Action buttons, inline on the tab row (right-aligned) -->
+        <div style="margin-left: auto; display: flex; align-items: center; padding-bottom: 0.5rem;">
+        <!-- AUTOMATED (EC2 + EBS + Other) -->
+        <div id="actions-automated" style="display: flex; align-items: center; gap: 0.75rem;">
+            <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
+            {# Button group hidden until at least one row is selected (shown by updateSelectedCount) #}
+            <div id="approveActions" style="display: none; gap: 0.5rem;">
+                <button type="button" id="approveBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-primary kpi-hover" style="padding: 0.4rem 0.75rem; cursor: pointer;" data-tip="Apply the fix now — stops or deletes the resource on AWS (or schedules it / opens a Terraform PR, per your settings)">
+                    Apply
+                </button>
+                <button type="button" id="rejectBtn" onclick="executeAction('reject')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; cursor: pointer;" data-tip="Decline this recommendation for now — the resource stays counted as active waste so you can revisit it">
+                    Skip
+                </button>
+                <button type="button" id="dismissBtn" onclick="executeAction('dismiss')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; cursor: pointer;" data-tip="Mark as not waste — stop counting this resource for good; it won't come back in your totals">
+                    Ignore
+                </button>
+            </div>
+        </div>
+        <!-- MANUAL (EIP / Snapshots) — buttons only; notice sits on its own row below -->
+        <div id="actions-manual" style="display: none; align-items: center; gap: 0.75rem;">
+            <span id="manualSelectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
+            {# Button group hidden until at least one row is selected (shown by updateSelectedCount) #}
+            <div id="manualActions" style="display: none; gap: 0.5rem;">
+                <button type="button" id="approveManualBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-primary kpi-hover" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer;" data-tip="Confirm the recommendation — the decision is recorded, but you still have to delete the resource yourself on AWS">
+                    Approve
+                </button>
+                <button type="button" id="rejectManualBtn" onclick="executeAction('reject')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer;" data-tip="Decline this recommendation for now — the resource stays counted as active waste so you can revisit it">
+                    Skip
+                </button>
+                <button type="button" id="dismissManualBtn" onclick="executeAction('dismiss')" class="btn btn-outline kpi-hover" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer;" data-tip="Mark as not waste — stop counting this resource for good; it won't come back in your totals">
+                    Ignore
+                </button>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <!-- Manual notice row (below the tabs, shown only on manual tabs) -->
+    <div id="manual-notice" style="display: none; margin-bottom: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; background: rgba(180,83,9,0.05); border: 1px solid rgba(180,83,9,0.2); border-radius: 6px; padding: 0.6rem 1rem;">
+            <span><strong>Manual action required</strong> — delete these resources directly from the <a id="awsConsoleLink" href="https://console.aws.amazon.com/ec2/v2/home" target="_blank" style="color: var(--primary);">AWS Console</a>.</span>
+        </div>
     </div>
 
     <form id="actionsForm">
-        <!-- Action buttons — AUTOMATED (EC2 + EBS) -->
-        <div id="actions-automated" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600);">0 selected</span>
-            <div style="display: flex; gap: 0.5rem;">
-                <button type="button" id="approveBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-primary" style="padding: 0.4rem 0.75rem;">
-                    Approve Selected
-                </button>
-                <button type="button" id="rejectBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
-                    Reject
-                </button>
-                <button type="button" id="dismissBtn" onclick="executeAction('dismiss')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" title="Stop counting this item as active waste for good">
-                    Dismiss
-                </button>
-            </div>
-        </div>
-        <!-- Manual notice — EBS / EIP / Snapshots -->
-        <div id="actions-manual" style="display: none; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; gap: 0.75rem;">
-            <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; background: rgba(180,83,9,0.05); border: 1px solid rgba(180,83,9,0.2); border-radius: 6px; padding: 0.6rem 1rem; flex: 1;">
-                <span><strong>Manual action required</strong> — delete these resources directly from the <a id="awsConsoleLink" href="https://console.aws.amazon.com/ec2/v2/home" target="_blank" style="color: var(--primary);">AWS Console</a>.</span>
-            </div>
-            <span id="manualSelectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
-            <button type="button" id="approveManualBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-primary" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" title="Confirm the recommendation — you still have to delete the resource yourself" disabled>
-                Approve
-            </button>
-            <button type="button" id="rejectManualBtn" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" disabled>
-                Reject
-            </button>
-            <button type="button" id="dismissManualBtn" onclick="executeAction('dismiss')" class="btn btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; opacity: 0.4; cursor: not-allowed;" title="Stop counting this item as active waste for good" disabled>
-                Dismiss
-            </button>
-        </div>
-
         <!-- EC2 Tab -->
         <div id="tab-ec2">
             {% if ec2_recs %}
@@ -297,8 +350,8 @@
                           {% endif %}
                         {% endif %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" onclick="event.stopPropagation(); updateSelectedCount();"></td>
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why act?" data-reason="{{ reason }}">{{ rec.resource_id[:20] }}</code> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#InstanceDetails:instanceId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why act?" data-reason="{{ reason }}">{{ rec.resource_id[:20] }}</code> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 {% if rec.recommendation_type == 'stop_instance' %}
@@ -313,10 +366,10 @@
                             <td style="padding: 0.4rem 0.5rem;">
                                 <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
                             </td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(current_cost) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Capped to real spend · list-price {{ '%.2f'|format(rec.monthly_cost_raw) }} €/mo"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_capped) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Capped to real spend · list-price est. {{ '%.2f'|format(savings) }} €"{% endif %}>{{ "%.2f"|format(rec.savings_capped) }}</strong>
                                     <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>
                                 </div>
                             </td>
@@ -360,17 +413,17 @@
                         {% for rec in ebs_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ebs" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ebs" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Not attached to any instance' %}
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why delete?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why delete?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" target="_blank" onclick="event.stopPropagation()" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_name or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; white-space: nowrap;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span> <span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Capped to real spend · list-price {{ '%.2f'|format(rec.monthly_cost_raw) }} €/mo"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_capped) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Capped to real spend · list-price est. {{ '%.2f'|format(savings) }} €"{% endif %}>{{ "%.2f"|format(rec.savings_capped) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -410,13 +463,13 @@
                         {% for rec in eip_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-eip" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-eip" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Not associated to any instance' %}
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why release?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why release?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" target="_blank" onclick="event.stopPropagation()" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Capped to real spend · list-price {{ '%.2f'|format(rec.monthly_cost_raw) }} €/mo"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_capped) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
@@ -457,17 +510,17 @@
                         {% for rec in snap_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-snap" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-snap" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Old snapshot — verify before deleting' %}
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why review?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" target="_blank" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why review?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" target="_blank" onclick="event.stopPropagation()" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.snap_description or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);">{{ "%.2f"|format(savings) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Capped to real spend · list-price {{ '%.2f'|format(rec.monthly_cost_raw) }} €/mo"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_capped) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Capped to real spend · list-price est. {{ '%.2f'|format(savings) }} €"{% endif %}>{{ "%.2f"|format(rec.savings_capped) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -506,14 +559,14 @@
                         {% for rec in other_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-other" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-other" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.action_required %}{% if rec.ai_insight %}{% set reason = reason ~ ' — ' ~ rec.ai_insight %}{% endif %}
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.volume_name or rec.resource_id }}</code> <button type="button" class="row-action-btn" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" title="CloudTrail history: who created or touched this resource" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.volume_name or rec.resource_id }}</code> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
                                                         <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Capped to real spend · list-price est. {{ '%.2f'|format(savings) }} €"{% endif %}>{{ "%.2f"|format(rec.savings_capped) }}</strong>
                                     <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span>
                                 </div>
                             </td>
@@ -561,6 +614,43 @@
 </div>
 {% endif %}
 
+{% if rejected_recs %}
+<!-- Skipped (rejected) recommendations — dropped from the pending list but
+     still counted as active waste. Collapsed by default: these are parked,
+     not a to-do. Restore sends one back to pending (re-detection never
+     revives a rejected reco on its own). -->
+<details class="card mt-1" style="padding: 0.75rem;">
+    <summary style="cursor: pointer; font-size: 0.9rem;">
+        <strong>Skipped recommendations</strong>
+        <span class="badge badge-info" style="margin: 0 0.4rem;">
+            {% if rejected_total_count > rejected_recs|length %}{{ rejected_recs|length }} of {{ rejected_total_count }}{% else %}{{ rejected_recs|length }}{% endif %}
+        </span>
+        <span style="font-size: 0.75rem; color: var(--gray-600); font-weight: 400;">
+            Declined for now — still counted as active waste. Restore one to act on it again.
+        </span>
+    </summary>
+    <div class="table-container" style="margin-top: 0.6rem;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+            <tbody>
+                {% for rj in rejected_recs %}
+                <tr id="rejected-row-{{ rj.id }}" style="border-top: 1px solid var(--gray-200, #e5e7eb);">
+                    <td style="padding: 0.4rem 0.6rem; font-family: monospace;">{{ rj.resource_id }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">{{ rj.recommendation_type }}</td>
+                    <td style="padding: 0.4rem 0.6rem;">EUR {{ "%.2f"|format(rj.estimated_monthly_savings_eur or 0) }}/mo</td>
+                    <td style="padding: 0.4rem 0.6rem;">skipped {{ rj.applied_at.strftime('%Y-%m-%d %H:%M') if rj.applied_at else '-' }}</td>
+                    <td style="padding: 0.4rem 0.6rem; text-align: right;">
+                        <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;"
+                                title="Send this recommendation back to the pending list so you can act on it again"
+                                onclick="restoreSkipped({{ rj.id }})">Restore</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</details>
+{% endif %}
+
 <!-- Resource-history modal: CloudTrail LookupEvents for one resource (who
      created/touched it) — see /api/recommendations/{id}/resource-history -->
 <div id="historyModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
@@ -574,6 +664,20 @@
         <p style="font-size: 0.72rem; color: var(--gray-500); margin: 0.75rem 0 0;">
             Last 90 days of management events, from CloudTrail event history.
         </p>
+    </div>
+</div>
+
+<!-- Styled confirmation dialog, replaces the native confirm() (which leaked
+     "localhost:8888 indique" and browser-locale buttons). Driven by the
+     confirmDialog() promise below. -->
+<div id="confirmModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1100; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 420px; box-shadow: 0 12px 32px rgba(0,0,0,0.2);">
+        <h3 id="confirmModalTitle" style="margin: 0 0 0.5rem; font-size: 1rem; color: var(--gray-800);">Please confirm</h3>
+        <p id="confirmModalMessage" style="margin: 0 0 1.25rem; font-size: 0.9rem; color: var(--gray-600); line-height: 1.5; white-space: pre-line;"></p>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+            <button type="button" id="confirmModalCancel" class="btn btn-outline" style="padding: 0.4rem 1rem;">Cancel</button>
+            <button type="button" id="confirmModalOk" class="btn btn-primary" style="padding: 0.4rem 1rem;">Confirm</button>
+        </div>
     </div>
 </div>
 
@@ -625,6 +729,10 @@
         const isAutomated = AUTOMATED_TABS.includes(tab);
         document.getElementById('actions-automated').style.display = isAutomated ? 'flex' : 'none';
         document.getElementById('actions-manual').style.display    = isAutomated ? 'none' : 'flex';
+        // The "manual action required" notice lives on its own row below the
+        // tabs (the buttons themselves are now inline on the tab row).
+        const notice = document.getElementById('manual-notice');
+        if (notice) notice.style.display = isAutomated ? 'none' : 'block';
 
         updateSelectedCount();
     }
@@ -648,24 +756,31 @@
         // Update the action bar this tab actually shows (see switchTab):
         // keying on 'ec2' left the automated bar's counter and buttons
         // frozen on the EBS and Other tabs, which display that same bar.
+        // Buttons appear only while at least one row is selected, and vanish
+        // when the selection is empty (whole group toggled, not just disabled).
         if (AUTOMATED_TABS.includes(currentTab)) {
             document.getElementById('selectedCount').textContent = count + ' selected';
-            const approveBtn = document.getElementById('approveBtn');
-            const rejectBtn  = document.getElementById('rejectBtn');
-            const dismissBtn = document.getElementById('dismissBtn');
-            [approveBtn, rejectBtn, dismissBtn].forEach(btn => {
-                if (btn) { btn.disabled = count === 0; btn.style.opacity = count === 0 ? '0.4' : '1'; btn.style.cursor = count === 0 ? 'not-allowed' : 'pointer'; }
-            });
+            const group = document.getElementById('approveActions');
+            if (group) group.style.display = count === 0 ? 'none' : 'flex';
         } else {
             const manualCount = document.getElementById('manualSelectedCount');
             if (manualCount) manualCount.textContent = count + ' selected';
-            const approveBtn = document.getElementById('approveManualBtn');
-            const rejectBtn = document.getElementById('rejectManualBtn');
-            const dismissBtn = document.getElementById('dismissManualBtn');
-            [approveBtn, rejectBtn, dismissBtn].forEach(b => {
-                if (b) { b.disabled = count === 0; b.style.opacity = count === 0 ? '0.4' : '1'; b.style.cursor = count === 0 ? 'not-allowed' : 'pointer'; }
-            });
+            const group = document.getElementById('manualActions');
+            if (group) group.style.display = count === 0 ? 'none' : 'flex';
         }
+    }
+
+    // Recompute each tab's count badge from the rows currently in the DOM so
+    // the badges never diverge from the tables (they used to stay frozen at
+    // the server-rendered count after rows were removed by an action). The
+    // badge is the inner <span> of the tab button's label span.
+    function updateTabBadges() {
+        ALL_TABS.forEach(t => {
+            const btn = document.getElementById('tab-btn-' + t);
+            if (!btn) return;
+            const badge = btn.querySelector(':scope > span:first-child > span');
+            if (badge) badge.textContent = document.querySelectorAll('.rec-checkbox-' + t).length;
+        });
     }
 
     function getSelectedIds() {
@@ -676,6 +791,56 @@
         return Array.from(checkboxes).map(cb => parseInt(cb.value));
     }
 
+    // Selected resources as {id, url} (id like i-…/vol-…, url = AWS console
+    // deep link when we can build one), shown in the confirmation dialog so the
+    // user sees — and can open — exactly what they act on.
+    function getSelectedResources() {
+        const checkboxes = document.querySelectorAll('.rec-checkbox-' + currentTab + ':checked');
+        return Array.from(checkboxes)
+            .map(cb => ({ id: cb.dataset.resource, url: cb.dataset.console || '' }))
+            .filter(r => r.id);
+    }
+
+    // Promise-based styled confirmation, drop-in replacement for confirm().
+    // Resolves true on Confirm/Enter, false on Cancel/Esc/backdrop click.
+    function confirmDialog(message, opts = {}) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('confirmModal');
+            document.getElementById('confirmModalTitle').textContent = opts.title || 'Please confirm';
+            const msgEl = document.getElementById('confirmModalMessage');
+            // opts.html is trusted markup the caller built (with its own escaping
+            // of AWS-sourced ids); plain messages stay textContent, inert.
+            if (opts.html) msgEl.innerHTML = opts.html;
+            else msgEl.textContent = message;
+            const okBtn = document.getElementById('confirmModalOk');
+            const cancelBtn = document.getElementById('confirmModalCancel');
+            okBtn.textContent = opts.confirmText || 'Confirm';
+            cancelBtn.textContent = opts.cancelText || 'Cancel';
+            okBtn.className = 'btn ' + (opts.danger ? 'btn-danger' : 'btn-primary');
+            modal.style.display = 'flex';
+            okBtn.focus();
+            function cleanup(result) {
+                modal.style.display = 'none';
+                okBtn.removeEventListener('click', onOk);
+                cancelBtn.removeEventListener('click', onCancel);
+                modal.removeEventListener('click', onBackdrop);
+                document.removeEventListener('keydown', onKey);
+                resolve(result);
+            }
+            const onOk = () => cleanup(true);
+            const onCancel = () => cleanup(false);
+            const onBackdrop = (e) => { if (e.target === modal) cleanup(false); };
+            const onKey = (e) => {
+                if (e.key === 'Escape') cleanup(false);
+                else if (e.key === 'Enter') cleanup(true);
+            };
+            okBtn.addEventListener('click', onOk);
+            cancelBtn.addEventListener('click', onCancel);
+            modal.addEventListener('click', onBackdrop);
+            document.addEventListener('keydown', onKey);
+        });
+    }
+
     async function executeAction(action, dryRun = true) {
         const ids = getSelectedIds();
         if (ids.length === 0) {
@@ -683,8 +848,48 @@
             return;
         }
 
-        const actionText = action === 'approve' ? 'approve' : action === 'dismiss' ? 'dismiss (stop counting as active waste)' : 'reject';
-        if (!confirm('Are you sure you want to ' + actionText + ' ' + ids.length + ' recommendation(s)?')) {
+        const actionText = action === 'approve'
+            ? (AUTOMATED_TABS.includes(currentTab) ? 'apply' : 'approve')
+            : action === 'dismiss' ? 'ignore (stop counting as active waste)'
+            : 'skip';
+        const confirmLabel = { apply: 'Apply', approve: 'Approve', skip: 'Skip' }[actionText] || 'Ignore';
+        const noun = ids.length === 1 ? 'recommendation' : 'recommendations';
+        // AWS-sourced ids/urls go into innerHTML below, so escape them.
+        const esc = s => String(s).replace(/[&<>"']/g,
+            c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        let html = esc('You are about to ' + actionText + ' ' + ids.length + ' ' + noun + '.');
+
+        // Show exactly which resources are affected — each id in blue, linking
+        // to its AWS console page when we have a deep link. Capped so a big
+        // selection doesn't blow up the dialog.
+        const resources = getSelectedResources();
+        if (resources.length) {
+            const shown = resources.slice(0, 6).map(r => r.url
+                ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener" '
+                  + 'style="color: var(--primary); text-decoration: none; font-family: monospace;">'
+                  + esc(r.id) + ' ↗</a>'
+                : '<span style="color: var(--primary); font-family: monospace;">' + esc(r.id) + '</span>'
+            ).join(', ');
+            const extra = resources.length > 6 ? ' (+' + (resources.length - 6) + ' more)' : '';
+            html += '<div style="margin-top: 0.75rem;">'
+                + (resources.length === 1 ? 'Resource: ' : 'Resources: ') + shown + extra + '</div>';
+        }
+
+        // Production reminder: applying here touches AWS for real. Only relevant
+        // when this is an Apply/Approve in live mode (dryRun is false).
+        if (action === 'approve' && !dryRun) {
+            html += '<div style="margin-top: 0.75rem; color: var(--danger); font-weight: 600;">'
+                + '⚠ Production mode — this executes the action for real on AWS.</div>';
+        }
+
+        const proceed = await confirmDialog(null, {
+            html: html,
+            confirmText: confirmLabel,
+            // Red confirm button for anything that isn't a plain dry-run apply:
+            // real production actions and the negative skip/ignore paths.
+            danger: action !== 'approve' || !dryRun,
+        });
+        if (!proceed) {
             return;
         }
 
@@ -701,28 +906,38 @@
             console.log('API Response:', response);  // Debug log
             const successCount = response.results.filter(r => r.success).length;
 
-            // Remove successful rows from table instantly
+            // Remove rows only for actions that actually changed the database.
             response.results.forEach(result => {
-                console.log('Processing result:', result);  // Debug log
-                if (result.success) {
-                    // Use String() to ensure type match with checkbox value attribute
-                    const checkbox = document.querySelector(`input.rec-checkbox[value="${String(result.recommendation_id)}"]`);
-                    console.log('Found checkbox:', checkbox);  // Debug log
-                    if (checkbox) {
-                        const row = checkbox.closest('tr');
-                        if (row) {
-                            row.remove();
-                            console.log('Removed row for rec_id:', result.recommendation_id);
-                        }
-                    }
-                } else {
+                if (!result.success) {
                     console.log('Action failed for rec_id:', result.recommendation_id, 'Error:', result.error);
+                    return;
+                }
+                // Dry-run approve/execute is a no-op server-side (nothing was
+                // stopped, deleted, or re-statused). Keep the row and the KPIs
+                // untouched so the page stays coherent with the unchanged DB —
+                // removing them faked a resolution that a reload would undo.
+                if (result.dry_run) return;
+                // Use String() to ensure type match with checkbox value attribute
+                const checkbox = document.querySelector(`input.rec-checkbox[value="${String(result.recommendation_id)}"]`);
+                if (checkbox) {
+                    // Decrement the summary KPIs by this row's own values (a
+                    // delta, correct even when pending exceeds the 500 rendered).
+                    const rowSavings = parseFloat(checkbox.dataset.savings) || 0;
+                    summaryState.count -= 1;
+                    summaryState.savings -= rowSavings;
+                    summaryState.confSum -= parseFloat(checkbox.dataset.confidence) || 0;
+                    // Keep the per-service cap accurate as rows leave.
+                    const bk = summaryState.buckets[checkbox.dataset.bucket];
+                    if (bk) bk.savings -= rowSavings;
+                    const row = checkbox.closest('tr');
+                    if (row) row.remove();
                 }
             });
 
             // Update counters immediately
             updateSelectedCount();
-            updateSummary();
+            renderSummary();
+            updateTabBadges();   // keep the tab counts in sync with the tables
 
             // Show empty message if no rows left in current tab
             const tabEl = document.getElementById('tab-' + currentTab);
@@ -732,16 +947,25 @@
                 if (tc) tc.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--gray-500);">No more recommendations in this tab</div>';
             }
 
-            // Red toast as soon as one action failed; note manual approvals
-            const manualCount = response.results.filter(r => r.success && r.manual).length;
+            // Red toast as soon as one action failed; note manual approvals.
+            // dry_run is a global config, so approve/execute results are either
+            // all dry-run or none — a single simulated branch is enough.
+            const dryRunCount = response.results.filter(r => r.success && r.dry_run).length;
+            const manualCount = response.results.filter(r => r.success && r.manual && !r.dry_run).length;
             const scheduledCount = response.results.filter(r => r.success && r.scheduled).length;
             const failures = response.results.filter(r => !r.success && r.error);
-            let msg = successCount + '/' + ids.length + ' actions completed successfully!';
-            if (manualCount > 0) {
-                msg += ' (' + manualCount + ' approved — execute manually on AWS)';
-            }
-            if (scheduledCount > 0) {
-                msg += ' (' + scheduledCount + ' scheduled — grace period, cancellable from this page)';
+            let msg;
+            if (dryRunCount > 0) {
+                msg = 'Dry-run — ' + dryRunCount + ' simulated, no change applied. '
+                    + 'Disable dry-run in Settings to act for real.';
+            } else {
+                msg = successCount + '/' + ids.length + ' actions completed successfully!';
+                if (manualCount > 0) {
+                    msg += ' (' + manualCount + ' approved — execute manually on AWS)';
+                }
+                if (scheduledCount > 0) {
+                    msg += ' (' + scheduledCount + ' scheduled — grace period, cancellable from this page)';
+                }
             }
             // The error text carries the fix (which switch to enable, which
             // safeguard refused): showing only the count buried it in the
@@ -763,7 +987,11 @@
     }
 
     async function dismissApprovedManual(recId) {
-        if (!confirm('Stop counting this as active waste? Use this if you changed your mind and are not going to delete it.')) {
+        const proceed = await confirmDialog(
+            'Use this if you changed your mind and are not going to delete it. It will no longer be counted as active waste.',
+            { title: 'Stop counting as active waste?', confirmText: 'Ignore', danger: true }
+        );
+        if (!proceed) {
             return;
         }
         try {
@@ -775,8 +1003,34 @@
                 })
             });
             const ok = response.results[0] && response.results[0].success;
-            showToast(ok ? 'Dismissed — no longer counted as active waste.'
-                         : 'Dismiss failed: ' + (response.results[0].error || 'unknown'),
+            showToast(ok ? 'Ignored — no longer counted as active waste.'
+                         : 'Failed: ' + (response.results[0].error || 'unknown'),
+                      ok ? 'success' : 'error');
+            if (ok) setTimeout(() => window.location.reload(), 1000);
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function restoreSkipped(recId) {
+        const proceed = await confirmDialog(
+            'This recommendation returns to the pending list so you can act on it again.',
+            { title: 'Restore this recommendation?', confirmText: 'Restore' }
+        );
+        if (!proceed) {
+            return;
+        }
+        try {
+            const response = await api('/api/actions', {
+                method: 'POST',
+                body: JSON.stringify({
+                    recommendation_ids: [recId],
+                    action: 'restore'
+                })
+            });
+            const ok = response.results[0] && response.results[0].success;
+            showToast(ok ? 'Restored — back in the pending list.'
+                         : 'Restore failed: ' + (response.results[0].error || 'unknown'),
                       ok ? 'success' : 'error');
             if (ok) setTimeout(() => window.location.reload(), 1000);
         } catch (error) {
@@ -785,7 +1039,11 @@
     }
 
     async function cancelScheduled(recId) {
-        if (!confirm('Cancel this scheduled execution? The recommendation returns to the pending list.')) {
+        const proceed = await confirmDialog(
+            'The recommendation returns to the pending list.',
+            { title: 'Cancel this scheduled execution?', confirmText: 'Cancel execution', cancelText: 'Keep', danger: true }
+        );
+        if (!proceed) {
             return;
         }
         try {
@@ -806,10 +1064,50 @@
         }
     }
 
-    function updateSummary() {
-        const count = document.querySelectorAll('.rec-checkbox').length;
-        const countSpan = document.querySelector('.card.mb-1 strong');
-        if (countSpan) countSpan.textContent = count;
+    // Live state behind the three summary KPIs. Seeded from the server-side
+    // totals (which span every matching row, not just the ≤500 rendered), then
+    // adjusted by deltas as rows are resolved — so the header never goes stale
+    // between actions and never needs a full reload to be correct.
+    const summaryState = {
+        count: {{ total_count }},
+        savings: {{ "%.6f"|format(total_savings) }},
+        confSum: {{ "%.6f"|format(total_count * avg_confidence) }},
+        // Per-Cost-Explorer-service savings buckets { key: {savings, cap} };
+        // the displayed savings are Σ min(bucket.savings, bucket.cap), so a
+        // service's estimate can't exceed its real spend (cap null = uncapped).
+        buckets: {{ savings_buckets|tojson }},
+    };
+
+    function renderSummary() {
+        const count = Math.max(0, summaryState.count);
+        const countEl = document.getElementById('kpiCount');
+        if (countEl) {
+            countEl.textContent = count;
+            countEl.classList.toggle('pending-blink', count > 0);
+        }
+        // Cap each service's estimate at its real spend, then sum (per-service
+        // cap). Disclose the raw estimate in the note when the cap bites.
+        const rawSavings = Math.max(0, summaryState.savings);
+        let cappedSavings = 0;
+        for (const k in summaryState.buckets) {
+            const b = summaryState.buckets[k];
+            const cap = (b.cap === null || b.cap === undefined) ? Infinity : b.cap;
+            cappedSavings += Math.min(Math.max(0, b.savings), cap);
+        }
+        const savingsEl = document.getElementById('kpiSavings');
+        if (savingsEl) savingsEl.textContent = cappedSavings.toFixed(2);
+        const capNote = document.getElementById('savingsCapNote');
+        if (capNote) {
+            const over = cappedSavings < rawSavings - 0.005;
+            capNote.style.display = over ? '' : 'none';
+            capNote.textContent = 'capped · est. ' + rawSavings.toFixed(2) + ' €';
+        }
+        const avg = count > 0 ? summaryState.confSum / count : 0;
+        const confEl = document.getElementById('kpiConfidence');
+        if (confEl) confEl.textContent = (avg * 100).toFixed(0);
+        const ring = document.getElementById('kpiConfidenceRing');
+        if (ring) ring.style.color = avg >= 0.8 ? 'var(--success)'
+            : avg >= 0.5 ? 'var(--warning)' : 'var(--danger)';
     }
 
     function showToast(message, type = 'success') {
@@ -1013,7 +1311,7 @@
         }
     }
 
-    // Initial state: action buttons stay disabled until a row is selected
+    // Initial state: action buttons stay hidden until a row is selected
     updateSelectedCount();
 
     // Deep link: /recommendations#tab=eip opens straight on that tab

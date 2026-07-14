@@ -5,13 +5,28 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from psycopg2.extras import Json
 
-from state import get_db, templates, _config_manager, _aws_status
+from state import get_db, templates, _config_manager, _aws_status, USD_TO_EUR
 from schemas import ActionRequest, AskQuestionRequest
 from jobs import _execute_ec2_boto3
 from utils.action_registry import execution_mode
 from utils.logger import log_remediation_action
 
 router = APIRouter()
+
+# Cost Explorer service each waste resource_type is billed under — used to cap
+# estimated savings at the real per-service spend (coherence cap in the
+# recommendations route). Several types share "EC2 - Other" (EBS, snapshots,
+# EIP, NAT), so they're capped together against that single line. A type not
+# in this map is left uncapped (cap = None) rather than hidden.
+RTYPE_TO_CE_SERVICE = {
+    "ec2_instance": "Amazon Elastic Compute Cloud - Compute",
+    "ebs_volume": "EC2 - Other",
+    "ebs_snapshot": "EC2 - Other",
+    "elastic_ip": "EC2 - Other",
+    "nat_gateway": "EC2 - Other",
+    "load_balancer": "Amazon Elastic Load Balancing",
+    "vpc": "Amazon Virtual Private Cloud",
+}
 
 
 @router.get("/recommendations", response_class=HTMLResponse)
@@ -96,6 +111,80 @@ def recommendations(
     total_savings = float(totals["total_savings"])
     avg_confidence = float(totals["avg_confidence"])
 
+    # Coherence cap (finops, display-time PER-SERVICE cap). A global cap on the
+    # total hides per-service overstatements behind big uncovered lines (EC2
+    # idle estimated at ~7 € while real EC2 compute is 0.26 €, masked by a
+    # 6.81 € WAF bill). So each service's estimated savings are capped at that
+    # service's own real 30-day Cost Explorer spend, then summed. Same filtered
+    # set as total_savings (reuses where_clause); no data is mutated; the raw
+    # estimate is disclosed in the note/tooltip.
+    cursor.execute(
+        """
+        SELECT service,
+               SUM(CASE WHEN currency = 'USD' THEN cost * %s ELSE cost END) AS eur
+        FROM cloud_costs_raw
+        WHERE usage_date >= CURRENT_DATE - 30
+        GROUP BY service
+        """,
+        (USD_TO_EUR,),
+    )
+    service_spend = {row["service"]: float(row["eur"] or 0) for row in cursor.fetchall()}
+
+    cursor.execute(
+        f"""
+        SELECT w.resource_type,
+               COALESCE(SUM(r.estimated_monthly_savings_eur), 0) AS est
+        FROM recommendations r
+        JOIN waste_detected w ON w.id = r.waste_id
+        {where_clause}
+        GROUP BY w.resource_type
+    """,  # noqa: S608 — where_clause is constant fragments; values are %s params
+        params if params else None,
+    )
+    # Buckets keyed by CE service; cap None = uncapped (unmapped type).
+    savings_buckets: dict = {}
+    for row in cursor.fetchall():
+        service = RTYPE_TO_CE_SERVICE.get(row["resource_type"])
+        key = service if service else "__unmapped__"
+        cap = service_spend.get(service, 0.0) if service else None
+        b = savings_buckets.setdefault(key, {"savings": 0.0, "cap": cap})
+        b["savings"] += float(row["est"])
+
+    savings_capped = sum(
+        b["savings"] if b["cap"] is None else min(b["savings"], b["cap"])
+        for b in savings_buckets.values()
+    )
+    # tolerance avoids a note on pure rounding noise
+    savings_over_spend = savings_capped < total_savings - 0.005
+    savings_display = savings_capped if savings_over_spend else total_savings
+
+    # Per-row realism factor: scale each service's rows by min(1, spend/est) so
+    # the displayed per-row Savings sum to the capped headline (a row can't
+    # claim more than its share of the service's real spend). Raw estimate kept
+    # on the row (savings_raw) for the tooltip. Annotating `recommendations`
+    # covers every tab list — they hold the same row objects.
+    savings_factor = {}
+    for key, b in savings_buckets.items():
+        if b["cap"] is None or b["savings"] <= 0:
+            savings_factor[key] = 1.0
+        else:
+            savings_factor[key] = min(1.0, b["cap"] / b["savings"])
+
+    for row in recommendations:
+        service = RTYPE_TO_CE_SERVICE.get(row["resource_type"])
+        factor = savings_factor.get(service if service else "__unmapped__", 1.0)
+        raw = float(row["estimated_monthly_savings_eur"] or 0)
+        row["savings_capped"] = raw * factor
+        row["savings_is_capped"] = factor < 0.9995
+        # Same factor scales the row's Monthly cost so an idle resource shows a
+        # realistic cost ≈ its realistic saving (no 3.56 €/mo cost next to a
+        # 0.13 € saving on one line). List price kept for the tooltip. Computed
+        # here in float — the metadata value is a Decimal and Decimal * float
+        # raises in the template.
+        mc_raw = float(row["monthly_cost"]) if row["monthly_cost"] is not None else raw
+        row["monthly_cost_raw"] = mc_raw
+        row["monthly_cost_capped"] = mc_raw * factor
+
     ec2_recs = [r for r in recommendations if r["resource_type"] == "ec2_instance"]
     # The EBS tab renders deletion semantics ("unattached", "why delete?"),
     # so it only gets delete_volume recs; gp2 migrations go to Other
@@ -161,6 +250,24 @@ def recommendations(
     cursor.execute("SELECT COUNT(*) AS n FROM recommendations WHERE status = 'approved_manual'")
     approved_manual_total_count = cursor.fetchone()["n"]
 
+    # Skipped (rejected) recommendations: dropped out of the pending list but
+    # still counted as active waste. Surfaced here so the user can bring one
+    # back to pending — re-detection never revives a 'rejected' reco on its
+    # own, so without this there was no way to undo a Skip.
+    cursor.execute("""
+        SELECT r.id, r.recommendation_type, r.applied_at,
+               r.estimated_monthly_savings_eur,
+               w.resource_id, w.resource_type
+        FROM recommendations r
+        JOIN waste_detected w ON r.waste_id = w.id
+        WHERE r.status = 'rejected'
+        ORDER BY r.applied_at DESC NULLS LAST
+        LIMIT 100
+    """)
+    rejected_recs = cursor.fetchall()
+    cursor.execute("SELECT COUNT(*) AS n FROM recommendations WHERE status = 'rejected'")
+    rejected_total_count = cursor.fetchone()["n"]
+
     # Distinguishes "the collector never ran" from "it ran and everything got
     # resolved" — an empty pending list means very different things, and the
     # generic placeholder used to claim the collector hadn't run even when
@@ -185,6 +292,8 @@ def recommendations(
             "scheduled_total_count": scheduled_total_count,
             "approved_manual_recs": approved_manual_recs,
             "approved_manual_total_count": approved_manual_total_count,
+            "rejected_recs": rejected_recs,
+            "rejected_total_count": rejected_total_count,
             "recommendations": recommendations,
             "ec2_recs": ec2_recs,
             "ebs_recs": ebs_recs,
@@ -194,6 +303,10 @@ def recommendations(
             "scheduled_recs": scheduled_recs,
             "total_count": total_count,
             "total_savings": total_savings,
+            "savings_display": savings_display,
+            "savings_over_spend": savings_over_spend,
+            "savings_buckets": savings_buckets,
+            "rtype_to_service": RTYPE_TO_CE_SERVICE,
             "avg_confidence": avg_confidence,
             "type_filter": type_filter,
             "min_savings": min_savings,
@@ -331,6 +444,47 @@ def resource_history(rec_id: int, conn=Depends(get_db)):
     return payload
 
 
+def _fmt_rec_line(r) -> str:
+    """One pending recommendation as a single `key=value | …` line for the
+    estate chat prompt. Every column the UI shows is included; type-specific
+    fields that are NULL for this row are dropped so the model only ever sees
+    facts that exist (nothing to hallucinate around)."""
+    parts = [
+        str(r["action_required"]),
+        str(r["resource_type"]),
+        str(r["resource_id"]),
+        f"savings={float(r['savings']):.2f} EUR/mo",
+        f"confidence={float(r['confidence']) * 100:.0f}%",
+    ]
+    if r["instance_type"]:
+        parts.append(f"type={r['instance_type']}")
+    if r["instance_state"]:
+        parts.append(f"state={r['instance_state']}")
+    if r["cpu_avg"] is not None:
+        parts.append(f"avg_cpu_7d={float(r['cpu_avg']):.1f}%")
+    if r["datapoints"] is not None:
+        parts.append(f"datapoints={r['datapoints']}")
+    if r["observation_days"] is not None:
+        parts.append(f"observation_days={r['observation_days']}")
+    if r["monthly_cost"] is not None:
+        parts.append(f"monthly_cost={float(r['monthly_cost']):.2f} EUR/mo")
+    if r["volume_size_gb"]:
+        parts.append(f"size_gb={r['volume_size_gb']}")
+    if r["volume_type"]:
+        parts.append(f"volume_type={r['volume_type']}")
+    if r["region"]:
+        parts.append(f"region={r['region']}")
+    if r["public_ip"]:
+        parts.append(f"public_ip={r['public_ip']}")
+    if r["age_days"] is not None:
+        parts.append(f"age_days={r['age_days']}")
+    if r["resource_name"]:
+        parts.append(f"name={r['resource_name']}")
+    if r["snap_description"]:
+        parts.append(f"description={r['snap_description']}")
+    return "- " + " | ".join(parts)
+
+
 @router.post("/api/recommendations/chat")
 def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
     """One-shot AI answer to a question about ALL pending recommendations.
@@ -345,11 +499,29 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
         raise HTTPException(status_code=400, detail="question must not be empty")
 
     cursor = conn.cursor()
+    # Pull every column the recommendations table shows (plus the confidence
+    # drivers cpu/datapoints/observation_days) so the model can answer from
+    # real per-row data instead of inventing figures. Fields are type-specific
+    # and mostly NULL outside their resource type; _fmt_rec_line drops NULLs.
     cursor.execute("""
         SELECT r.action_required,
                COALESCE(r.estimated_monthly_savings_eur, 0) AS savings,
                w.resource_type, w.resource_id,
-               COALESCE(w.confidence_score, 0) AS confidence
+               COALESCE(w.confidence_score, 0) AS confidence,
+               w.metadata->>'instance_type' AS instance_type,
+               w.metadata->>'instance_state' AS instance_state,
+               (w.metadata->>'cpu_avg_7d')::numeric AS cpu_avg,
+               (w.metadata->>'datapoints')::int AS datapoints,
+               (w.metadata->>'observation_days')::int AS observation_days,
+               (w.metadata->>'monthly_cost_eur')::numeric AS monthly_cost,
+               w.metadata->>'size_gb' AS volume_size_gb,
+               w.metadata->>'vol_type' AS volume_type,
+               COALESCE(w.metadata->>'region', w.metadata->>'az') AS region,
+               w.metadata->>'name' AS resource_name,
+               w.metadata->>'public_ip' AS public_ip,
+               COALESCE((w.metadata->>'age_days')::integer,
+                        CURRENT_DATE - w.detection_date) AS age_days,
+               w.metadata->>'description' AS snap_description
         FROM recommendations r
         JOIN waste_detected w ON w.id = r.waste_id
         WHERE r.status = 'pending'
@@ -362,11 +534,7 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
     count = len(rows)
     total_savings = sum(float(r["savings"]) for r in rows)
     avg_conf = (sum(float(r["confidence"]) for r in rows) / count * 100) if count else 0.0
-    lines = "\n".join(
-        f"- {r['action_required']} | {r['resource_type']} | {r['resource_id']} | "
-        f"{float(r['savings']):.2f} | {float(r['confidence']) * 100:.0f}%"
-        for r in rows
-    )
+    lines = "\n".join(_fmt_rec_line(r) for r in rows)
 
     answer = answer_estate_question(
         question,
@@ -475,6 +643,30 @@ def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db)):
                         **({} if result else {"error": "not in scheduled state"}),
                     }
                 )
+
+            elif action_request.action == "restore":
+                # Un-skip: send a rejected recommendation back to the pending
+                # queue so the user can act on it again. Restricted to
+                # 'rejected' so it can never resurrect an already-resolved
+                # item (applied/approved/obsolete/dismissed) as fresh waste.
+                cursor.execute(
+                    """
+                    UPDATE recommendations
+                    SET status = 'pending', applied_at = NULL
+                    WHERE id = %s AND status = 'rejected'
+                    RETURNING id
+                """,
+                    (rec_id,),
+                )
+                result = cursor.fetchone()
+                restore_result = {
+                    "recommendation_id": rec_id,
+                    "success": result is not None,
+                    "action": "restored",
+                    **({} if result else {"error": "not in rejected state"}),
+                }
+                results.append(restore_result)
+                log_remediation_action("restore", [rec_id], restore_result, dry_run=False)
 
             elif action_request.action in ("approve", "execute"):
                 # Get resource info
@@ -644,21 +836,23 @@ def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db)):
                         ),
                     )
 
-                    # Update recommendation status. A dry-run touches no AWS
-                    # resource: leaving the status untouched (still 'pending')
-                    # keeps it counted as active waste instead of looking
-                    # remediated when nothing was actually done. Manual review
-                    # is a real human decision either way, so it always
-                    # records the decision — but as 'approved_manual', not
-                    # 'approved': nothing has touched the resource yet (the
-                    # human still has to delete it themselves), so it must
-                    # stay counted in active_waste (see the view's comment)
-                    # until sync confirms it's actually gone, same principle
-                    # as the dry-run case just below.
-                    if manual_review:
-                        new_status = "approved_manual"
-                    elif dry_run:
+                    # Update recommendation status.
+                    # Dry-run is checked FIRST so it's a uniform no-op: it
+                    # touches no AWS resource, so nothing is re-statused (stays
+                    # 'pending', still counted as active waste). Manual-review
+                    # types used to commit to 'approved_manual' even under
+                    # dry-run — a persisted approval demanding a real AWS
+                    # deletion, shown beneath the Dry-run banner. That was
+                    # incoherent; now dry-run changes nothing for any type.
+                    # Outside dry-run, manual review records the human decision
+                    # as 'approved_manual' (not 'approved'): nothing touched the
+                    # resource yet — the human still deletes it themselves — so
+                    # it stays counted in active_waste until a sync confirms
+                    # it's actually gone.
+                    if dry_run:
                         new_status = None
+                    elif manual_review:
+                        new_status = "approved_manual"
                     else:
                         new_status = "approved" if aws_success else "pending"
 
