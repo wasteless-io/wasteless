@@ -296,7 +296,9 @@ class EC2StoppedDetector:
                         waste_id, recommendation_type, action_required,
                         estimated_monthly_savings_eur, status
                     ) VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (waste_id) DO NOTHING;
+                    ON CONFLICT (waste_id) DO UPDATE SET
+                        estimated_monthly_savings_eur = EXCLUDED.estimated_monthly_savings_eur
+                    WHERE recommendations.status = 'pending';
                 """,
                     (
                         waste_id,
