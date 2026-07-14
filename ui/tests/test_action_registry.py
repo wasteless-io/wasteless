@@ -166,6 +166,17 @@ class TestApproveFlow(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertFalse(result["manual"])
 
+    def test_manual_type_recorded_as_todo_even_in_dry_run(self):
+        """Mark-as-to-do never touches AWS, so it records 'approved_manual'
+        even under dry-run — and reports dry_run=False (a real bookkeeping
+        change, not a simulated no-op), so the UI reloads to show the to-do."""
+        result, cursor = self._approve("delete_vpc", "vpc", "vpc-dry", dry_run=True)
+        self.assertTrue(result["success"])
+        self.assertTrue(result["manual"])
+        self.assertFalse(result["dry_run"])
+        updates = [c for c in cursor.execute.call_args_list if "UPDATE recommendations" in str(c)]
+        self.assertTrue(any("approved_manual" in str(c.args[1]) for c in updates))
+
     def test_disabled_toggle_degrades_automated_type_to_manual(self):
         # stop_instance is 'boto3' in the registry; with its per-action
         # toggle off, production approval must not attempt any AWS call
