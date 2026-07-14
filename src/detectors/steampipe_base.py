@@ -139,7 +139,18 @@ class SteampipeWasteDetector:
                         estimated_monthly_savings_eur, status
                     ) VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (waste_id) DO UPDATE SET
-                        estimated_monthly_savings_eur = EXCLUDED.estimated_monthly_savings_eur
+                        estimated_monthly_savings_eur = EXCLUDED.estimated_monthly_savings_eur,
+                        -- The AI insight quotes generation-time figures: drop
+                        -- it when the resynced savings drifts beyond
+                        -- max(10 pct of old, 0.50 EUR) so enrich_recommendations()
+                        -- rewrites it with fresh numbers on the next run.
+                        ai_insight = CASE
+                            WHEN abs(recommendations.estimated_monthly_savings_eur
+                                     - EXCLUDED.estimated_monthly_savings_eur)
+                                 > GREATEST(recommendations.estimated_monthly_savings_eur * 0.10, 0.50)
+                            THEN NULL
+                            ELSE recommendations.ai_insight
+                        END
                     WHERE recommendations.status = 'pending';
                 """,
                     (
