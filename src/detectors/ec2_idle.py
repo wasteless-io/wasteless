@@ -465,7 +465,18 @@ class EC2IdleDetector:
                         f"(avg CPU: {cpu_avg:.1f}%)"
                     )
 
-                # Insert recommendation
+                # Insert recommendation.
+                # On re-detection the waste_id already exists, so we upsert:
+                # - a still-'pending' reco just gets its savings/action
+                #   refreshed;
+                # - an 'obsolete' reco is *revived* to 'pending'. Obsolete
+                #   means the sync job saw the instance stopped/terminated/
+                #   gone outside wasteless; if it is running and idle again,
+                #   the waste is real again and the reco must resurface —
+                #   without this branch an obsolete reco stayed buried
+                #   forever (the ON CONFLICT WHERE never matched it).
+                # Any human-resolved status (applied, dismissed, rejected,
+                # scheduled, pr_open, approved_manual) is left untouched.
                 cursor.execute(
                     """
                     INSERT INTO recommendations (
@@ -474,8 +485,12 @@ class EC2IdleDetector:
                     )
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (waste_id) DO UPDATE SET
-                        estimated_monthly_savings_eur = EXCLUDED.estimated_monthly_savings_eur
-                    WHERE recommendations.status = 'pending';
+                        estimated_monthly_savings_eur = EXCLUDED.estimated_monthly_savings_eur,
+                        recommendation_type = EXCLUDED.recommendation_type,
+                        action_required = EXCLUDED.action_required,
+                        status = 'pending',
+                        applied_at = NULL
+                    WHERE recommendations.status IN ('pending', 'obsolete');
                 """,
                     (waste_id, recommendation_type, action, monthly_waste, "pending"),
                 )

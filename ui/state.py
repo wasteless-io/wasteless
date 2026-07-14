@@ -160,6 +160,10 @@ from utils.config_manager import ConfigManager
 
 _config_manager = ConfigManager()
 templates.env.globals["get_dry_run"] = _config_manager.get_dry_run
+# Read-only policy state for the recommendations status banner (edited on
+# /settings; only surfaced here so the action page shows the active mode).
+templates.env.globals["get_grace_period_days"] = _config_manager.get_grace_period_days
+templates.env.globals["get_auto_remediation_enabled"] = _config_manager.get_auto_remediation_enabled
 
 # Every EUR figure derives from AWS USD pricing through this fixed rate;
 # exposed to templates so the conversion is disclosed instead of implicit.

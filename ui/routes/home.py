@@ -212,6 +212,28 @@ def home(request: Request, conn=Depends(get_db)):
     aws_spend_30d_usd = float(spend_row["spend_usd"]) if spend_row else 0.0
     aws_service_count = int(spend_row["service_count"]) if spend_row else 0
 
+    # Coherence guard (finops invariant, wired to live data). Detector
+    # cost/savings estimates are list-price based and independent from the
+    # metered Cost Explorer bill, so total active waste can exceed real
+    # spend — arithmetically impossible ("on ne peut pas gaspiller plus
+    # qu'on ne dépense", src/core/finops_invariants). Rather than let the
+    # invariant raise (500) or silently show waste_rate > 100 %, we run it
+    # and surface any violation as a banner so the incoherence is visible.
+    from core.finops_invariants import waste_percentage, FinOpsInvariantError
+
+    total_waste_monthly = float(result["total_waste"] or 0)
+    waste_exceeds_spend = None
+    if aws_spend_30d_eur is not None and aws_spend_30d_eur > 0:
+        try:
+            waste_percentage(total_waste_monthly, aws_spend_30d_eur)
+        except FinOpsInvariantError:
+            # spend > 0 and waste >= 0 are guaranteed above, so the only
+            # way this raises is waste > spend — the case worth flagging.
+            waste_exceeds_spend = {
+                "waste": total_waste_monthly,
+                "spend": aws_spend_30d_eur,
+            }
+
     # Monthly average over ALL collected history (rows accumulate beyond
     # the 30-day collection window as days pass): daily average scaled to
     # a month, same 365/12 convention as everywhere else. Feeds the
@@ -280,5 +302,6 @@ def home(request: Request, conn=Depends(get_db)):
             "aws_spend_vs_avg": aws_spend_vs_avg,
             "aws_service_count": aws_service_count,
             "top_services": top_services,
+            "waste_exceeds_spend": waste_exceeds_spend,
         },
     )

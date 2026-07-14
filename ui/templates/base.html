@@ -598,6 +598,19 @@
             50% { transform: scale(1.35); }
             100% { transform: scale(1); }
         }
+        /* Bell badge blinks softly while recommendations await review (class
+           toggled by the shared poller when count > 0). Coexists with the
+           one-shot badge-pop: the combined selector runs both animations. */
+        @keyframes notif-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .notif-badge.notif-blink { animation: notif-blink 1.6s ease-in-out infinite; }
+        .notif-badge.badge-pop.notif-blink { animation: badge-pop 0.35s ease, notif-blink 1.6s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+            .notif-badge.notif-blink,
+            .notif-badge.badge-pop.notif-blink { animation: none; }
+        }
 
         .notif-bell {
             position: relative;
@@ -870,6 +883,7 @@
                 const prev = parseInt(badge.textContent, 10) || 0;
                 badge.textContent = n;
                 badge.style.display = n > 0 ? 'flex' : 'none';
+                badge.classList.toggle('notif-blink', n > 0);
                 if (_pendingCount !== null && n > prev) {
                     badge.classList.remove('badge-pop');
                     void badge.offsetWidth; // restart the animation
