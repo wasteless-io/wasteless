@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from psycopg2.extras import Json
 
-from state import get_db, templates, _config_manager, _aws_status, USD_TO_EUR
+from state import get_db, templates, _config_manager, _aws_status, USD_TO_EUR, DAYS_PER_MONTH
 from schemas import ActionRequest, AskQuestionRequest
 from jobs import _execute_ec2_boto3
 from utils.action_registry import execution_mode
@@ -18,6 +18,13 @@ router = APIRouter()
 # recommendations route). Several types share "EC2 - Other" (EBS, snapshots,
 # EIP, NAT), so they're capped together against that single line. A type not
 # in this map is left uncapped (cap = None) rather than hidden.
+# The savings cap below compares estimates against the trailing-30-day Cost
+# Explorer bill. A resource younger than that window barely appears in the
+# bill, so capping it would wrongly crush a correct forward-looking estimate
+# (stopping a week-old idle instance really does save its full monthly cost).
+# Only resources at least this old are subject to the per-service cap.
+BILLING_WINDOW_DAYS = 30
+
 RTYPE_TO_CE_SERVICE = {
     "ec2_instance": "Amazon Elastic Compute Cloud - Compute",
     "ebs_volume": "EC2 - Other",
@@ -82,6 +89,8 @@ def recommendations(
             w.metadata->>'name' as volume_name,
             w.metadata->>'public_ip' as public_ip,
             COALESCE((w.metadata->>'age_days')::integer, CURRENT_DATE - w.detection_date) as age_days,
+            GREATEST(COALESCE((w.metadata->>'age_days')::numeric, 0),
+                     EXTRACT(EPOCH FROM (NOW() - w.created_at)) / 86400.0) as age_days_frac,
             w.metadata->>'description' as snap_description,
             r.ai_insight
         FROM recommendations r
@@ -130,33 +139,81 @@ def recommendations(
     )
     service_spend = {row["service"]: float(row["eur"] or 0) for row in cursor.fetchall()}
 
+    # Age-aware split: only resources old enough to have been billed through
+    # the window are capped; younger ones keep their full estimate (their
+    # forward-looking savings are real even though the trailing bill barely
+    # saw them yet).
     cursor.execute(
         f"""
         SELECT w.resource_type,
-               COALESCE(SUM(r.estimated_monthly_savings_eur), 0) AS est
+               COALESCE(SUM(CASE WHEN COALESCE((w.metadata->>'age_days')::numeric,
+                                               CURRENT_DATE - w.detection_date, 0) >= %s
+                                 THEN r.estimated_monthly_savings_eur ELSE 0 END), 0) AS est_mature,
+               COALESCE(SUM(CASE WHEN COALESCE((w.metadata->>'age_days')::numeric,
+                                               CURRENT_DATE - w.detection_date, 0) < %s
+                                 THEN r.estimated_monthly_savings_eur ELSE 0 END), 0) AS est_young
         FROM recommendations r
         JOIN waste_detected w ON w.id = r.waste_id
         {where_clause}
         GROUP BY w.resource_type
     """,  # noqa: S608 — where_clause is constant fragments; values are %s params
-        params if params else None,
+        [BILLING_WINDOW_DAYS, BILLING_WINDOW_DAYS] + params,
     )
-    # Buckets keyed by CE service; cap None = uncapped (unmapped type).
-    savings_buckets: dict = {}
+    # Buckets keyed by CE service; cap None = uncapped (unmapped types and
+    # everything younger than the billing window land in "__uncapped__").
+    savings_buckets: dict = {"__uncapped__": {"savings": 0.0, "cap": None}}
     for row in cursor.fetchall():
         service = RTYPE_TO_CE_SERVICE.get(row["resource_type"])
-        key = service if service else "__unmapped__"
-        cap = service_spend.get(service, 0.0) if service else None
-        b = savings_buckets.setdefault(key, {"savings": 0.0, "cap": cap})
-        b["savings"] += float(row["est"])
+        est_mature = float(row["est_mature"])
+        est_young = float(row["est_young"])
+        if service:
+            b = savings_buckets.setdefault(
+                service, {"savings": 0.0, "cap": service_spend.get(service, 0.0)}
+            )
+            b["savings"] += est_mature
+            savings_buckets["__uncapped__"]["savings"] += est_young
+        else:
+            savings_buckets["__uncapped__"]["savings"] += est_mature + est_young
 
     savings_capped = sum(
         b["savings"] if b["cap"] is None else min(b["savings"], b["cap"])
         for b in savings_buckets.values()
     )
-    # tolerance avoids a note on pure rounding noise
+    # tolerance avoids a note on pure rounding noise. The raw estimate stays
+    # the headline (the "normal" savings the user expects); the capped figure
+    # is disclosed as a "realistic" note under it when the cap bites.
     savings_over_spend = savings_capped < total_savings - 0.005
-    savings_display = savings_capped if savings_over_spend else total_savings
+
+    # "Wasted so far": what the filtered resources have already cost since
+    # their creation — monthly cost prorated per day of age (365/12 days per
+    # month, same convention as everywhere else). Backward-looking cumulative
+    # amount, unlike Savings/mo (a forward monthly rate); notably it stays
+    # honest for resources younger than the 30-day billing window, which the
+    # per-service cap squashes. Aggregated over every matching row (same
+    # where_clause), not just the 500 displayed.
+    # Age in FRACTIONAL days — "from creation until now", per the tile's
+    # promise: a resource created this morning has already consumed a few
+    # cents, and integer days would show 0.00 for its whole first day.
+    # GREATEST covers both directions: metadata age_days wins for resources
+    # older than their detection; hours-since-detection wins for fresh ones.
+    age_frac_sql = """GREATEST(
+            COALESCE((w.metadata->>'age_days')::numeric, 0),
+            EXTRACT(EPOCH FROM (NOW() - w.created_at)) / 86400.0
+        )"""
+    cursor.execute(
+        f"""
+        SELECT COALESCE(SUM(
+            COALESCE((w.metadata->>'monthly_cost_eur')::numeric,
+                     r.estimated_monthly_savings_eur, 0)
+            * {age_frac_sql}
+        ), 0) / %s AS wasted
+        FROM recommendations r
+        JOIN waste_detected w ON r.waste_id = w.id
+        {where_clause}
+    """,  # noqa: S608 — constant SQL fragments; values are %s params
+        [DAYS_PER_MONTH] + params,
+    )
+    wasted_so_far_total = float(cursor.fetchone()["wasted"])
 
     # Per-row realism factor: scale each service's rows by min(1, spend/est) so
     # the displayed per-row Savings sum to the capped headline (a row can't
@@ -172,7 +229,14 @@ def recommendations(
 
     for row in recommendations:
         service = RTYPE_TO_CE_SERVICE.get(row["resource_type"])
-        factor = savings_factor.get(service if service else "__unmapped__", 1.0)
+        mature = float(row["age_days"] or 0) >= BILLING_WINDOW_DAYS
+        if service and mature:
+            row["bucket_key"] = service
+            factor = savings_factor.get(service, 1.0)
+        else:
+            # Young or unmapped: full estimate, uncapped bucket.
+            row["bucket_key"] = "__uncapped__"
+            factor = 1.0
         raw = float(row["estimated_monthly_savings_eur"] or 0)
         row["savings_capped"] = raw * factor
         row["savings_is_capped"] = factor < 0.9995
@@ -184,6 +248,9 @@ def recommendations(
         mc_raw = float(row["monthly_cost"]) if row["monthly_cost"] is not None else raw
         row["monthly_cost_raw"] = mc_raw
         row["monthly_cost_capped"] = mc_raw * factor
+        # Row's share of "Wasted so far" (same fractional-age formula as the
+        # SQL aggregate); carried on the checkbox so live KPI deltas stay exact.
+        row["wasted_so_far"] = mc_raw * float(row["age_days_frac"] or 0) / DAYS_PER_MONTH
 
     ec2_recs = [r for r in recommendations if r["resource_type"] == "ec2_instance"]
     # The EBS tab renders deletion semantics ("unattached", "why delete?"),
@@ -303,10 +370,10 @@ def recommendations(
             "scheduled_recs": scheduled_recs,
             "total_count": total_count,
             "total_savings": total_savings,
-            "savings_display": savings_display,
+            "savings_capped": savings_capped,
             "savings_over_spend": savings_over_spend,
+            "wasted_so_far_total": wasted_so_far_total,
             "savings_buckets": savings_buckets,
-            "rtype_to_service": RTYPE_TO_CE_SERVICE,
             "avg_confidence": avg_confidence,
             "type_filter": type_filter,
             "min_savings": min_savings,
@@ -521,6 +588,9 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
                w.metadata->>'public_ip' AS public_ip,
                COALESCE((w.metadata->>'age_days')::integer,
                         CURRENT_DATE - w.detection_date) AS age_days,
+               GREATEST(COALESCE((w.metadata->>'age_days')::numeric, 0),
+                        EXTRACT(EPOCH FROM (NOW() - w.created_at)) / 86400.0)
+                   AS age_days_frac,
                w.metadata->>'description' AS snap_description
         FROM recommendations r
         JOIN waste_detected w ON w.id = r.waste_id
@@ -536,6 +606,46 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
     avg_conf = (sum(float(r["confidence"]) for r in rows) / count * 100) if count else 0.0
     lines = "\n".join(_fmt_rec_line(r) for r in rows)
 
+    # Same per-service coherence cap the summary tile shows ("realistic ·
+    # X € (capped to real spend)") — computed here too so the model can
+    # explain that figure instead of denying it exists.
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT service,
+               SUM(CASE WHEN currency = 'USD' THEN cost * %s ELSE cost END) AS eur
+        FROM cloud_costs_raw
+        WHERE usage_date >= CURRENT_DATE - 30
+        GROUP BY service
+        """,
+        (USD_TO_EUR,),
+    )
+    service_spend = {r["service"]: float(r["eur"] or 0) for r in cursor.fetchall()}
+    cursor.close()
+    # Age-aware, like the page: only resources older than the billing window
+    # are capped against their service's real spend.
+    bucket_est: dict = {}
+    uncapped_total = 0.0
+    for r in rows:
+        service = RTYPE_TO_CE_SERVICE.get(r["resource_type"])
+        if service and float(r["age_days"] or 0) >= BILLING_WINDOW_DAYS:
+            bucket_est[service] = bucket_est.get(service, 0.0) + float(r["savings"])
+        else:
+            uncapped_total += float(r["savings"])
+    capped_total = uncapped_total + sum(
+        min(est, service_spend.get(service, 0.0)) for service, est in bucket_est.items()
+    )
+    capped_savings = f"{capped_total:.2f}" if capped_total < total_savings - 0.005 else None
+
+    # Mirror of the "Wasted so far" tile (same formula), so the chat can
+    # explain that figure too.
+    wasted_total = sum(
+        float(r["monthly_cost"] if r["monthly_cost"] is not None else r["savings"])
+        * float(r["age_days_frac"] or 0)
+        / DAYS_PER_MONTH
+        for r in rows
+    )
+
     answer = answer_estate_question(
         question,
         count,
@@ -543,6 +653,8 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
         f"{avg_conf:.0f}",
         lines,
         conn=conn,
+        capped_savings=capped_savings,
+        wasted_so_far=f"{wasted_total:.2f}",
     )
     if answer is None:
         return JSONResponse(
