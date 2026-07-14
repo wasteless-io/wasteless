@@ -12,7 +12,7 @@ class ActionRequest(BaseModel):
     recommendation_ids: List[int] = Field(min_length=1, max_length=500)
     # Closed set — the route dispatches on these exact values; anything else
     # must be rejected at validation time (422), not silently fall through.
-    action: Literal["approve", "reject", "dismiss", "cancel", "execute"]
+    action: Literal["approve", "reject", "dismiss", "cancel", "execute", "restore"]
     dry_run: bool = True
 
 
