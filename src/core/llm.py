@@ -190,6 +190,7 @@ recommendations across their AWS estate.
 
 Totals: {count} pending recommendations, {savings} EUR/month total
 estimated savings, {avg_confidence} average detection confidence (percent).
+{wasted_note}{cap_note}
 
 Recommendations (one per line, starting with `action | resource type |
 resource id | savings | confidence`, then `key=value` fields that exist for
@@ -226,6 +227,8 @@ def answer_estate_question(
     avg_confidence: Any,
     recommendations: str,
     conn=None,
+    capped_savings: Any = None,
+    wasted_so_far: Any = None,
 ) -> Optional[str]:
     """One-shot answer to a question about ALL pending recommendations.
 
@@ -233,13 +236,44 @@ def answer_estate_question(
     conversation history, each call rebuilds the full prompt), tracked
     under the 'qa' feature so AI Spend breaks it out separately from the
     batch-generated insights. `recommendations` is a pre-rendered, capped
-    one-line-per-item block built by the route.
+    one-line-per-item block built by the route. `capped_savings`, when
+    provided, is the per-service realistic figure the UI shows next to the
+    raw total ("realistic · X € (capped to real spend)") — passed so the
+    model can explain that number instead of denying it exists.
     """
     if not is_enabled():
         return None
     question = (question or "").strip()
     if not question:
         return None
+
+    # Same coherence rule for the "Wasted so far" tile: every figure the UI
+    # shows next to this chat must be explainable by it.
+    wasted_note = ""
+    if wasted_so_far is not None:
+        wasted_note = (
+            f"\nThe UI's 'Wasted so far' tile shows {wasted_so_far} EUR: the "
+            "cumulative amount these resources have already cost since their "
+            "creation (each item's monthly_cost prorated per day of age_days, "
+            "365/12 days per month), unlike the monthly savings rate above.\n"
+        )
+
+    # The UI shows this figure right above the chat ("realistic · X €
+    # (capped to real spend)"); without this paragraph the model denied
+    # the number existed when asked what it meant.
+    cap_note = ""
+    if capped_savings is not None:
+        cap_note = (
+            f"\nThe UI also shows 'realistic · {capped_savings} EUR (capped to "
+            "real spend)' under the total: per-line savings are on-demand "
+            "list-price estimates, so each service's estimated savings are "
+            "capped at that service's real spend over the last 30 days (Cost "
+            "Explorer) — you cannot save more than you actually spend. Only "
+            "resources at least 30 days old are capped; younger ones keep "
+            "their full estimate (the trailing bill barely saw them yet). "
+            f"{capped_savings} EUR is the sum after capping; the per-line "
+            "figures above remain the uncapped estimates."
+        )
 
     try:
         import litellm
@@ -253,6 +287,8 @@ def answer_estate_question(
                         count=count,
                         savings=savings,
                         avg_confidence=avg_confidence,
+                        wasted_note=wasted_note,
+                        cap_note=cap_note,
                         recommendations=recommendations[:4000],
                         question=question[:MAX_QUESTION_LEN],
                     ),
