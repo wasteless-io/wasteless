@@ -96,11 +96,18 @@
             <div class="summary-sep"></div>
             <div class="summary-kpi">
                 <div class="summary-ring-label">Savings / mo</div>
-                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Estimated monthly savings, capped at your real cloud spend — you can't save more than you spend. Detector estimates use on-demand list prices."><span class="kpi-zoom"><span id="kpiSavings" class="countup">{{ "%.2f"|format(savings_display) }}</span><span class="ring-unit">€</span></span></span></div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="Total estimated monthly savings (on-demand list prices). When this exceeds your real cloud spend, the realistic capped figure is shown below — you can't save more than you spend."><span class="kpi-zoom"><span id="kpiSavings" class="countup">{{ "%.2f"|format(total_savings) }}</span><span class="ring-unit">€</span></span></span></div>
                 {# Shown when the raw estimate exceeds the real bill: the value
-                   above is capped, the estimate is disclosed here. Toggled live
-                   by renderSummary after each action. #}
-                <div id="savingsCapNote" style="font-size: 0.58rem; color: var(--warning); font-weight: 600; margin-top: 0.1rem;{% if not savings_over_spend %} display: none;{% endif %}">capped · est. {{ "%.2f"|format(total_savings) }} €</div>
+                   above is the list-price estimate, the realistic (capped to
+                   real per-service spend) figure is disclosed here. Toggled
+                   live by renderSummary after each action. #}
+                <div id="savingsCapNote" style="font-size: 0.58rem; color: var(--warning); font-weight: 600; margin-top: 0.1rem;{% if not savings_over_spend %} display: none;{% endif %}">realistic · {{ "%.2f"|format(savings_capped) }} € (capped to real spend)</div>
+            </div>
+            <div class="summary-sep"></div>
+            <div class="summary-kpi">
+                <div class="summary-ring-label">Wasted so far</div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip="What these resources have already cost since their creation — monthly cost prorated per day of age. Grows every day they stay unresolved."><span class="kpi-zoom"><span id="kpiWasted" class="countup">{{ "%.2f"|format(wasted_so_far_total) }}</span><span class="ring-unit">€</span></span></span></div>
+                <div style="font-size: 0.58rem; color: var(--gray-500); font-weight: 600; margin-top: 0.1rem;">since created</div>
             </div>
             <div class="summary-sep"></div>
             <div class="summary-kpi">
@@ -350,7 +357,7 @@
                           {% endif %}
                         {% endif %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#InstanceDetails:instanceId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#InstanceDetails:instanceId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why act?" data-reason="{{ reason }}">{{ rec.resource_id[:20] }}</code> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
@@ -366,10 +373,10 @@
                             <td style="padding: 0.4rem 0.5rem;">
                                 <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
                             </td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Capped to real spend · list-price {{ '%.2f'|format(rec.monthly_cost_raw) }} €/mo"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_capped) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Capped to real spend · list-price est. {{ '%.2f'|format(savings) }} €"{% endif %}>{{ "%.2f"|format(rec.savings_capped) }}</strong>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong>
                                     <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>
                                 </div>
                             </td>
@@ -413,17 +420,17 @@
                         {% for rec in ebs_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ebs" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ebs" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Not attached to any instance' %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why delete?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" target="_blank" onclick="event.stopPropagation()" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_name or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; white-space: nowrap;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span> <span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Capped to real spend · list-price {{ '%.2f'|format(rec.monthly_cost_raw) }} €/mo"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_capped) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Capped to real spend · list-price est. {{ '%.2f'|format(savings) }} €"{% endif %}>{{ "%.2f"|format(rec.savings_capped) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -463,13 +470,13 @@
                         {% for rec in eip_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-eip" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-eip" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Not associated to any instance' %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why release?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" target="_blank" onclick="event.stopPropagation()" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Capped to real spend · list-price {{ '%.2f'|format(rec.monthly_cost_raw) }} €/mo"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_capped) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
@@ -510,17 +517,17 @@
                         {% for rec in snap_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-snap" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-snap" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Old snapshot — verify before deleting' %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;" class="reason-hover" data-reason-title="Why review?" data-reason="{{ reason }}">{{ rec.resource_id }}</code> <a href="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" target="_blank" onclick="event.stopPropagation()" style="font-size: 0.7rem; color: var(--primary); text-decoration: none; margin-left: 4px;">↗</a> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.snap_description or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Capped to real spend · list-price {{ '%.2f'|format(rec.monthly_cost_raw) }} €/mo"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_capped) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} €/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Capped to real spend · list-price est. {{ '%.2f'|format(savings) }} €"{% endif %}>{{ "%.2f"|format(rec.savings_capped) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">€</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -559,14 +566,14 @@
                         {% for rec in other_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-other" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rtype_to_service.get(rec.resource_type, '__unmapped__') }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-other" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-wasted="{{ rec.wasted_so_far }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.action_required %}{% if rec.ai_insight %}{% set reason = reason ~ ' — ' ~ rec.ai_insight %}{% endif %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.volume_name or rec.resource_id }}</code> <button type="button" class="row-action-btn kpi-hover" style="margin-left: 6px;" aria-label="CloudTrail history of this resource" data-tip="View this resource's history — who created it and who last touched it (CloudTrail, last 90 days)" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openHistoryModal(this.dataset.recId, this.dataset.recLabel)"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
                                                         <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Capped to real spend · list-price est. {{ '%.2f'|format(savings) }} €"{% endif %}>{{ "%.2f"|format(rec.savings_capped) }}</strong>
+                                    <strong class="text-success"{% if rec.savings_is_capped %} title="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong>
                                     <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span>
                                 </div>
                             </td>
@@ -926,6 +933,7 @@
                     summaryState.count -= 1;
                     summaryState.savings -= rowSavings;
                     summaryState.confSum -= parseFloat(checkbox.dataset.confidence) || 0;
+                    summaryState.wasted -= parseFloat(checkbox.dataset.wasted) || 0;
                     // Keep the per-service cap accurate as rows leave.
                     const bk = summaryState.buckets[checkbox.dataset.bucket];
                     if (bk) bk.savings -= rowSavings;
@@ -1076,6 +1084,8 @@
         // the displayed savings are Σ min(bucket.savings, bucket.cap), so a
         // service's estimate can't exceed its real spend (cap null = uncapped).
         buckets: {{ savings_buckets|tojson }},
+        // Cumulative cost of the listed resources since creation.
+        wasted: {{ "%.6f"|format(wasted_so_far_total) }},
     };
 
     function renderSummary() {
@@ -1085,8 +1095,9 @@
             countEl.textContent = count;
             countEl.classList.toggle('pending-blink', count > 0);
         }
-        // Cap each service's estimate at its real spend, then sum (per-service
-        // cap). Disclose the raw estimate in the note when the cap bites.
+        // Headline = raw list-price estimate (the "normal" savings). The
+        // per-service capped figure (Σ min(bucket.savings, bucket.cap)) is
+        // disclosed as a "realistic" note when the cap bites.
         const rawSavings = Math.max(0, summaryState.savings);
         let cappedSavings = 0;
         for (const k in summaryState.buckets) {
@@ -1095,12 +1106,14 @@
             cappedSavings += Math.min(Math.max(0, b.savings), cap);
         }
         const savingsEl = document.getElementById('kpiSavings');
-        if (savingsEl) savingsEl.textContent = cappedSavings.toFixed(2);
+        if (savingsEl) savingsEl.textContent = rawSavings.toFixed(2);
+        const wastedEl = document.getElementById('kpiWasted');
+        if (wastedEl) wastedEl.textContent = Math.max(0, summaryState.wasted).toFixed(2);
         const capNote = document.getElementById('savingsCapNote');
         if (capNote) {
             const over = cappedSavings < rawSavings - 0.005;
             capNote.style.display = over ? '' : 'none';
-            capNote.textContent = 'capped · est. ' + rawSavings.toFixed(2) + ' €';
+            capNote.textContent = 'realistic · ' + cappedSavings.toFixed(2) + ' € (capped to real spend)';
         }
         const avg = count > 0 ? summaryState.confSum / count : 0;
         const confEl = document.getElementById('kpiConfidence');
