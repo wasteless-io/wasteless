@@ -262,9 +262,12 @@ def recommendations(
     ]
     eip_recs = [r for r in recommendations if r["resource_type"] == "elastic_ip"]
     snap_recs = [r for r in recommendations if r["resource_type"] == "ebs_snapshot"]
+    rds_recs = [
+        r for r in recommendations if r["resource_type"] in ("rds_instance", "rds_snapshot")
+    ]
     # Catch-all so recommendations from new detectors (NAT gateways, load
-    # balancers, gp2 migrations, ...) are never silently hidden
-    bucketed = {id(r) for r in ec2_recs + ebs_recs + eip_recs + snap_recs}
+    # balancers, gp2 migrations, AMIs, ...) are never silently hidden
+    bucketed = {id(r) for r in ec2_recs + ebs_recs + eip_recs + snap_recs + rds_recs}
     other_recs = [r for r in recommendations if id(r) not in bucketed]
 
     # Approvals waiting out their grace period (cancellable)
@@ -367,6 +370,7 @@ def recommendations(
             "ebs_recs": ebs_recs,
             "eip_recs": eip_recs,
             "snap_recs": snap_recs,
+            "rds_recs": rds_recs,
             "other_recs": other_recs,
             "scheduled_recs": scheduled_recs,
             "total_count": total_count,

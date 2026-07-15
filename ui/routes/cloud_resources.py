@@ -158,6 +158,56 @@ def cloud_resources(
             logger.error(f"Snapshots error {region}: {e}")
             return []
 
+    def _fetch_rds(region):
+        try:
+            rds = get_client("rds", region=region)
+            result = []
+            paginator = rds.get_paginator("describe_db_instances")
+            for page in paginator.paginate():
+                for db in page.get("DBInstances", []):
+                    result.append(
+                        {
+                            "db_id": db["DBInstanceIdentifier"],
+                            "engine": db.get("Engine", "-"),
+                            "engine_version": db.get("EngineVersion", "-"),
+                            "class": db.get("DBInstanceClass", "-"),
+                            "status": db.get("DBInstanceStatus", "-"),
+                            "size_gb": db.get("AllocatedStorage", 0),
+                            "storage_type": db.get("StorageType", "-"),
+                            "multi_az": db.get("MultiAZ", False),
+                            "region": region,
+                        }
+                    )
+            return result
+        except Exception as e:
+            logger.error(f"RDS error {region}: {e}")
+            return []
+
+    def _fetch_rds_snapshots(region):
+        try:
+            rds = get_client("rds", region=region)
+            result = []
+            # Manual snapshots only: automated ones are managed by the
+            # instance retention window and would flood the inventory.
+            paginator = rds.get_paginator("describe_db_snapshots")
+            for page in paginator.paginate(SnapshotType="manual"):
+                for snap in page.get("DBSnapshots", []):
+                    result.append(
+                        {
+                            "snapshot_id": snap["DBSnapshotIdentifier"],
+                            "db_id": snap.get("DBInstanceIdentifier", "-"),
+                            "engine": snap.get("Engine", "-"),
+                            "size_gb": snap.get("AllocatedStorage", 0),
+                            "status": snap.get("Status", "-"),
+                            "created": snap.get("SnapshotCreateTime"),
+                            "region": region,
+                        }
+                    )
+            return result
+        except Exception as e:
+            logger.error(f"RDS snapshots error {region}: {e}")
+            return []
+
     def _fetch_s3():
         try:
             s3 = get_client("s3")
@@ -191,6 +241,8 @@ def cloud_resources(
         ip_futs = [executor.submit(_fetch_ips, r) for r in CLOUD_REGIONS]
         vpc_futs = [executor.submit(_fetch_vpcs, r) for r in CLOUD_REGIONS]
         snap_futs = [executor.submit(_fetch_snapshots, r) for r in CLOUD_REGIONS]
+        rds_futs = [executor.submit(_fetch_rds, r) for r in CLOUD_REGIONS]
+        rds_snap_futs = [executor.submit(_fetch_rds_snapshots, r) for r in CLOUD_REGIONS]
         s3_fut = executor.submit(_fetch_s3)
 
     instances = [i for f in ec2_futs for i in f.result()]
@@ -198,6 +250,8 @@ def cloud_resources(
     ips = [ip for f in ip_futs for ip in f.result()]
     vpcs = [vpc for f in vpc_futs for vpc in f.result()]
     snapshots = [s for f in snap_futs for s in f.result()]
+    databases = [d for f in rds_futs for d in f.result()]
+    rds_snapshots = [s for f in rds_snap_futs for s in f.result()]
     buckets = s3_fut.result()
 
     # Apply region filter (S3 not filtered — global service)
@@ -207,6 +261,8 @@ def cloud_resources(
         ips = [ip for ip in ips if ip["region"] == region_filter]
         vpcs = [vpc for vpc in vpcs if vpc["region"] == region_filter]
         snapshots = [s for s in snapshots if s["region"] == region_filter]
+        databases = [d for d in databases if d["region"] == region_filter]
+        rds_snapshots = [s for s in rds_snapshots if s["region"] == region_filter]
 
     if state_filter != "all":
         instances = [i for i in instances if i["state"] == state_filter]
@@ -216,6 +272,8 @@ def cloud_resources(
     ips.sort(key=lambda x: (not x["associated"], x["region"]))
     vpcs.sort(key=lambda x: (not x["is_default"], x["region"]))
     snapshots.sort(key=lambda x: x["start_time"] or "", reverse=True)
+    databases.sort(key=lambda x: (x["status"] != "available", x["region"], x["db_id"]))
+    rds_snapshots.sort(key=lambda x: x["created"] or "", reverse=True)
     buckets.sort(key=lambda x: x["name"])
 
     return templates.TemplateResponse(
@@ -228,6 +286,8 @@ def cloud_resources(
             "ips": ips,
             "vpcs": vpcs,
             "snapshots": snapshots,
+            "databases": databases,
+            "rds_snapshots": rds_snapshots,
             "buckets": buckets,
             "state_filter": state_filter,
             "region_filter": region_filter,
@@ -239,6 +299,7 @@ def cloud_resources(
             "ip_count": len(ips),
             "vpc_count": len(vpcs),
             "snap_count": len(snapshots),
+            "rds_count": len(databases) + len(rds_snapshots),
             "s3_count": len(buckets),
         },
     )

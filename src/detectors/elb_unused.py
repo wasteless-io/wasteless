@@ -45,21 +45,37 @@ class ELBUnusedDetector(SteampipeWasteDetector):
         for row in rows:
             lb_type = row.get("lb_type") or "application"
             cost = ELB_MONTHLY_COST_EUR.get(lb_type, DEFAULT_ELB_COST_EUR)
-            reason = "no instances attached" if lb_type == "classic" else "no registered targets"
+            reason = row.get("reason") or ("no_instances" if lb_type == "classic" else "no_targets")
+            registered = int(row.get("registered_targets") or 0)
+            # "no_traffic" is a slightly weaker signal than an empty LB (a
+            # low-traffic internal LB could in theory see exactly zero over the
+            # window), so it gets lower confidence — still above the 0.80
+            # auto-remediation floor.
+            if reason == "no_traffic":
+                why = f"no traffic in 30 days ({registered} target(s) registered)"
+                confidence = 0.85
+            elif reason == "no_instances":
+                why = "no instances attached"
+                confidence = 0.90
+            else:  # no_targets
+                why = "no registered targets"
+                confidence = 0.90
             items.append(
                 {
                     "resource_id": row.get("arn") or row["name"],
                     "monthly_cost": cost,
-                    "confidence": 0.90,
+                    "confidence": confidence,
                     "action": (
                         f"DELETE unused {lb_type} load balancer {row['name']} "
-                        f"in {row.get('region', '')} — {reason}"
+                        f"in {row.get('region', '')} — {why}"
                     ),
                     "metadata": {
                         "name": row["name"],
                         "lb_type": lb_type,
                         "arn": row.get("arn") or "",
                         "region": row.get("region") or "",
+                        "reason": reason,
+                        "registered_targets": registered,
                         "monthly_cost_eur": cost,
                     },
                 }
