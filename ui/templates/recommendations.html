@@ -102,7 +102,8 @@
     /* Read-only policy status banner (dry-run / grace / auto-remediation).
        Editing lives on /settings; this only mirrors the active mode. */
     .policy-banner { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.75rem; font-size: 0.8rem; color: var(--gray-600); }
-    .mode-pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; }
+    .mode-pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; text-decoration: none; cursor: pointer; transition: filter 0.15s ease, box-shadow 0.15s ease; }
+    a.mode-pill:hover { filter: brightness(0.95); box-shadow: 0 0 0 1px currentColor inset; }
     .mode-pill--dry  { background: rgba(0,113,227,0.08); color: var(--primary); }
     .mode-pill--live { background: rgba(220,38,38,0.08); color: var(--danger); border-color: rgba(220,38,38,0.28); }
     .mode-pill--soft { background: rgba(0,0,0,0.04); color: var(--gray-600); }
@@ -194,10 +195,12 @@
             <div class="summary-sep"></div>
             <div class="summary-kpi">
                 <div class="summary-ring-label">Savings</div>
-                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip-card="Total estimated monthly savings for the pending recommendations only (on-demand list prices). The Overview's 'Monthly Waste' also counts items you've declined or queued, so it can be higher. When this exceeds your real cloud spend, the realistic capped figure is shown below — you can't save more than you spend."><span class="kpi-zoom"><span id="kpiSavings" class="countup">{{ "%.2f"|format(total_savings) }}</span><span class="ring-unit">€</span></span></span></div>
-                {# Which month the estimate refers to — same now() convention as
-                   the overview's Monthly Waste / AWS Spend month labels. #}
-                <div style="font-size: 0.58rem; color: var(--gray-400); font-weight: 500; margin-top: 0.1rem; text-transform: uppercase; letter-spacing: 0.08em;">{{ now().strftime('%B') }}</div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip-card="Forward monthly savings RATE of the pending recommendations only (on-demand list prices) — not a month-to-date total, so it drops to 0 once everything is resolved. Realized savings appear as 'Savings Realized' on the Overview (verified via Cost Explorer). The Overview's 'Monthly Waste' can be higher (it also counts items you've declined or queued). When this exceeds your real cloud spend, the realistic capped figure is shown below."><span class="kpi-zoom"><span id="kpiSavings" class="countup">{{ "%.2f"|format(total_savings) }}</span><span class="ring-unit">€</span></span></span></div>
+                {# It's a forward monthly RATE scoped to the pending backlog,
+                   not a month-to-date accumulation — so it drops to 0 when
+                   everything is resolved. The month name ("JULY") was removed:
+                   it read as a July cumulative, which this is not. #}
+                <div style="font-size: 0.58rem; color: var(--gray-400); font-weight: 500; margin-top: 0.1rem;">per month · pending</div>
                 {# Shown when the raw estimate exceeds the real bill: the value
                    above is the list-price estimate, the realistic (capped to
                    real per-service spend) figure is disclosed here. Toggled
@@ -207,8 +210,8 @@
             <div class="summary-sep"></div>
             <div class="summary-kpi">
                 <div class="summary-ring-label">Wasted so far</div>
-                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip-card="What these resources have already cost since their creation — monthly cost prorated per day of age. Grows every day they stay unresolved."><span class="kpi-zoom"><span id="kpiWasted" class="countup">{{ "%.2f"|format(wasted_so_far_total) }}</span><span class="ring-unit">€</span></span></span></div>
-                <div style="font-size: 0.58rem; color: var(--gray-500); font-weight: 600; margin-top: 0.1rem;">since created</div>
+                <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip-card="What the STILL-PENDING resources have already cost since each was created — monthly cost prorated per day of age. Grows every day they stay unresolved, and drops as you resolve them (it counts only the pending backlog, NOT a month-to-date total)."><span class="kpi-zoom"><span id="kpiWasted" class="countup">{{ "%.2f"|format(wasted_so_far_total) }}</span><span class="ring-unit">€</span></span></span></div>
+                <div style="font-size: 0.58rem; color: var(--gray-500); font-weight: 600; margin-top: 0.1rem;">pending · since created</div>
             </div>
             <div class="summary-sep"></div>
             <div class="summary-kpi">
@@ -331,23 +334,23 @@
         </button>
         {% endif %}
 
-        <!-- Active policy status, inline on the tab row (edit on /settings) -->
-        <div class="policy-banner" style="margin: 0 0 0 1rem; padding-bottom: 0.5rem;">
+        <!-- Right cluster: policy status pills sit next to the selected count
+             and action buttons (moved here from just after the tabs). -->
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 1rem; padding-bottom: 0.5rem;">
+        <!-- Active policy status — the mode pill links to /settings to change it -->
+        <div class="policy-banner" style="margin: 0;">
             {% if get_dry_run() %}
-            <span class="mode-pill mode-pill--dry"><span class="dot">●</span> Dry-run</span>
+            <a href="/settings" class="mode-pill mode-pill--dry kpi-hover" data-tip-card="Dry-run — approving only simulates, nothing is touched on AWS. Click to change the mode in Settings."><span class="dot">●</span> Dry-run</a>
             {% else %}
-            <span class="mode-pill mode-pill--live kpi-hover" tabindex="0" data-tip-card="Production mode — approving a recommendation executes the action for real on AWS (stop, terminate, delete). Switch to dry-run in Settings to simulate without touching any resource."><span class="dot">●</span> Production</span>
+            <a href="/settings" class="mode-pill mode-pill--live kpi-hover" data-tip-card="Production mode — approving a recommendation executes the action for real on AWS (stop, terminate, delete). Click to change the mode in Settings."><span class="dot">●</span> Production</a>
             {% endif %}
             {% if get_grace_period_days() > 0 %}
-            <span class="mode-pill mode-pill--soft">Grace period: {{ get_grace_period_days() }} day{{ 's' if get_grace_period_days() > 1 }}</span>
+            <a href="/settings" class="mode-pill mode-pill--soft kpi-hover" data-tip-card="Approved automated actions wait this long before executing, cancellable meanwhile. Click to change it in Settings.">Grace period: {{ get_grace_period_days() }} day{{ 's' if get_grace_period_days() > 1 }}</a>
             {% endif %}
             {% if not get_auto_remediation_enabled() %}
-            <span class="mode-pill mode-pill--soft">Auto-remediation off</span>
+            <a href="/settings" class="mode-pill mode-pill--soft kpi-hover" data-tip-card="Auto-remediation is off — nothing runs without your approval. Click to change it in Settings.">Auto-remediation off</a>
             {% endif %}
         </div>
-
-        <!-- Action buttons, inline on the tab row (right-aligned) -->
-        <div style="margin-left: auto; display: flex; align-items: center; padding-bottom: 0.5rem;">
         <!-- AUTOMATED (EC2 + EBS + Other) -->
         <div id="actions-automated" style="display: flex; align-items: center; gap: 0.75rem;">
             <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
@@ -737,6 +740,14 @@
         </div>
         <p id="resourceModalLabel" style="font-size: 0.8rem; color: var(--gray-600); margin: 0 0 0.75rem; font-family: monospace;"></p>
         <div id="resourceContent" style="font-size: 0.85rem; color: var(--gray-700);"></div>
+        {# Act on this recommendation without leaving the modal. The primary
+           label switches to "Mark as to-do" for manual-review resources
+           (EIP/Snapshots). Shown once the details have loaded. #}
+        <div id="resourceModalActions" style="display: none; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--gray-100); gap: 0.5rem; justify-content: flex-end;">
+            <button type="button" id="resModalApply" class="btn btn-primary" style="padding: 0.4rem 0.9rem;" onclick="modalAction('approve')">Apply</button>
+            <button type="button" id="resModalSkip" class="btn btn-outline" style="padding: 0.4rem 0.9rem;" onclick="modalAction('reject')">Skip</button>
+            <button type="button" id="resModalIgnore" class="btn btn-outline" style="padding: 0.4rem 0.9rem;" onclick="modalAction('dismiss')">Ignore</button>
+        </div>
     </div>
 </div>
 
@@ -762,6 +773,9 @@
 
 {% block extra_js %}
 <script>
+    // Active dry-run mode (from ConfigManager) — used by the resource-detail
+    // modal's action buttons, mirroring the tab action bar.
+    const DRY_RUN = {{ 'true' if get_dry_run() else 'false' }};
     let currentTab = 'ec2';
 
     const ALL_TABS = ['ec2', 'ebs', 'eip', 'snap', 'other'];
@@ -1246,11 +1260,17 @@
     // dispatched server-side on the id prefix) plus its CloudTrail creation
     // event, fetched in parallel. Both endpoints cache per resource
     // server-side, so reopening is free.
+    let _modalRecId = null;
+    let _modalIsManual = false;
+
     function openResourceModal(recId, label) {
+        _modalRecId = recId;
         document.getElementById('resourceModalTitle').textContent = 'Resource details';
         document.getElementById('resourceModalLabel').textContent = label;
         const content = document.getElementById('resourceContent');
         content.textContent = 'Loading…';
+        // Hide the action footer until the details (and resource kind) load.
+        document.getElementById('resourceModalActions').style.display = 'none';
         document.getElementById('resourceModal').style.display = 'flex';
 
         const esc = s => String(s).replace(/[&<>"']/g,
@@ -1334,10 +1354,71 @@
                 + 'Open this ' + esc(details.kind.toLowerCase()) + ' in the AWS Console ↗</a></div>';
 
             content.innerHTML = creationBox + recap + tagsBlock + consoleLink;
+
+            // Reveal the action footer. Manual-review resources (Elastic IP /
+            // Snapshot) never touch AWS, so the primary label is "Mark as
+            // to-do"; automated ones (Instance / Volume) keep "Apply".
+            _modalIsManual = ['Elastic IP', 'Snapshot'].includes(details.kind);
+            document.getElementById('resModalApply').textContent =
+                _modalIsManual ? 'Mark as to-do' : 'Apply';
+            document.getElementById('resourceModalActions').style.display = 'flex';
         }).catch(err => { content.textContent = 'Request failed: ' + err; });
     }
 
+    // Act on the modal's recommendation (same endpoints as the tab action
+    // bar), then close and reload so the table, KPIs and To-do bell refresh.
+    async function modalAction(action) {
+        const recId = _modalRecId;
+        if (!recId) return;
+        const isManualApprove = action === 'approve' && _modalIsManual;
+        const verb = action === 'approve' ? (isManualApprove ? 'mark as to-do' : 'apply')
+            : action === 'dismiss' ? 'ignore (stop counting as active waste)' : 'skip';
+        const confirmText = { 'apply': 'Apply', 'mark as to-do': 'Mark as to-do', 'skip': 'Skip' }[verb] || 'Ignore';
+        const esc = s => String(s).replace(/[&<>"']/g,
+            c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const label = document.getElementById('resourceModalLabel').textContent;
+        let html = esc('You are about to ' + verb + ' this recommendation (' + label + ').');
+        // Real AWS execution warning, only for a live (non-dry-run) automated Apply.
+        if (action === 'approve' && !DRY_RUN && !isManualApprove) {
+            html += '<div style="margin-top: 0.75rem; color: var(--danger); font-weight: 600;">'
+                + '⚠ Production mode — this executes the action for real on AWS.</div>';
+        }
+        const proceed = await confirmDialog(null, {
+            html: html,
+            confirmText: confirmText,
+            danger: isManualApprove ? false : (action !== 'approve' || !DRY_RUN),
+        });
+        if (!proceed) return;
+
+        try {
+            const response = await api('/api/actions', {
+                method: 'POST',
+                body: JSON.stringify({ recommendation_ids: [recId], action: action, dry_run: DRY_RUN })
+            });
+            const r = response.results && response.results[0];
+            if (!r || !r.success) {
+                showToast('Failed: ' + ((r && r.error) || 'unknown'), 'error');
+                return;
+            }
+            closeResourceModal();
+            if (r.dry_run) {
+                // Automated Apply in dry-run: nothing changed, so no reload.
+                showToast('Dry-run — simulated, no change applied. Disable dry-run in Settings to act for real.', 'success');
+            } else {
+                const done = isManualApprove ? 'Marked as to-do.'
+                    : action === 'reject' ? 'Skipped.'
+                    : action === 'dismiss' ? 'Ignored — no longer counted as active waste.'
+                    : 'Done.';
+                showToast(done, 'success');
+                setTimeout(() => window.location.reload(), 900);
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
     function closeResourceModal() {
+        _modalRecId = null;
         document.getElementById('resourceModal').style.display = 'none';
     }
 
