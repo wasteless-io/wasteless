@@ -62,6 +62,9 @@
     <button class="tab-btn" id="tab-snapshots" onclick="switchTab('snapshots')">
         Snapshots <span class="tab-count">{{ snap_count }}</span>
     </button>
+    <button class="tab-btn" id="tab-rds" onclick="switchTab('rds')">
+        RDS <span class="tab-count">{{ rds_count }}</span>
+    </button>
     <button class="tab-btn" id="tab-s3" onclick="switchTab('s3')">
         S3 Buckets <span class="tab-count">{{ s3_count }}</span>
     </button>
@@ -356,6 +359,81 @@
 {% endif %}
 </div>
 
+<!-- ===== TAB: RDS ===== -->
+<div id="panel-rds" style="display:none">
+{% if databases %}
+<div class="card" style="padding: 0.75rem; margin-bottom: 0.75rem;">
+    <div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--gray-700);">DB Instances</div>
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">DB Identifier</th>
+                    <th style="padding: 0.5rem;">Engine</th>
+                    <th style="padding: 0.5rem;">Class</th>
+                    <th style="padding: 0.5rem;">Status</th>
+                    <th style="padding: 0.5rem;">Storage</th>
+                    <th style="padding: 0.5rem;">Multi-AZ</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for db in databases %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-family: monospace; font-size: 0.8rem;">{{ db.db_id }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ db.engine }} {{ db.engine_version }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ db.class }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; {% if db.status == 'available' %}color: var(--success);{% elif db.status == 'stopped' %}color: var(--warning);{% endif %}">{{ db.status }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ db.size_gb }} GiB {{ db.storage_type }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ 'yes' if db.multi_az else 'no' }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ db.region }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% if rds_snapshots %}
+<div class="card" style="padding: 0.75rem;">
+    <div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--gray-700);">Manual Snapshots</div>
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Snapshot ID</th>
+                    <th style="padding: 0.5rem;">Source DB</th>
+                    <th style="padding: 0.5rem;">Engine</th>
+                    <th style="padding: 0.5rem;">Size</th>
+                    <th style="padding: 0.5rem;">Status</th>
+                    <th style="padding: 0.5rem;">Created</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for snap in rds_snapshots %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-family: monospace; font-size: 0.8rem;">{{ snap.snapshot_id }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.db_id }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.engine }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.size_gb }} GiB</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.status }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">{% if snap.created %}<span style="font-size: 0.8rem;">{{ snap.created.strftime('%Y-%m-%d') }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.region }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% if not databases and not rds_snapshots %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No RDS instances or manual snapshots found</p>
+</div>
+{% endif %}
+</div>
+
 <!-- ===== TAB: S3 Buckets ===== -->
 <div id="panel-s3" style="display:none">
 {% if buckets %}
@@ -393,7 +471,7 @@
 
 <script>
 function switchTab(tab) {
-    ['ec2', 'volumes', 'ips', 'vpcs', 'snapshots', 's3'].forEach(t => {
+    ['ec2', 'volumes', 'ips', 'vpcs', 'snapshots', 'rds', 's3'].forEach(t => {
         document.getElementById('panel-' + t).style.display = t === tab ? '' : 'none';
         document.getElementById('tab-' + t).classList.toggle('active', t === tab);
     });

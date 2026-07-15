@@ -990,7 +990,8 @@
         // gp2 migrations and network resources land in Other.
         const _tabByType = {
             stop_instance: 'ec2', terminate_instance: 'ec2', downsize_instance: 'ec2',
-            delete_volume: 'ebs', release_ip: 'eip', delete_snapshot: 'snap'
+            delete_volume: 'ebs', release_ip: 'eip', delete_snapshot: 'snap',
+            delete_rds_instance: 'rds', downsize_rds_instance: 'rds', delete_rds_snapshot: 'rds'
         };
 
         // Deep-link a resource id to its AWS console page (region may carry an
