@@ -29,6 +29,11 @@ EXECUTION_MODES = {
     "delete_snapshot": "manual",
     "release_ip": "manual",
     "delete_vpc": "manual",
+    # RDS & AMI — destructive/irreversible, always manual review
+    "deregister_ami": "manual",
+    "delete_rds_instance": "manual",
+    "downsize_rds_instance": "manual",
+    "delete_rds_snapshot": "manual",
 }
 
 

@@ -17,6 +17,11 @@ from detectors.nat_gateway_unused import NATGatewayUnusedDetector, NAT_GATEWAY_M
 from detectors.ebs_gp2_migration import EBSGp2MigrationDetector, GP2_TO_GP3_SAVINGS_EUR_PER_GIB
 from detectors.elb_unused import ELBUnusedDetector, ELB_MONTHLY_COST_EUR
 from detectors.vpc_unused import VPCUnusedDetector
+from detectors.ami_orphan import AMIOrphanDetector, SNAPSHOT_EUR_PER_GIB
+from detectors.rds_stopped import RDSStoppedDetector
+from detectors.rds_snapshot_orphan import RDSSnapshotOrphanDetector
+from detectors.rds_idle import RDSIdleDetector
+from detectors import rds_pricing
 from collectors.ec2_metrics_steampipe import rows_to_records
 
 
@@ -128,8 +133,160 @@ class TestELBUnusedMapping:
         )[0]
         assert item["resource_id"] == "legacy"
 
+    def test_no_traffic_reason_and_lower_confidence(self):
+        item = _bare(ELBUnusedDetector).map_rows(
+            [
+                {
+                    "lb_type": "application",
+                    "name": "idle-alb",
+                    "arn": "arn:alb",
+                    "region": "eu-west-1",
+                    "reason": "no_traffic",
+                    "registered_targets": 3,
+                }
+            ]
+        )[0]
+        assert "no traffic in 30 days" in item["action"]
+        assert "3 target(s) registered" in item["action"]
+        assert item["confidence"] == 0.85
+        assert item["metadata"]["reason"] == "no_traffic"
+        assert item["metadata"]["registered_targets"] == 3
+
     def test_empty_input(self):
         assert _bare(ELBUnusedDetector).map_rows([]) == []
+
+
+class TestAMIOrphanMapping:
+
+    def test_cost_from_backing_snapshots(self):
+        item = _bare(AMIOrphanDetector).map_rows(
+            [
+                {
+                    "image_id": "ami-0abc",
+                    "name": "base-image",
+                    "region": "eu-west-1",
+                    "platform_details": "Linux/UNIX",
+                    "backing_gb": 30,
+                    "snapshot_count": 2,
+                    "age_days": 120,
+                }
+            ]
+        )[0]
+        assert item["resource_id"] == "ami-0abc"
+        assert item["monthly_cost"] == round(30 * SNAPSHOT_EUR_PER_GIB, 2)
+        assert "DEREGISTER" in item["action"]
+        assert "base-image (ami-0abc)" in item["action"]
+        assert item["metadata"]["snapshot_count"] == 2
+
+    def test_unnamed_ami_uses_bare_id(self):
+        item = _bare(AMIOrphanDetector).map_rows(
+            [{"image_id": "ami-1", "backing_gb": 0, "snapshot_count": 0, "age_days": 100}]
+        )[0]
+        assert "ami-1" in item["action"]
+        assert item["monthly_cost"] == 0.0
+
+    def test_empty_input(self):
+        assert _bare(AMIOrphanDetector).map_rows([]) == []
+
+
+class TestRDSStoppedMapping:
+
+    def test_storage_cost_and_autorestart_note(self):
+        item = _bare(RDSStoppedDetector).map_rows(
+            [
+                {
+                    "db_instance_identifier": "db-prod",
+                    "class": "db.t3.medium",
+                    "engine": "postgres",
+                    "allocated_storage": 100,
+                    "storage_type": "gp3",
+                    "multi_az": False,
+                    "region": "eu-west-1",
+                    "age_days": 45,
+                }
+            ]
+        )[0]
+        assert item["resource_id"] == "db-prod"
+        assert item["monthly_cost"] == rds_pricing.storage_eur(100, "gp3")
+        assert "auto-restarts after 7 days" in item["action"]
+
+    def test_empty_input(self):
+        assert _bare(RDSStoppedDetector).map_rows([]) == []
+
+
+class TestRDSSnapshotOrphanMapping:
+
+    def test_backup_storage_cost(self):
+        item = _bare(RDSSnapshotOrphanDetector).map_rows(
+            [
+                {
+                    "db_snapshot_identifier": "snap-manual-1",
+                    "db_instance_identifier": "db-old",
+                    "engine": "mysql",
+                    "allocated_storage": 50,
+                    "storage_type": "gp2",
+                    "region": "eu-west-1",
+                    "age_days": 200,
+                }
+            ]
+        )[0]
+        assert item["resource_id"] == "snap-manual-1"
+        assert item["monthly_cost"] == rds_pricing.snapshot_eur(50)
+        assert "db-old" in item["action"]
+
+    def test_empty_input(self):
+        assert _bare(RDSSnapshotOrphanDetector).map_rows([]) == []
+
+
+class TestRDSIdleMapping:
+
+    def test_full_instance_cost_and_multi_az(self):
+        single = _bare(RDSIdleDetector).map_rows(
+            [
+                {
+                    "db_instance_identifier": "db-idle",
+                    "class": "db.m5.large",
+                    "engine": "postgres",
+                    "allocated_storage": 100,
+                    "storage_type": "gp3",
+                    "multi_az": False,
+                    "max_conn_14d": 0,
+                    "region": "eu-west-1",
+                }
+            ]
+        )[0]
+        assert single["monthly_cost"] == rds_pricing.instance_eur("db.m5.large", False, 100, "gp3")
+        assert "0 connections in 14 days" in single["action"]
+        # multi-AZ roughly doubles the compute portion → strictly more expensive
+        multi = _bare(RDSIdleDetector).map_rows(
+            [
+                {
+                    "db_instance_identifier": "db-idle-ha",
+                    "class": "db.m5.large",
+                    "allocated_storage": 100,
+                    "storage_type": "gp3",
+                    "multi_az": True,
+                }
+            ]
+        )[0]
+        assert multi["monthly_cost"] > single["monthly_cost"]
+
+    def test_unknown_class_uses_default(self):
+        item = _bare(RDSIdleDetector).map_rows(
+            [
+                {
+                    "db_instance_identifier": "db-x",
+                    "class": "db.weird.42xlarge",
+                    "allocated_storage": 20,
+                }
+            ]
+        )[0]
+        expected = rds_pricing.instance_eur("db.weird.42xlarge", False, 20, "gp2")
+        assert item["monthly_cost"] == expected
+        assert expected > 0
+
+    def test_empty_input(self):
+        assert _bare(RDSIdleDetector).map_rows([]) == []
 
 
 class TestVPCUnusedMapping:

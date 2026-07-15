@@ -80,6 +80,8 @@ Resources:
                   - elasticloadbalancing:DescribeLoadBalancers
                   - elasticloadbalancing:DescribeTargetGroups
                   - elasticloadbalancing:DescribeTargetHealth
+                  - rds:DescribeDBInstances
+                  - rds:DescribeDBSnapshots
                   - s3:GetBucketLocation
                   - s3:ListAllMyBuckets
                 Resource: '*'
@@ -131,6 +133,8 @@ Resources:
                   - elasticloadbalancing:DescribeLoadBalancers
                   - elasticloadbalancing:DescribeTargetGroups
                   - elasticloadbalancing:DescribeTargetHealth
+                  - rds:DescribeDBInstances
+                  - rds:DescribeDBSnapshots
                   - s3:GetBucketLocation
                   - s3:ListAllMyBuckets
                 Resource: '*'
