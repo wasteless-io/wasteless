@@ -257,7 +257,7 @@
 <div class="top-grid">
 <div class="card compact">
     <div class="section-label">Financial Overview</div>
-    <div class="grid grid-4">
+    <div class="grid grid-5">
 
         <!-- Monthly Waste -->
         <div class="kpi">
@@ -267,6 +267,24 @@
             <div class="kpi-value text-warning"><span class="kpi-hover" tabindex="0" data-tip="Active detected waste per month{% if (kpis.declined_count or 0) > 0 %} — includes {{ "%.2f"|format(kpis.declined_monthly or 0) }} €/mo you reviewed and declined{% endif %} · AWS on-demand pricing at a fixed {{ usd_to_eur }} USD&rarr;EUR rate"><span class="kpi-zoom">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></span></span></div>
             <div class="kpi-label">Monthly Waste</div>
             <div class="kpi-sub">{{ eur((kpis.active_monthly or 0) * 12) }}/year{% if (kpis.declined_count or 0) > 0 %} · incl. {{ eur(kpis.declined_monthly) }}/mo declined after review{% endif %}</div>
+        </div>
+
+        <!-- Wasted so far (cumulative sunk cost of the still-pending backlog;
+             moved here from the Recommendations bar, where it clashed with the
+             forward Savings/mo rate) -->
+        <div class="kpi">
+            <div class="kpi-icon">
+                <span class="{% if (kpis.wasted_so_far or 0) > 0 %}bg-danger{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 22a10 10 0 100-20"/><path d="M12 12l3 2"/></svg></span>
+            </div>
+            {% if (kpis.wasted_so_far or 0) > 0 %}
+            <div class="kpi-value text-danger"><span class="kpi-hover" tabindex="0" data-tip="What the still-pending resources have already cost since each was created — monthly cost prorated per day of age. Grows every day they stay unresolved, and drops as you approve them. Backward-looking cumulative amount, unlike Pending Savings (a forward monthly rate)."><span class="kpi-zoom">{{ eur(kpis.wasted_so_far) }}</span></span></div>
+            <div class="kpi-label">Wasted so far</div>
+            <div class="kpi-sub">Pending backlog · since each was created</div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">Wasted so far</div>
+            <div class="kpi-sub">Nothing pending long enough to add up</div>
+            {% endif %}
         </div>
 
         <!-- Savings Realized -->
