@@ -96,6 +96,22 @@ class TestDetectorGuard(unittest.TestCase):
             sys.path.remove(str(REPO_SRC))
 
 
+class TestConfirmationPhrases(unittest.TestCase):
+    """The confirmation dialog spells out per type what an Apply does
+    (ACTION_PHRASES in recommendations.html). A registry type without a
+    phrase falls back to its raw snake_case name in a user-facing dialog:
+    adding a detector means adding its phrase too."""
+
+    def test_every_registry_type_has_a_dialog_phrase(self):
+        template = (UI_DIR / "templates" / "recommendations.html").read_text()
+        missing = [t for t in EXECUTION_MODES if f"{t}:" not in template]
+        self.assertEqual(
+            missing,
+            [],
+            f"Types missing from ACTION_PHRASES in recommendations.html: {missing}",
+        )
+
+
 class TestApproveFlow(unittest.TestCase):
     """Approve via /api/actions with a mocked DB: manual-review types in
     production mode must record the decision without touching AWS."""
