@@ -96,7 +96,10 @@ def recommendations(
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         {where_clause}
-        ORDER BY r.estimated_monthly_savings_eur DESC LIMIT 500
+        -- r.id tiebreaker: savings often tie (e.g. identical volumes) and
+        -- Postgres gives ties no stable order, so rows would shuffle between
+        -- page loads — dangerous when users re-select rows by position
+        ORDER BY r.estimated_monthly_savings_eur DESC, r.id LIMIT 500
     """,  # noqa: S608 — where_clause is constant fragments; values are %s params
         params if params else None,
     )
@@ -246,7 +249,7 @@ def recommendations(
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         WHERE r.status = 'scheduled'
-        ORDER BY r.execute_after
+        ORDER BY r.execute_after, r.id
         LIMIT 100
     """)
     scheduled_recs = cursor.fetchall()
@@ -261,7 +264,7 @@ def recommendations(
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         WHERE r.status = 'pr_open'
-        ORDER BY r.estimated_monthly_savings_eur DESC
+        ORDER BY r.estimated_monthly_savings_eur DESC, r.id
         LIMIT 100
     """)
     pr_open_recs = cursor.fetchall()
@@ -280,7 +283,7 @@ def recommendations(
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         WHERE r.status = 'approved_manual'
-        ORDER BY r.applied_at
+        ORDER BY r.applied_at, r.id
         LIMIT 100
     """)
     approved_manual_recs = cursor.fetchall()
@@ -298,7 +301,7 @@ def recommendations(
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         WHERE r.status = 'rejected'
-        ORDER BY r.applied_at DESC NULLS LAST
+        ORDER BY r.applied_at DESC NULLS LAST, r.id
         LIMIT 100
     """)
     rejected_recs = cursor.fetchall()
@@ -396,7 +399,7 @@ def api_recommendations(
         query += " AND w.confidence_score >= %s"
         params.append(min_confidence)
 
-    query += " ORDER BY r.estimated_monthly_savings_eur DESC LIMIT %s"
+    query += " ORDER BY r.estimated_monthly_savings_eur DESC, r.id LIMIT %s"
     params.append(limit)
 
     cursor.execute(query, params)
@@ -871,7 +874,7 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
         FROM recommendations r
         JOIN waste_detected w ON w.id = r.waste_id
         WHERE r.status = 'pending'
-        ORDER BY r.estimated_monthly_savings_eur DESC NULLS LAST
+        ORDER BY r.estimated_monthly_savings_eur DESC NULLS LAST, r.id
         LIMIT 100
         """)
     rows = cursor.fetchall()
