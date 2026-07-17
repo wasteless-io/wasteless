@@ -21,8 +21,12 @@ def landing(request: Request):
 
 
 @router.get("/", response_class=HTMLResponse)
-def home(request: Request, conn=Depends(get_db)):
-    """Home page with overview metrics."""
+def home(request: Request, conn=Depends(get_db), welcome: str = ""):
+    """Home page with overview metrics.
+
+    `welcome=1` is set by the /setup success hand-off: the page then greets
+    the user once (the banner's script cleans the URL so a refresh does
+    not repeat it)."""
     # Premier lancement : tant qu'AWS n'est pas connecte, la home n'affiche
     # que des zeros — on emmene l'utilisateur au wizard, comme l'ouverture
     # navigateur de wasteless.sh. Seule la racine redirige : les autres
@@ -140,9 +144,13 @@ def home(request: Request, conn=Depends(get_db)):
     # Last collection time — shown in the KPI banner footer and drives
     # the onboarding hint. collection_runs gets one row per "wasteless
     # collect" run even when nothing is detected; waste_detected's
-    # updated_at only moves when a detector writes or re-confirms a
-    # finding (and is the only signal for manual single-detector runs,
-    # which don't record a collection_runs row).
+    # created_at covers manual single-detector runs (which don't record
+    # a collection_runs row) through the findings they insert.
+    # Two traps this query avoids: a run whose steps die on AWS
+    # AccessDenied still inserts a collection_runs row (hence the
+    # failed_steps filter), and updated_at moves every tick even with
+    # AWS broken because detectors re-confirm findings from DB-cached
+    # metrics (hence created_at, not updated_at).
     # Staleness is decided in SQL, against the same clock that stamped
     # the rows (Postgres runs in Docker and may not share the host's
     # timezone). 15 min = 3 missed ticks of the 5-minute loop.
@@ -150,8 +158,10 @@ def home(request: Request, conn=Depends(get_db)):
         SELECT last_sync, last_sync < NOW() - INTERVAL '15 minutes' as stale
         FROM (
             SELECT GREATEST(
-                (SELECT MAX(updated_at) FROM waste_detected),
-                (SELECT MAX(ran_at) FROM collection_runs)
+                (SELECT MAX(created_at) FROM waste_detected),
+                (SELECT MAX(created_at) FROM cloud_costs_raw),
+                (SELECT MAX(ran_at) FROM collection_runs
+                 WHERE failed_steps = '{}')
             ) as last_sync
         ) t
     """)
@@ -303,5 +313,6 @@ def home(request: Request, conn=Depends(get_db)):
             "aws_service_count": aws_service_count,
             "top_services": top_services,
             "waste_exceeds_spend": waste_exceeds_spend,
+            "welcome": welcome == "1",
         },
     )
