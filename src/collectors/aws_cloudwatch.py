@@ -131,8 +131,12 @@ class AWSCloudWatchCollector:
             return instances
 
         except Exception as e:
+            # Propagate instead of returning []: "cannot list instances"
+            # (AccessDenied, no credentials, region disabled) must not look
+            # like "the account has no instances". main() decides whether
+            # the whole run failed (every region) or just this one.
             logger.error(f"Failed to fetch EC2 instances: {e}")
-            return []
+            raise
 
     def get_cpu_utilization(self, instance_id, days=7):
         """
@@ -478,14 +482,22 @@ def main():
     AWS_SCAN_REGIONS comes from constants (AWS_REGIONS env var, or the
     same four-region default as ec2_stopped and the Cloud Resources
     page). A region that fails (not enabled on the account, missing
-    permission) must not cost the others their collection.
+    permission) must not cost the others their collection; but when EVERY
+    region fails, AWS is unreachable (bad credentials, broken role trust)
+    and the process exits nonzero so wasteless.sh records the step in
+    collection_runs.failed_steps instead of a healthy-looking run.
     """
+    failed_regions = 0
     for region in AWS_SCAN_REGIONS:
         try:
             collector = AWSCloudWatchCollector(region=region)
             collector.run(days=7, save_to_db=True)
         except Exception as e:
             logger.error(f"Collection failed for region {region}: {e}")
+            failed_regions += 1
+    if failed_regions == len(AWS_SCAN_REGIONS):
+        logger.error("Collection failed in every region: AWS unreachable or access denied")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

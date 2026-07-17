@@ -313,6 +313,11 @@ _collect() {
     echo -e "${BOLD}WasteLess — Collect & Detect${NC}"
     echo ""
 
+    # Steps en echec accumules pour collection_runs.failed_steps : l'UI en
+    # a besoin pour distinguer "le run a tourne" de "le run a rapporte des
+    # donnees" (un AccessDenied AWS fait echouer chaque step sans arreter
+    # le run, et l'heure du run passait pour de la fraicheur de donnees).
+    _FAILED_STEPS=""
     _run_step() {
         local label="$1" cmd="$2"
         echo -e "$label"
@@ -320,6 +325,9 @@ _collect() {
             echo -e "${GREEN}[OK]${NC} Done"
         else
             echo -e "${YELLOW}[WARN]${NC} Step failed — continuing"
+            local step_name
+            step_name="$(basename "$cmd" .py)"
+            _FAILED_STEPS="${_FAILED_STEPS:+$_FAILED_STEPS,}$step_name"
         fi
         echo ""
     }
@@ -359,16 +367,25 @@ _collect() {
     # Record the run so the UI can flag a partial collection instead of
     # silently under-reporting waste — the steampipe warning above only
     # ever reached ~/.wasteless.log, never the dashboard.
-    WASTELESS_SKIPPED_STEPS="$_SKIPPED_STEPS" python3 -c "
+    WASTELESS_SKIPPED_STEPS="$_SKIPPED_STEPS" WASTELESS_FAILED_STEPS="$_FAILED_STEPS" python3 -c "
 import os
 import sys
 sys.path.insert(0, 'src')
 from core.database import execute_query
 skipped = [s for s in os.environ.get('WASTELESS_SKIPPED_STEPS', '').split(',') if s]
-execute_query(
-    'INSERT INTO collection_runs (full_run, skipped_steps) VALUES (%s, %s)',
-    (len(skipped) == 0, skipped),
-)
+failed = [s for s in os.environ.get('WASTELESS_FAILED_STEPS', '').split(',') if s]
+try:
+    execute_query(
+        'INSERT INTO collection_runs (full_run, skipped_steps, failed_steps) VALUES (%s, %s, %s)',
+        (len(skipped) == 0, skipped, failed),
+    )
+except Exception:
+    # Base pas encore migree (colonne failed_steps absente) : enregistrer
+    # le run quand meme plutot que de perdre la ligne.
+    execute_query(
+        'INSERT INTO collection_runs (full_run, skipped_steps) VALUES (%s, %s)',
+        (len(skipped) == 0, skipped),
+    )
 " 2>>"$LOG_FILE" || echo -e "${YELLOW}[WARN]${NC} could not record collection_runs status"
 
     echo ""
