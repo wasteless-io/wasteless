@@ -2,8 +2,14 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Wasteless onboarding: creates the cross-account IAM roles wasteless uses
   to analyze (read-only) and, optionally, remediate (write) cloud waste in
-  this account. The policy actions are kept in sync with
-  onboarding/policies/*.json by a unit test in the wasteless repository.
+  this account. The read-only role only lists resources and reads usage
+  metrics; it can never read the data inside them, modify anything, or
+  touch IAM. The remediation role is only used for actions a human approves
+  in the wasteless UI, and is optional (set CreateRemediationRole to false
+  to keep wasteless in pure detection mode). Sessions are temporary (1 hour
+  max) and deleting this stack revokes all access instantly. The policy
+  actions are kept in sync with onboarding/policies/*.json by a unit test
+  in the wasteless repository, where every permission can be audited.
 
 Parameters:
   TrustedPrincipalArn:
@@ -42,6 +48,14 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${RoleNamePrefix}-readonly'
+      Description: >-
+        Read-only analysis role for wasteless (cloud cost waste detection).
+        Grants only Describe/Get/List calls on resource metadata, CloudWatch
+        metrics and Cost Explorer: wasteless can see which resources exist
+        and how much they are used, but can never read the data they
+        contain, never create, modify or delete anything, and never touch
+        IAM. Sessions last 1 hour max; delete this role to revoke all
+        access instantly.
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -94,6 +108,14 @@ Resources:
     Condition: WantRemediation
     Properties:
       RoleName: !Sub '${RoleNamePrefix}-remediation'
+      Description: >-
+        Remediation role for wasteless, assumed only to execute waste
+        cleanup actions approved by a human in the wasteless UI (stop an
+        idle instance, delete an orphaned volume, ...). Limited to the
+        listed EC2/ELB cleanup actions: no IAM access, and the only thing
+        it can create is a rollback snapshot taken before destructive EBS
+        actions. Sessions last 1 hour max; delete this role to revoke all
+        access instantly (wasteless then falls back to detection mode).
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: '2012-10-17'

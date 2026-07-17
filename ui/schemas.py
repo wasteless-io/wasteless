@@ -35,6 +35,19 @@ class PolicyImport(BaseModel):
     yaml_text: str
 
 
+class LlmSetupRequest(BaseModel):
+    """AI insights (LLM) configuration submitted from the Settings page.
+
+    `model` is a litellm model id ('provider/name'). `api_key` is optional:
+    empty means "test/keep the key already in the environment" (ollama
+    never needs one). Sizes are bounded so a stray paste can't stuff
+    megabytes into the process environment.
+    """
+
+    model: str = Field(min_length=1, max_length=200)
+    api_key: str = Field(default="", max_length=256)
+
+
 class AwsSetupRequest(BaseModel):
     """AWS connection submitted from the /setup onboarding page.
 
