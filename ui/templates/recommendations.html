@@ -337,11 +337,11 @@
         </button>
         <button id="tab-btn-eip" onclick="switchTab('eip')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Elastic IPs <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ eip_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
         <button id="tab-btn-snap" onclick="switchTab('snap')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Snapshots <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ snap_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
         {% if rds_recs %}
         <button id="tab-btn-rds" onclick="switchTab('rds')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
@@ -352,7 +352,12 @@
         {% if other_recs %}
         <button id="tab-btn-other" onclick="switchTab('other')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Other <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ other_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
+            {# Mixed bag by construction (catch-all bucket): gp2/NAT/LB/AMI
+               execute for real, VPC and friends only queue a to-do. This
+               label used to say MANUAL REVIEW while the tab sat in
+               AUTOMATED_TABS, which fed a real user mixup; the confirmation
+               dialog now spells out the per-type behavior. #}
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MIXED</span>
         </button>
         {% endif %}
 
@@ -378,7 +383,7 @@
             {% endif %}
         </div>
         <div class="tab-actions" style="display: flex; align-items: center; gap: 1rem; padding-bottom: 0.5rem;">
-        <!-- AUTOMATED (EC2 + EBS + Other) -->
+        <!-- AUTOMATED (EC2 / EBS / EIP / Snapshots / Other) -->
         <div id="actions-automated" style="display: flex; align-items: center; gap: 0.75rem;">
             <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
             {# Button group hidden until at least one row is selected (shown by updateSelectedCount) #}
@@ -394,7 +399,7 @@
                 </button>
             </div>
         </div>
-        <!-- MANUAL (EIP / Snapshots) — buttons only; notice sits on its own row below -->
+        <!-- MANUAL (RDS) — buttons only; notice sits on its own row below -->
         <div id="actions-manual" style="display: none; align-items: center; gap: 0.75rem;">
             <span id="manualSelectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
             {# Button group hidden until at least one row is selected (shown by updateSelectedCount) #}
@@ -822,9 +827,9 @@
         </div>
         <p id="resourceModalLabel" style="font-size: 0.8rem; color: var(--gray-600); margin: 0 0 0.75rem; font-family: monospace;"></p>
         <div id="resourceContent" style="font-size: 0.85rem; color: var(--gray-700);"></div>
-        {# Act on this recommendation without leaving the modal. The primary
-           label switches to "Mark as to-do" for manual-review resources
-           (EIP/Snapshots). Shown once the details have loaded. #}
+        {# Act on this recommendation without leaving the modal. Every kind
+           the modal serves now has an automated remediator, so the primary
+           label stays "Apply". Shown once the details have loaded. #}
         <div id="resourceModalActions" style="display: none; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--gray-100); gap: 0.5rem; justify-content: flex-end;">
             <button type="button" id="resModalApply" class="btn btn-primary" style="padding: 0.4rem 0.9rem;" onclick="modalAction('approve')">Apply</button>
             <button type="button" id="resModalSkip" class="btn btn-outline" style="padding: 0.4rem 0.9rem;" onclick="modalAction('reject')">Skip</button>
@@ -865,10 +870,12 @@
     let currentTab = 'ec2';
 
     const ALL_TABS = ['ec2', 'ebs', 'eip', 'snap', 'rds', 'other'];
-    // 'ebs' (delete_volume, snapshot-first) and 'other' (gp2 migrations,
-    // NAT gateways, load balancers) have automated remediators. 'rds' is
-    // manual review (deleting a database is never auto-executed).
-    const AUTOMATED_TABS = ['ec2', 'ebs', 'other'];
+    // 'ebs' (delete_volume, snapshot-first), 'eip' (release_ip), 'snap'
+    // (delete_snapshot, live-checked 90d+ and AMI-free) and 'other' (gp2
+    // migrations, NAT gateways, load balancers, AMI deregistration) have
+    // automated remediators. 'rds' is manual review (deleting a database
+    // is never auto-executed).
+    const AUTOMATED_TABS = ['ec2', 'ebs', 'eip', 'snap', 'other'];
 
     // What each recommendation type actually does when applied, spelled out
     // in the confirmation dialog. The Other tab mixes very different actions
@@ -1524,10 +1531,11 @@
 
             content.innerHTML = creationBox + recap + tagsBlock + consoleLink;
 
-            // Reveal the action footer. Manual-review resources (Elastic IP /
-            // Snapshot) never touch AWS, so the primary label is "Mark as
-            // to-do"; automated ones (Instance / Volume) keep "Apply".
-            _modalIsManual = ['Elastic IP', 'Snapshot'].includes(details.kind);
+            // Reveal the action footer. Every kind this modal serves
+            // (Instance / Volume / Elastic IP / Snapshot) now has an
+            // automated remediator, so the primary label is always "Apply";
+            // the list is kept for future manual-review kinds.
+            _modalIsManual = [].includes(details.kind);
             document.getElementById('resModalApply').textContent =
                 _modalIsManual ? 'Mark as to-do' : 'Apply';
             document.getElementById('resourceModalActions').style.display = 'flex';

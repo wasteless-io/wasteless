@@ -8,6 +8,9 @@ auto_remediation:
     delete_volume: true
     delete_nat_gateway: true
     delete_load_balancer: true
+    release_ip: true
+    delete_snapshot: true
+    deregister_ami: true
 approval:
   grace_period_days: 3
 protection:
