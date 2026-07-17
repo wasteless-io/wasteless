@@ -455,7 +455,7 @@
                           {% endif %}
                         {% endif %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#InstanceDetails:instanceId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-ec2" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#InstanceDetails:instanceId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Why act?" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id[:20] }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
@@ -518,7 +518,7 @@
                         {% for rec in ebs_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ebs" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-ebs" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Volumes:volumeId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Not attached to any instance' %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Why delete?" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_name or '-' }}</span></td>
@@ -568,7 +568,7 @@
                         {% for rec in eip_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-eip" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-eip" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#ElasticIpAddresses:allocationId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Not associated to any instance' %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Why release?" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
@@ -615,7 +615,7 @@
                         {% for rec in snap_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-snap" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-snap" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#Snapshots:snapshotId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.ai_insight or 'Old snapshot — verify before deleting' %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Why review?" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.snap_description or '-' }}</span></td>
@@ -664,7 +664,7 @@
                         {% for rec in rds_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-rds" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-rds" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.action_required %}{% if rec.ai_insight %}{% set reason = reason ~ ' — ' ~ rec.ai_insight %}{% endif %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
@@ -711,7 +711,7 @@
                         {% for rec in other_recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-other" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-other" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.action_required %}{% if rec.ai_insight %}{% set reason = reason ~ ' — ' ~ rec.ai_insight %}{% endif %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.volume_name or rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
@@ -869,6 +869,32 @@
     // NAT gateways, load balancers) have automated remediators. 'rds' is
     // manual review (deleting a database is never auto-executed).
     const AUTOMATED_TABS = ['ec2', 'ebs', 'other'];
+
+    // What each recommendation type actually does when applied, spelled out
+    // in the confirmation dialog. The Other tab mixes very different actions
+    // (migrate, release, delete) behind one Apply button: a generic "apply N
+    // recommendations" let a user believe volumes were being deleted when
+    // they were being migrated. {n} = count, {s} = plural suffix.
+    const ACTION_PHRASES = {
+        stop_instance: 'Stop {n} EC2 instance{s}',
+        terminate_instance: 'Terminate {n} EC2 instance{s}',
+        migrate_gp2_to_gp3: 'Migrate {n} volume{s} from gp2 to gp3 (volumes are kept, not deleted)',
+        delete_volume: 'Delete {n} EBS volume{s} (a rollback snapshot is taken first)',
+        delete_nat_gateway: 'Delete {n} NAT gateway{s}',
+        delete_load_balancer: 'Delete {n} load balancer{s}',
+        downsize_instance: 'Downsize {n} EC2 instance{s}',
+        delete_snapshot: 'Delete {n} EBS snapshot{s}',
+        release_ip: 'Release {n} Elastic IP{s}',
+        delete_vpc: 'Delete {n} VPC{s}',
+        deregister_ami: 'Deregister {n} AMI{s}',
+        delete_rds_instance: 'Delete {n} RDS instance{s}',
+        downsize_rds_instance: 'Downsize {n} RDS instance{s}',
+        delete_rds_snapshot: 'Delete {n} RDS snapshot{s}',
+    };
+    // Effective execution mode per type (registry + per-action opt-out),
+    // rendered server-side: manual types inside an automated tab only record
+    // a to-do, and the dialog must say so.
+    const ACTION_EXEC_MODES = {{ action_exec_modes | default({}) | tojson }};
 
     function switchTab(tab) {
         currentTab = tab;
@@ -1048,6 +1074,34 @@
               + (ids.length === 1 ? 'resource' : 'resources') + ' yourself on AWS.'
             : 'You are about to ' + actionText + ' ' + ids.length + ' ' + noun + '.');
 
+        // Spell out per type what "apply" will actually do. On the mixed
+        // Other tab this is the difference between "migrate" and "delete";
+        // manual-mode types are flagged as to-do only (nothing runs on AWS).
+        let anyRealExecution = true;
+        if (action === 'approve' && !isManualApprove) {
+            const typeCounts = {};
+            document.querySelectorAll('.rec-checkbox-' + currentTab + ':checked').forEach(cb => {
+                const t = cb.dataset.rectype || 'unknown';
+                typeCounts[t] = (typeCounts[t] || 0) + 1;
+            });
+            const lines = Object.entries(typeCounts).map(([t, n]) => {
+                const phrase = ACTION_PHRASES[t]
+                    ? ACTION_PHRASES[t].replace('{n}', n).replace(/\{s\}/g, n === 1 ? '' : 's')
+                    : t + ' × ' + n;
+                const manualOnly = (ACTION_EXEC_MODES[t] || 'manual') === 'manual';
+                return '<li style="margin-top: 0.2rem;">' + esc(phrase)
+                    + (manualOnly
+                        ? ' <span style="color: var(--warning); font-weight: 600;">(to-do only: recorded, you execute it yourself on AWS)</span>'
+                        : '')
+                    + '</li>';
+            });
+            html += '<ul style="margin: 0.6rem 0 0 1.2rem; padding: 0;">' + lines.join('') + '</ul>';
+            const types = Object.keys(typeCounts);
+            if (types.length) {
+                anyRealExecution = types.some(t => (ACTION_EXEC_MODES[t] || 'manual') !== 'manual');
+            }
+        }
+
         // Show exactly which resources are affected — each id in blue, linking
         // to its AWS console page when we have a deep link. Capped so a big
         // selection doesn't blow up the dialog.
@@ -1066,8 +1120,9 @@
 
         // Production reminder: applying here touches AWS for real. Only
         // relevant for an Apply in live mode (dryRun is false) on an
-        // automated tab — a manual to-do never executes anything.
-        if (action === 'approve' && !dryRun && !isManualApprove) {
+        // automated tab — a manual to-do never executes anything, so a
+        // selection made only of manual-mode types skips the warning too.
+        if (action === 'approve' && !dryRun && !isManualApprove && anyRealExecution) {
             html += '<div style="margin-top: 0.75rem; color: var(--danger); font-weight: 600;">'
                 + '⚠ Production mode — this executes the action for real on AWS.</div>';
         }

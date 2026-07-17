@@ -8,7 +8,7 @@ from psycopg2.extras import Json
 from state import get_db, templates, _config_manager, _aws_status, USD_TO_EUR, DAYS_PER_MONTH
 from schemas import ActionRequest, AskQuestionRequest
 from jobs import _execute_ec2_boto3
-from utils.action_registry import execution_mode
+from utils.action_registry import execution_mode, EXECUTION_MODES
 from utils.logger import log_remediation_action
 
 router = APIRouter()
@@ -343,6 +343,17 @@ def recommendations(
             "other_recs": other_recs,
             "scheduled_recs": scheduled_recs,
             "total_count": total_count,
+            # Effective execution mode per type (registry + per-action
+            # opt-out) so the confirmation dialog can spell out what an
+            # Apply really does, and flag to-do-only types
+            "action_exec_modes": {
+                t: (
+                    "manual"
+                    if execution_mode(t) != "manual" and not _config_manager.get_action_enabled(t)
+                    else execution_mode(t)
+                )
+                for t in EXECUTION_MODES
+            },
             # The table query is capped at 500 rows; when the true total is
             # larger the template discloses the truncation instead of letting
             # tab counts pass for totals
