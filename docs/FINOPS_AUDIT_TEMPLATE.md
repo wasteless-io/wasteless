@@ -28,6 +28,7 @@
 - EBS
 - NAT Gateway
 - Elastic IP
+- RDS
 - CloudWatch
 - Tags
 - Cost Explorer
@@ -48,7 +49,6 @@
 - Marketplace costs
 - Taxes
 - Enterprise discounts
-- RDS (no detector implemented yet — not analyzed, not to be listed as in-scope)
 - EKS (no detector implemented yet — not analyzed, not to be listed as in-scope)
 
 ## 3. Financial Overview

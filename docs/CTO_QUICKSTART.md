@@ -1,18 +1,18 @@
-# Connect AWS in 10 minutes — the non-technical path
+# Connect AWS with the guided setup
 
 This is the short version of [AWS_SETUP.md](AWS_SETUP.md), written for
 someone who runs a company, not a terminal. Five steps, one of which you
 can delegate.
 
 **What you are granting:** one read-only IAM role (`wasteless-readonly`,
-Describe/Get/List permissions only). WasteLess physically cannot modify,
+Describe/Get/List permissions only). Wasteless physically cannot modify,
 stop, or delete anything in your account with it. Write access is a
 separate optional role you can add later, and every write still requires
 an explicit approval in the UI.
 
 ---
 
-## 1. Install WasteLess (5 min)
+## 1. Install Wasteless
 
 ```bash
 git clone https://github.com/wasteless-io/wasteless.git && cd wasteless
@@ -23,7 +23,7 @@ When the installer asks about AWS, pick **option 2 (not yet)** — you will
 connect through the web page in the next steps, which is easier than the
 terminal.
 
-## 2. Open the setup page (30 s)
+## 2. Open the setup page
 
 ```bash
 wasteless
@@ -32,7 +32,7 @@ wasteless
 Your browser opens on the setup guide (<http://localhost:8888/setup>)
 automatically as long as AWS is not connected yet.
 
-## 3. Create the roles in your AWS account (2 min — delegable)
+## 3. Create the roles in your AWS account
 
 This is the only step that happens inside AWS.
 
@@ -53,11 +53,11 @@ the button and send them the link instead — it carries everything they need.
 Two options worth knowing, both on the setup page *before* you open the link:
 
 - **External ID** — type a secret phrase of your choice in the *External ID*
-  field for extra protection; the link bakes it into the stack, and WasteLess
-  keeps the same value. Recommended if WasteLess runs from a different AWS
+  field for extra protection; the link bakes it into the stack, and Wasteless
+  keeps the same value. Recommended if Wasteless runs from a different AWS
   account.
 - **Detection-only** — on the AWS review page, set `CreateRemediationRole`
-  to `false`: WasteLess can then never modify anything in the account. Clear
+  to `false`: Wasteless can then never modify anything in the account. Clear
   the *Remediation role ARN* field on the setup page afterwards.
 
 <details>
@@ -65,7 +65,7 @@ Two options worth knowing, both on the setup page *before* you open the link:
 
 1. Get the template file
    [`wasteless-onboarding.yaml`](../onboarding/cloudformation/wasteless-onboarding.yaml)
-   on your machine (it is in the folder you installed WasteLess into, under
+   on your machine (it is in the folder you installed Wasteless into, under
    `onboarding/cloudformation/`, or download it from GitHub with the link above).
 2. Sign in to the AWS console with an account that can create IAM roles
    (an administrator), then open
@@ -73,10 +73,10 @@ Two options worth knowing, both on the setup page *before* you open the link:
 3. Select **Upload a template file**, choose `wasteless-onboarding.yaml`,
    click **Next**.
 4. Stack name: `wasteless-onboarding`. The default parameters are right for
-   the standard setup (WasteLess analyzing the account it is connected to):
+   the standard setup (Wasteless analyzing the account it is connected to):
    - `TrustedPrincipalArn` — leave empty.
    - `ExternalId` — leave empty, or type a secret phrase of your choice; you
-     will paste the **same value** into WasteLess at step 4.
+     will paste the **same value** into Wasteless at step 4.
    - `CreateRemediationRole` — keep `true`, or `false` for detection-only.
 
    Click **Next**.
@@ -90,11 +90,11 @@ Two options worth knowing, both on the setup page *before* you open the link:
 
 **Terraform path** *(optional — only if your team already manages its
 infrastructure with Terraform; Terraform is never required to install or run
-WasteLess)*: apply [`onboarding/terraform/`](../onboarding/terraform/) —
+Wasteless)*: apply [`onboarding/terraform/`](../onboarding/terraform/) —
 the outputs `readonly_role_arn` and `remediation_role_arn` are the same two
 role ARNs.
 
-## 4. Test and save (30 s)
+## 4. Test and save
 
 Back on the setup page: the region and both role ARNs are already filled in
 from your account ID and the template's default role names. Click
@@ -102,7 +102,7 @@ from your account ID and the template's default role names. Click
 **Test & save**. Both configuration files are written for you; no restart
 needed.
 
-## 5. Watch the dashboard fill (2 min)
+## 5. Let the first collection run
 
 Nothing to do: a first collection starts automatically the moment you save,
 the dashboard fills with your account's waste within a couple of minutes,
