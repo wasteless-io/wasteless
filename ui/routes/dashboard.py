@@ -145,7 +145,8 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     cursor = conn.cursor()
 
     # Fetch KPIs including new CTO metrics
-    cursor.execute("""
+    cursor.execute(
+        """
         WITH metrics AS (
             SELECT COALESCE(SUM(estimated_monthly_savings_eur), 0) as potential_monthly
             FROM recommendations WHERE status = 'pending'
@@ -184,6 +185,26 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             FROM recommendations
             WHERE status = 'pending'
         ),
+        -- "Wasted so far": what the still-pending resources have already cost
+        -- since each was created — monthly cost prorated per fractional day of
+        -- age. Backward-looking cumulative amount (moved here from the
+        -- Recommendations bar, where it collided with the forward Savings/mo
+        -- rate). GREATEST keeps it honest for resources younger than their
+        -- detection: metadata age_days wins when older, hours-since-created
+        -- wins when fresh.
+        wasted AS (
+            SELECT COALESCE(SUM(
+                COALESCE((w.metadata->>'monthly_cost_eur')::numeric,
+                         r.estimated_monthly_savings_eur, 0)
+                * GREATEST(
+                    COALESCE((w.metadata->>'age_days')::numeric, 0),
+                    EXTRACT(EPOCH FROM (NOW() - w.created_at)) / 86400.0
+                  )
+            ), 0) / %s as wasted_so_far
+            FROM recommendations r
+            JOIN waste_detected w ON r.waste_id = w.id
+            WHERE r.status = 'pending'
+        ),
         last_scan AS (
             SELECT MAX(updated_at) as last_analysis
             FROM waste_detected
@@ -198,6 +219,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             f.failed_7d,
             c.total_saved as cumulative_savings,
             p.pending_count,
+            wd.wasted_so_far,
             l.last_analysis
         FROM metrics m
         CROSS JOIN savings s
@@ -206,8 +228,11 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         CROSS JOIN failed f
         CROSS JOIN cumulative c
         CROSS JOIN pending p
+        CROSS JOIN wasted wd
         CROSS JOIN last_scan l;
-    """)
+    """,
+        (DAYS_PER_MONTH,),
+    )
     kpis = cursor.fetchone()
 
     # Cost of inaction: first detection date + daily burn rate (active waste)

@@ -78,6 +78,8 @@ class TestPolicyJsons:
             "elasticloadbalancing:DescribeLoadBalancers",  # elb_unused
             "elasticloadbalancing:DescribeTargetGroups",  # elb_unused
             "elasticloadbalancing:DescribeTargetHealth",  # elb_unused
+            "rds:DescribeDBInstances",  # rds_stopped, rds_idle
+            "rds:DescribeDBSnapshots",  # rds_snapshot_orphan
         }
         granted = {a for s in load_json(READONLY_JSON)["Statement"] for a in s["Action"]}
         missing = required_actions - granted
@@ -86,7 +88,7 @@ class TestPolicyJsons:
     def test_readonly_actions_are_read_only(self):
         readonly = load_json(READONLY_JSON)
         pattern = re.compile(
-            r"^(ce|cloudtrail|cloudwatch|ec2|elasticloadbalancing|s3):(Describe|Get|List|Lookup)"
+            r"^(ce|cloudtrail|cloudwatch|ec2|elasticloadbalancing|rds|s3):(Describe|Get|List|Lookup)"
         )
         for statement in readonly["Statement"]:
             for action in statement["Action"]:
