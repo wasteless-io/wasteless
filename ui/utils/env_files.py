@@ -4,7 +4,7 @@ Both the /setup page (AWS) and the Settings AI card save credentials the
 same way: write BOTH env files (root .env feeds the collectors/detectors,
 ui/.env feeds this process) and apply the values to the running process so
 no restart is needed. Keeping the two files in sync here is the whole
-point — the manual "mirror the root .env" convention lost users.
+point: the manual "mirror the root .env" convention lost users.
 """
 
 import os

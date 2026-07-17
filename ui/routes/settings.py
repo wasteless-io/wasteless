@@ -100,7 +100,7 @@ def api_update_config(update: ConfigUpdate):
 
 @router.post("/api/llm/test")
 def api_llm_test(payload: LlmSetupRequest):
-    """Dry LLM connection test — one 'ping' completion, never writes
+    """Dry LLM connection test: one 'ping' completion, never writes
     anything. Same contract as /api/aws-setup/test: failures surface as a
     400 with a user-safe message, never a 500."""
     from core.llm import check_connection
@@ -114,7 +114,7 @@ def api_llm_test(payload: LlmSetupRequest):
 @router.post("/api/llm/save")
 def api_llm_save(payload: LlmSetupRequest):
     """Test, then persist the AI insights connection to both env files and
-    apply it to this process — mirrors /api/aws-setup, so a bad key can
+    apply it to this process, mirroring /api/aws-setup, so a bad key can
     never be saved silently."""
     from core.llm import MODEL_ENV_VAR, check_connection, key_env_var
     from utils.env_files import apply_to_env, write_env_files
@@ -126,7 +126,7 @@ def api_llm_save(payload: LlmSetupRequest):
             {
                 "success": False,
                 "error": "wasteless doesn't know which env var stores the key for this "
-                "provider — add it to .env and ui/.env manually, then save the model alone",
+                "provider. Add it to .env and ui/.env manually, then save the model alone",
             },
             status_code=400,
         )

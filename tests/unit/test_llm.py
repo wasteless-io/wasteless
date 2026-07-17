@@ -271,7 +271,7 @@ class TestUserSafeError:
 
     def test_auth_failure_wrapped_in_bad_request_is_classified_as_auth(self):
         """DeepSeek returns 'Authentication Fails' wrapped by litellm in a
-        BadRequestError — the message, not the class, names the real cause."""
+        BadRequestError: the message, not the class, names the real cause."""
 
         class BadRequestError(Exception):
             pass

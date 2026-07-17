@@ -831,7 +831,7 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
         return JSONResponse(
             {
                 "answer": None,
-                "error": "AI insights are not configured — set a model and API key "
+                "error": "AI insights are not configured. Set a model and API key "
                 "in Settings → AI Insights (LLM)",
             },
             status_code=503,
@@ -931,7 +931,7 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
         )
     except LLMUnavailableError as e:
         # User-safe classification from core.llm (bad key, rate limit,
-        # timeout...) — actionable, unlike the old generic message.
+        # timeout...), actionable, unlike the old generic message.
         return JSONResponse({"answer": None, "error": str(e)}, status_code=503)
     if answer is None:
         return JSONResponse(

@@ -7,7 +7,7 @@ Same contract as the /setup AWS endpoints: the test endpoint never writes
 anything, the save endpoint persists to BOTH env files only after a
 successful connection test, and provider failures surface as a 400 with a
 user-safe message, never a 500. core.llm.test_connection is mocked
-throughout — no test here talks to an LLM provider.
+throughout; no test here talks to an LLM provider.
 """
 
 import sys
@@ -97,7 +97,7 @@ class TestLlmSaveEndpoint(unittest.TestCase):
         self.assertNotIn("API_KEY", root_text)
 
     def test_key_for_unknown_provider_is_rejected(self):
-        """We wouldn't know which env var to write the key into — refuse
+        """We wouldn't know which env var to write the key into, so refuse
         instead of guessing, without calling the provider at all."""
         with patch.object(core_llm, "check_connection") as tc:
             response = api_llm_save(_payload(model="somefuture/model"))

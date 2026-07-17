@@ -279,7 +279,7 @@
     <p class="text-muted" style="margin: 0 0 0.75rem 0; font-size: 0.8rem;">
         Explains each recommendation and powers the recommendations chat. Any litellm model id
         (<code>provider/model</code>) works; your AWS resource metadata is sent to the chosen provider.
-        Test runs one tiny completion against the provider — nothing is saved until you click Test &amp; Save.
+        Test runs one tiny completion against the provider; nothing is saved until you click Test &amp; Save.
     </p>
     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
         <input type="text" id="llmModel" class="form-input" list="llmModelSuggestions"
@@ -293,7 +293,7 @@
         </datalist>
         <input type="password" id="llmApiKey" class="form-input" autocomplete="off"
                style="flex: 2 1 220px; padding: 0.4rem;"
-               placeholder="{{ 'API key (saved — leave empty to keep it)' if llm_key_set else 'API key (ollama needs none)' }}">
+               placeholder="{{ 'API key (saved, leave empty to keep it)' if llm_key_set else 'API key (ollama needs none)' }}">
         <button onclick="testLlm(false)" id="llmTestBtn" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Test</button>
         <button onclick="testLlm(true)" id="llmSaveBtn" class="btn btn-primary" style="padding: 0.4rem 0.75rem;">Test &amp; Save</button>
     </div>
@@ -383,7 +383,7 @@
             const data = await resp.json();
             if (resp.ok && data.success) {
                 status.textContent = save
-                    ? 'Saved — AI insights are live (' + data.model + '). New insights appear on the next collection.'
+                    ? 'Saved. AI insights are live (' + data.model + '). New insights appear on the next collection.'
                     : 'Connection OK (' + data.model + ').';
                 status.style.color = 'var(--success, #22c55e)';
                 if (save) document.getElementById('llmApiKey').value = '';

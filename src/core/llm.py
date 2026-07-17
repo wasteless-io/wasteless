@@ -49,7 +49,7 @@ KEY_ENV_VARS: Dict[str, Optional[str]] = {
 
 class LLMUnavailableError(Exception):
     """Provider-level LLM failure carrying a user-safe message (no stack
-    trace, no key material) — raised by the interactive features (chat)
+    trace, no key material), raised by the interactive features (chat)
     where the user needs to know WHY there is no answer; the batch
     features (insights) keep degrading silently instead."""
 
@@ -122,7 +122,7 @@ def user_safe_error(e: Exception, model: Optional[str] = None) -> str:
     """One short, user-facing line for a failed LLM call.
 
     Classified by exception class name (walking the MRO) so litellm never
-    has to be imported here — it is an optional dependency. The provider's
+    has to be imported here (it is an optional dependency). The provider's
     own message is appended, collapsed and capped: it names the actual
     cause (wrong key, unknown model id) and contains no secrets.
     """
@@ -132,17 +132,17 @@ def user_safe_error(e: Exception, model: Optional[str] = None) -> str:
     if "AuthenticationError" in names or "authentication" in detail.lower():
         # Second clause: some providers (DeepSeek) return their auth failure
         # in a way litellm wraps as BadRequestError, not AuthenticationError.
-        reason = f"authentication failed for {target} — the API key is missing, invalid or revoked"
+        reason = f"authentication failed for {target}: the API key is missing, invalid or revoked"
     elif "PermissionDeniedError" in names:
         reason = f"the API key is valid but not allowed to use {target}"
     elif "RateLimitError" in names:
-        reason = "provider rate limit or quota exceeded — retry later or check your billing"
+        reason = "provider rate limit or quota exceeded, retry later or check your billing"
     elif "Timeout" in names or "APITimeoutError" in names:
         reason = f"the provider did not answer within {TIMEOUT_SECONDS}s"
     elif "APIConnectionError" in names:
-        reason = f"cannot reach the provider for {target} — network or endpoint problem"
+        reason = f"cannot reach the provider for {target} (network or endpoint problem)"
     elif "NotFoundError" in names or "BadRequestError" in names:
-        reason = f"the provider rejected the request — check the model id ({target})"
+        reason = f"the provider rejected the request, check the model id ({target})"
     else:
         reason = f"the LLM call failed ({type(e).__name__})"
     return f"{reason}. Provider says: {detail}" if detail else reason
@@ -151,12 +151,12 @@ def user_safe_error(e: Exception, model: Optional[str] = None) -> str:
 def check_connection(model: str, api_key: Optional[str] = None) -> Optional[str]:
     """One tiny 'ping' completion against `model` (with `api_key` when
     given, else the environment's key). Returns None on success or a
-    user-safe error message on failure. Never raises, persists nothing —
+    user-safe error message on failure. Never raises, persists nothing:
     this is the dry test behind Settings and mirrors install.sh's check."""
     try:
         import litellm
     except ImportError:
-        return "litellm is not installed in the UI environment — run install.sh again or pip install litellm"
+        return "litellm is not installed in the UI environment. Run install.sh again or pip install litellm"
     try:
         litellm.completion(
             model=model,
@@ -325,7 +325,7 @@ def answer_estate_question(
 
     Returns None when AI is not configured (or the question is empty);
     raises LLMUnavailableError with a user-safe message when the provider
-    call itself fails — the chat UI must tell the user why.
+    call itself fails, since the chat UI must tell the user why.
     """
     if not is_enabled():
         return None
@@ -389,7 +389,7 @@ def answer_estate_question(
         return answer.strip() if answer else None
     except Exception as e:
         # Interactive feature: unlike the batch insights, the user is
-        # waiting for this answer — surface a typed, user-safe reason
+        # waiting for this answer: surface a typed, user-safe reason
         # (bad key, rate limit, timeout) instead of a silent None.
         logger.warning(f"AI estate Q&A failed: {e}")
         raise LLMUnavailableError(user_safe_error(e)) from e
