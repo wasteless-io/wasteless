@@ -9,13 +9,20 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
+import pytest
+
 from core import llm
 from core.llm import (
+    LLMUnavailableError,
+    answer_estate_question,
     build_prompt,
     enrich_recommendations,
     generate_insight,
     is_enabled,
+    key_env_var,
     record_usage,
+    check_connection,
+    user_safe_error,
     MODEL_ENV_VAR,
 )
 
@@ -204,3 +211,122 @@ class TestEnrichRecommendations:
         with patch.dict(sys.modules, {"litellm": MagicMock()}):
             assert enrich_recommendations(conn) == 0
         conn.rollback.assert_called_once()
+
+
+class TestKeyEnvVar:
+
+    def test_known_providers(self):
+        assert key_env_var("anthropic/claude-haiku-4-5-20251001") == "ANTHROPIC_API_KEY"
+        assert key_env_var("deepseek/deepseek-chat") == "DEEPSEEK_API_KEY"
+        assert key_env_var("openai/gpt-4o-mini") == "OPENAI_API_KEY"
+
+    def test_keyless_and_unknown_providers(self):
+        assert key_env_var("ollama/llama3.1") is None
+        assert key_env_var("somefuture/model") is None
+        # No provider prefix at all
+        assert key_env_var("gpt-4o-mini") is None
+
+
+class _AuthenticationError(Exception):
+    pass
+
+
+class _RateLimitError(Exception):
+    pass
+
+
+class _Timeout(Exception):
+    pass
+
+
+class TestUserSafeError:
+    """Classification is by exception CLASS NAME (litellm stays optional),
+    with the provider's message appended, collapsed and capped."""
+
+    def test_authentication_error_names_the_key(self):
+        # Renamed so the MRO exposes the litellm-style class name
+        _AuthenticationError.__name__ = "AuthenticationError"
+        msg = user_safe_error(_AuthenticationError("401 bad key"), "openai/gpt-4o-mini")
+        assert "API key" in msg
+        assert "openai/gpt-4o-mini" in msg
+        assert "401 bad key" in msg
+
+    def test_rate_limit(self):
+        _RateLimitError.__name__ = "RateLimitError"
+        assert "rate limit" in user_safe_error(_RateLimitError(), "m")
+
+    def test_timeout(self):
+        _Timeout.__name__ = "Timeout"
+        assert "did not answer" in user_safe_error(_Timeout(), "m")
+
+    def test_unknown_exception_falls_back_to_class_name(self):
+        msg = user_safe_error(RuntimeError("boom"), "m")
+        assert "RuntimeError" in msg
+        assert "boom" in msg
+
+    def test_detail_is_collapsed_and_capped(self):
+        msg = user_safe_error(RuntimeError("a\nb\n" + "x" * 500), "m")
+        assert "\n" not in msg
+        assert "x" * 201 not in msg
+
+    def test_auth_failure_wrapped_in_bad_request_is_classified_as_auth(self):
+        """DeepSeek returns 'Authentication Fails' wrapped by litellm in a
+        BadRequestError — the message, not the class, names the real cause."""
+
+        class BadRequestError(Exception):
+            pass
+
+        msg = user_safe_error(
+            BadRequestError('{"error":{"message":"Authentication Fails, api key invalid"}}'),
+            "deepseek/deepseek-chat",
+        )
+        assert "API key" in msg
+
+
+class TestTestConnection:
+
+    def test_success_returns_none(self):
+        mock = MagicMock()
+        with patch.dict(sys.modules, {"litellm": mock}):
+            assert check_connection("openai/gpt-4o-mini", "sk-x") is None
+        kwargs = mock.completion.call_args.kwargs
+        assert kwargs["model"] == "openai/gpt-4o-mini"
+        assert kwargs["api_key"] == "sk-x"
+
+    def test_empty_key_falls_back_to_env(self):
+        mock = MagicMock()
+        with patch.dict(sys.modules, {"litellm": mock}):
+            check_connection("ollama/llama3.1", None)
+        assert mock.completion.call_args.kwargs["api_key"] is None
+
+    def test_provider_error_returns_user_safe_message(self):
+        mock = MagicMock()
+        mock.completion.side_effect = RuntimeError("kaboom")
+        with patch.dict(sys.modules, {"litellm": mock}):
+            msg = check_connection("openai/gpt-4o-mini", "sk-x")
+        assert msg is not None
+        assert "kaboom" in msg
+
+    def test_litellm_missing_returns_install_hint(self):
+        with patch.dict(sys.modules, {"litellm": None}):
+            msg = check_connection("openai/gpt-4o-mini")
+        assert msg is not None
+        assert "litellm" in msg
+
+
+class TestAnswerEstateQuestionErrors:
+    """The chat is interactive: provider failures must raise the typed,
+    user-safe error (the route turns it into a 503 body), while 'not
+    configured' still degrades to None."""
+
+    def test_disabled_returns_none(self, monkeypatch):
+        monkeypatch.delenv(MODEL_ENV_VAR, raising=False)
+        assert answer_estate_question("q", 1, "1.00", "90", "line") is None
+
+    def test_provider_error_raises_llm_unavailable(self, monkeypatch):
+        monkeypatch.setenv(MODEL_ENV_VAR, "gpt-4o-mini")
+        mock = MagicMock()
+        mock.completion.side_effect = RuntimeError("kaboom")
+        with patch.dict(sys.modules, {"litellm": mock}):
+            with pytest.raises(LLMUnavailableError, match="kaboom"):
+                answer_estate_question("q", 1, "1.00", "90", "line")

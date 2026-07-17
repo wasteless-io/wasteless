@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from schemas import AwsSetupRequest
 from state import templates, _aws_status, check_aws_reachable
+from utils.env_files import apply_to_env, write_env_files
 from utils.logger import get_logger
 
 router = APIRouter()
@@ -27,11 +28,6 @@ logger = get_logger("setup")
 
 APP_DIR = Path(__file__).resolve().parent.parent  # ui/
 ROOT_DIR = APP_DIR.parent  # repo root
-
-# Both files, in this order: root .env feeds the collectors/detectors,
-# ui/.env feeds this process. Keeping them in sync here is the whole
-# point — the manual "mirror the root .env" convention lost users.
-ENV_FILES = [ROOT_DIR / ".env", APP_DIR / ".env"]
 
 ROLE_ARN_RE = re.compile(r"^arn:aws:iam::\d{12}:role/.+$")
 REGION_RE = re.compile(r"^[a-z]{2}(-[a-z]+)+-\d$")
@@ -119,23 +115,15 @@ def _test_connection(payload: AwsSetupRequest) -> dict:
     return result
 
 
+# Both files, in this order: root .env feeds the collectors/detectors,
+# ui/.env feeds this process. Kept as a module attribute (tests patch it);
+# the shared implementation lives in utils/env_files.py since the Settings
+# AI card saves the same way.
+ENV_FILES = [ROOT_DIR / ".env", APP_DIR / ".env"]
+
+
 def _write_env_files(values: dict) -> None:
-    """Set KEY=VALUE in every env file: replace the line when the key
-    exists, append otherwise. Empty values are left untouched (this page
-    only adds or updates the AWS connection, it never unsets keys)."""
-    for path in ENV_FILES:
-        lines = path.read_text().splitlines() if path.exists() else []
-        remaining = {k: v for k, v in values.items() if v}
-        out = []
-        for line in lines:
-            key = line.split("=", 1)[0] if "=" in line else None
-            if key in remaining:
-                out.append(f"{key}={remaining.pop(key)}")
-            else:
-                out.append(line)
-        out.extend(f"{k}={v}" for k, v in remaining.items())
-        path.write_text("\n".join(out) + "\n")
-        os.chmod(path, 0o600)
+    write_env_files(values, ENV_FILES)
 
 
 def _start_background_collection() -> bool:
@@ -165,9 +153,7 @@ def _apply_to_process(values: dict) -> None:
     """Make the new connection live without a restart: env vars for boto3's
     chain, reset of the backend client cache, refreshed status for the
     banner and the sync job."""
-    for key, value in values.items():
-        if value:
-            os.environ[key] = value
+    apply_to_env(values)
     from utils.aws_clients import reset_cache
 
     reset_cache()

@@ -32,6 +32,28 @@ TIMEOUT_SECONDS = 20
 MAX_INSIGHTS_PER_RUN = 25
 MAX_QUESTION_LEN = 500
 
+# Which env var stores the API key, per litellm provider prefix. Drives the
+# Settings save endpoint (where to persist the key) and the install prompt.
+# Ollama is local and needs no key; unknown prefixes map to None so the
+# caller can tell the user to set the key manually.
+KEY_ENV_VARS: Dict[str, Optional[str]] = {
+    "deepseek": "DEEPSEEK_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "ollama": None,
+}
+
+
+class LLMUnavailableError(Exception):
+    """Provider-level LLM failure carrying a user-safe message (no stack
+    trace, no key material) — raised by the interactive features (chat)
+    where the user needs to know WHY there is no answer; the batch
+    features (insights) keep degrading silently instead."""
+
+
 # Detection metadata (tag names/descriptions, snapshot descriptions...) comes
 # from AWS resources that anyone with tag-write access can set — it is
 # untrusted text, not instructions. Stripping newlines/control characters
@@ -87,6 +109,66 @@ def is_enabled() -> bool:
     except ImportError:
         logger.debug("litellm not installed — AI insights disabled")
         return False
+
+
+def key_env_var(model: str) -> Optional[str]:
+    """Env var holding the API key for a litellm model id ('provider/name'),
+    or None when the provider is keyless (ollama) or unknown to wasteless."""
+    provider = model.split("/", 1)[0].strip().lower() if "/" in model else ""
+    return KEY_ENV_VARS.get(provider)
+
+
+def user_safe_error(e: Exception, model: Optional[str] = None) -> str:
+    """One short, user-facing line for a failed LLM call.
+
+    Classified by exception class name (walking the MRO) so litellm never
+    has to be imported here — it is an optional dependency. The provider's
+    own message is appended, collapsed and capped: it names the actual
+    cause (wrong key, unknown model id) and contains no secrets.
+    """
+    target = model or os.getenv(MODEL_ENV_VAR) or "the configured model"
+    names = {c.__name__ for c in type(e).__mro__}
+    detail = " ".join(str(e).split())[:200]
+    if "AuthenticationError" in names or "authentication" in detail.lower():
+        # Second clause: some providers (DeepSeek) return their auth failure
+        # in a way litellm wraps as BadRequestError, not AuthenticationError.
+        reason = f"authentication failed for {target} — the API key is missing, invalid or revoked"
+    elif "PermissionDeniedError" in names:
+        reason = f"the API key is valid but not allowed to use {target}"
+    elif "RateLimitError" in names:
+        reason = "provider rate limit or quota exceeded — retry later or check your billing"
+    elif "Timeout" in names or "APITimeoutError" in names:
+        reason = f"the provider did not answer within {TIMEOUT_SECONDS}s"
+    elif "APIConnectionError" in names:
+        reason = f"cannot reach the provider for {target} — network or endpoint problem"
+    elif "NotFoundError" in names or "BadRequestError" in names:
+        reason = f"the provider rejected the request — check the model id ({target})"
+    else:
+        reason = f"the LLM call failed ({type(e).__name__})"
+    return f"{reason}. Provider says: {detail}" if detail else reason
+
+
+def check_connection(model: str, api_key: Optional[str] = None) -> Optional[str]:
+    """One tiny 'ping' completion against `model` (with `api_key` when
+    given, else the environment's key). Returns None on success or a
+    user-safe error message on failure. Never raises, persists nothing —
+    this is the dry test behind Settings and mirrors install.sh's check."""
+    try:
+        import litellm
+    except ImportError:
+        return "litellm is not installed in the UI environment — run install.sh again or pip install litellm"
+    try:
+        litellm.completion(
+            model=model,
+            api_key=api_key or None,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=5,
+            timeout=TIMEOUT_SECONDS,
+        )
+        return None
+    except Exception as e:
+        logger.info(f"LLM connection test failed for {model}: {e}")
+        return user_safe_error(e, model)
 
 
 def record_usage(conn, feature: str, response: Any) -> None:
@@ -240,6 +322,10 @@ def answer_estate_question(
     provided, is the per-service realistic figure the UI shows next to the
     raw total ("realistic · X € (capped to real spend)") — passed so the
     model can explain that number instead of denying it exists.
+
+    Returns None when AI is not configured (or the question is empty);
+    raises LLMUnavailableError with a user-safe message when the provider
+    call itself fails — the chat UI must tell the user why.
     """
     if not is_enabled():
         return None
@@ -302,8 +388,11 @@ def answer_estate_question(
         answer = response.choices[0].message.content
         return answer.strip() if answer else None
     except Exception as e:
-        logger.warning(f"AI estate Q&A failed (continuing without): {e}")
-        return None
+        # Interactive feature: unlike the batch insights, the user is
+        # waiting for this answer — surface a typed, user-safe reason
+        # (bad key, rate limit, timeout) instead of a silent None.
+        logger.warning(f"AI estate Q&A failed: {e}")
+        raise LLMUnavailableError(user_safe_error(e)) from e
 
 
 def enrich_recommendations(conn, limit: int = MAX_INSIGHTS_PER_RUN) -> int:

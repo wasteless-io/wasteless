@@ -1,13 +1,15 @@
-"""Settings page: config editing, whitelist, policy-as-code export/import."""
+"""Settings page: config editing, whitelist, policy-as-code export/import,
+AI insights (LLM) connection."""
 
+import os
 from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from state import get_db, templates
-from schemas import ConfigUpdate, PolicyImport
+from schemas import ConfigUpdate, LlmSetupRequest, PolicyImport
 
 router = APIRouter()
 
@@ -42,10 +44,21 @@ def settings(request: Request, conn=Depends(get_db)):
         {"type": t, "mode": m} for t, m in EXECUTION_MODES.items() if m in ("boto3", "remediator")
     ]
 
+    from core.llm import MODEL_ENV_VAR, key_env_var
+
+    llm_model = os.getenv(MODEL_ENV_VAR, "")
+    llm_key_var = key_env_var(llm_model) if llm_model else None
+
     return templates.TemplateResponse(
         request,
         "settings.html",
-        context={"config": config, "stats": stats, "automatable_actions": automatable_actions},
+        context={
+            "config": config,
+            "stats": stats,
+            "automatable_actions": automatable_actions,
+            "llm_model": llm_model,
+            "llm_key_set": bool(llm_key_var and os.getenv(llm_key_var)),
+        },
     )
 
 
@@ -83,6 +96,51 @@ def api_update_config(update: ConfigUpdate):
         return {"success": success}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/api/llm/test")
+def api_llm_test(payload: LlmSetupRequest):
+    """Dry LLM connection test — one 'ping' completion, never writes
+    anything. Same contract as /api/aws-setup/test: failures surface as a
+    400 with a user-safe message, never a 500."""
+    from core.llm import check_connection
+
+    error = check_connection(payload.model.strip(), payload.api_key or None)
+    if error:
+        return JSONResponse({"success": False, "error": error}, status_code=400)
+    return {"success": True, "model": payload.model.strip()}
+
+
+@router.post("/api/llm/save")
+def api_llm_save(payload: LlmSetupRequest):
+    """Test, then persist the AI insights connection to both env files and
+    apply it to this process — mirrors /api/aws-setup, so a bad key can
+    never be saved silently."""
+    from core.llm import MODEL_ENV_VAR, check_connection, key_env_var
+    from utils.env_files import apply_to_env, write_env_files
+
+    model = payload.model.strip()
+    key_var = key_env_var(model)
+    if payload.api_key and not key_var:
+        return JSONResponse(
+            {
+                "success": False,
+                "error": "wasteless doesn't know which env var stores the key for this "
+                "provider — add it to .env and ui/.env manually, then save the model alone",
+            },
+            status_code=400,
+        )
+
+    error = check_connection(model, payload.api_key or None)
+    if error:
+        return JSONResponse({"success": False, "error": error}, status_code=400)
+
+    values = {MODEL_ENV_VAR: model}
+    if payload.api_key and key_var:
+        values[key_var] = payload.api_key
+    write_env_files(values)
+    apply_to_env(values)
+    return {"success": True, "model": model, "key_saved": bool(payload.api_key and key_var)}
 
 
 @router.get("/api/policies/export")
