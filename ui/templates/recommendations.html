@@ -155,7 +155,7 @@
                     {% for m in approved_manual_recs %}
                     <div class="todo-row" id="todoRow-{{ m.id }}">
                         <div style="min-width: 0;">
-                            <a class="todo-res-id" data-res-id="{{ m.resource_id }}" data-region="{{ m.region }}"
+                            <a class="todo-res-id" data-res-id="{{ m.resource_id }}" data-region="{{ m.region }}" data-rec-type="{{ m.recommendation_type }}"
                                target="_blank" rel="noopener" data-tip-card="Open in the AWS Console">{{ m.resource_id }}</a>
                             <div class="todo-row-meta">{{ m.recommendation_type.replace('_', ' ') }} · {{ "%.2f"|format(m.estimated_monthly_savings_eur or 0) }} €/mo</div>
                             <div class="todo-row-added">added {{ m.applied_at.strftime('%Y-%m-%d %H:%M') if m.applied_at else '-' }}</div>
@@ -1839,18 +1839,35 @@
     // Deep-link each resource id to its AWS console page (same fragments as
     // the resource-details modal). Region may carry an AZ suffix ('eu-west-1a')
     // — strip a single trailing letter so the console's region param is valid.
-    function awsConsoleUrl(resourceId, region) {
+    function awsConsoleUrl(resourceId, region, recType) {
         region = (region || 'eu-west-1').replace(/([0-9])[a-z]$/, '$1');
+        const r = encodeURIComponent(region);
+        // RDS identifiers are bare names with no prefix: dispatch on the
+        // recommendation type instead of the id.
+        if (recType && recType.indexOf('rds') !== -1) {
+            return 'https://console.aws.amazon.com/rds/home?region=' + r
+                + (recType === 'delete_rds_snapshot'
+                ? '#db-snapshot:id=' + resourceId
+                : '#database:id=' + resourceId + ';is-cluster=false');
+        }
+        if (resourceId.startsWith('nat-')) {
+            return 'https://console.aws.amazon.com/vpcconsole/home?region=' + r + '#NatGatewayDetails:natGatewayId=' + resourceId;
+        }
+        if (resourceId.startsWith('vpc-')) {
+            return 'https://console.aws.amazon.com/vpcconsole/home?region=' + r + '#VpcDetails:VpcId=' + resourceId;
+        }
         const frag = resourceId.startsWith('i-') ? '#InstanceDetails:instanceId=' + resourceId
             : resourceId.startsWith('vol-') ? '#VolumeDetails:volumeId=' + resourceId
             : resourceId.startsWith('eipalloc-') ? '#ElasticIpDetails:AllocationId=' + resourceId
             : resourceId.startsWith('snap-') ? '#SnapshotDetails:snapshotId=' + resourceId
+            : resourceId.startsWith('ami-') ? '#ImageDetails:imageId=' + resourceId
+            : resourceId.startsWith('arn:aws:elasticloadbalancing') ? '#LoadBalancer:loadBalancerArn=' + resourceId
             : '';
-        return 'https://console.aws.amazon.com/ec2/v2/home?region=' + encodeURIComponent(region) + frag;
+        return 'https://console.aws.amazon.com/ec2/v2/home?region=' + r + frag;
     }
     // Set each id's href up-front so it works with middle-click / new-tab too.
     document.querySelectorAll('#todoPanel .todo-res-id').forEach((a) => {
-        a.href = awsConsoleUrl(a.dataset.resId, a.dataset.region);
+        a.href = awsConsoleUrl(a.dataset.resId, a.dataset.region, a.dataset.recType);
     });
 
     function toggleTodoPanel(event) {
