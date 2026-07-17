@@ -1,4 +1,5 @@
-"""Live cloud resource inventory (EC2, EBS, EIP, VPC, snapshots, S3)."""
+"""Live cloud resource inventory (EC2, EBS, EIP, VPC, snapshots, NAT
+gateways, load balancers, AMIs, RDS, S3)."""
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -208,6 +209,97 @@ def cloud_resources(
             logger.error(f"RDS snapshots error {region}: {e}")
             return []
 
+    def _fetch_nat_gateways(region):
+        try:
+            ec2 = get_client("ec2", region=region)
+            result = []
+            for nat in ec2.describe_nat_gateways().get("NatGateways", []):
+                result.append(
+                    {
+                        "nat_id": nat["NatGatewayId"],
+                        "name": _tag_name(nat.get("Tags")),
+                        "state": nat.get("State", "-"),
+                        "vpc_id": nat.get("VpcId", "-"),
+                        "subnet_id": nat.get("SubnetId", "-"),
+                        "type": nat.get("ConnectivityType", "public"),
+                        "created": nat.get("CreateTime"),
+                        "region": region,
+                    }
+                )
+            return result
+        except Exception as e:
+            logger.error(f"NAT gateways error {region}: {e}")
+            return []
+
+    def _fetch_load_balancers(region):
+        result = []
+        try:
+            elbv2 = get_client("elbv2", region=region)
+            paginator = elbv2.get_paginator("describe_load_balancers")
+            for page in paginator.paginate():
+                for lb in page.get("LoadBalancers", []):
+                    result.append(
+                        {
+                            "name": lb["LoadBalancerName"],
+                            "arn": lb.get("LoadBalancerArn", "-"),
+                            "lb_type": lb.get("Type", "application"),
+                            "scheme": lb.get("Scheme", "-"),
+                            "state": (lb.get("State") or {}).get("Code", "-"),
+                            "vpc_id": lb.get("VpcId", "-"),
+                            "created": lb.get("CreatedTime"),
+                            "region": region,
+                        }
+                    )
+        except Exception as e:
+            logger.error(f"ELBv2 error {region}: {e}")
+        try:
+            elb = get_client("elb", region=region)
+            for lb in elb.describe_load_balancers().get("LoadBalancerDescriptions", []):
+                result.append(
+                    {
+                        "name": lb["LoadBalancerName"],
+                        "arn": "-",
+                        "lb_type": "classic",
+                        "scheme": lb.get("Scheme", "-"),
+                        "state": "-",
+                        "vpc_id": lb.get("VPCId", "-"),
+                        "created": lb.get("CreatedTime"),
+                        "region": region,
+                    }
+                )
+        except Exception as e:
+            logger.error(f"Classic ELB error {region}: {e}")
+        return result
+
+    def _fetch_amis(region):
+        try:
+            ec2 = get_client("ec2", region=region)
+            result = []
+            # Self-owned only: public AMIs would flood the inventory
+            paginator = ec2.get_paginator("describe_images")
+            for page in paginator.paginate(Owners=["self"]):
+                for image in page.get("Images", []):
+                    snapshot_ids = [
+                        m["Ebs"]["SnapshotId"]
+                        for m in image.get("BlockDeviceMappings", [])
+                        if "Ebs" in m and m["Ebs"].get("SnapshotId")
+                    ]
+                    result.append(
+                        {
+                            "image_id": image["ImageId"],
+                            "name": image.get("Name") or _tag_name(image.get("Tags")),
+                            "state": image.get("State", "-"),
+                            "created": image.get("CreationDate", "-"),
+                            "snapshot_count": len(snapshot_ids),
+                            "public": image.get("Public", False),
+                            "region": region,
+                        }
+                    )
+            return result
+        except Exception as e:
+            logger.error(f"AMIs error {region}: {e}")
+            return []
+
     def _fetch_s3():
         try:
             s3 = get_client("s3")
@@ -234,8 +326,8 @@ def cloud_resources(
             logger.error(f"S3 error: {e}")
             return []
 
-    # Fetch all resource types in parallel (snapshots per region + S3 global)
-    with ThreadPoolExecutor(max_workers=len(CLOUD_REGIONS) * 5 + 1) as executor:
+    # Fetch all resource types in parallel (per region + S3 global)
+    with ThreadPoolExecutor(max_workers=len(CLOUD_REGIONS) * 8 + 1) as executor:
         ec2_futs = [executor.submit(_fetch_ec2, r) for r in CLOUD_REGIONS]
         vol_futs = [executor.submit(_fetch_volumes, r) for r in CLOUD_REGIONS]
         ip_futs = [executor.submit(_fetch_ips, r) for r in CLOUD_REGIONS]
@@ -243,6 +335,9 @@ def cloud_resources(
         snap_futs = [executor.submit(_fetch_snapshots, r) for r in CLOUD_REGIONS]
         rds_futs = [executor.submit(_fetch_rds, r) for r in CLOUD_REGIONS]
         rds_snap_futs = [executor.submit(_fetch_rds_snapshots, r) for r in CLOUD_REGIONS]
+        nat_futs = [executor.submit(_fetch_nat_gateways, r) for r in CLOUD_REGIONS]
+        lb_futs = [executor.submit(_fetch_load_balancers, r) for r in CLOUD_REGIONS]
+        ami_futs = [executor.submit(_fetch_amis, r) for r in CLOUD_REGIONS]
         s3_fut = executor.submit(_fetch_s3)
 
     instances = [i for f in ec2_futs for i in f.result()]
@@ -252,6 +347,9 @@ def cloud_resources(
     snapshots = [s for f in snap_futs for s in f.result()]
     databases = [d for f in rds_futs for d in f.result()]
     rds_snapshots = [s for f in rds_snap_futs for s in f.result()]
+    nat_gateways = [n for f in nat_futs for n in f.result()]
+    load_balancers = [lb for f in lb_futs for lb in f.result()]
+    amis = [a for f in ami_futs for a in f.result()]
     buckets = s3_fut.result()
 
     # Apply region filter (S3 not filtered — global service)
@@ -263,6 +361,9 @@ def cloud_resources(
         snapshots = [s for s in snapshots if s["region"] == region_filter]
         databases = [d for d in databases if d["region"] == region_filter]
         rds_snapshots = [s for s in rds_snapshots if s["region"] == region_filter]
+        nat_gateways = [n for n in nat_gateways if n["region"] == region_filter]
+        load_balancers = [lb for lb in load_balancers if lb["region"] == region_filter]
+        amis = [a for a in amis if a["region"] == region_filter]
 
     if state_filter != "all":
         instances = [i for i in instances if i["state"] == state_filter]
@@ -274,6 +375,9 @@ def cloud_resources(
     snapshots.sort(key=lambda x: x["start_time"] or "", reverse=True)
     databases.sort(key=lambda x: (x["status"] != "available", x["region"], x["db_id"]))
     rds_snapshots.sort(key=lambda x: x["created"] or "", reverse=True)
+    nat_gateways.sort(key=lambda x: (x["state"] != "available", x["region"], x["nat_id"]))
+    load_balancers.sort(key=lambda x: (x["region"], x["name"]))
+    amis.sort(key=lambda x: x["created"] or "", reverse=True)
     buckets.sort(key=lambda x: x["name"])
 
     return templates.TemplateResponse(
@@ -300,6 +404,12 @@ def cloud_resources(
             "vpc_count": len(vpcs),
             "snap_count": len(snapshots),
             "rds_count": len(databases) + len(rds_snapshots),
+            "nat_gateways": nat_gateways,
+            "load_balancers": load_balancers,
+            "amis": amis,
+            "nat_count": len(nat_gateways),
+            "lb_count": len(load_balancers),
+            "ami_count": len(amis),
             "s3_count": len(buckets),
         },
     )
