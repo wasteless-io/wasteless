@@ -278,22 +278,13 @@ class TestPostSaveCollection(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         collection.assert_not_called()
 
-    def test_start_background_collection_launches_wasteless_collect(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            script = Path(tmp) / "wasteless.sh"
-            script.write_text("#!/bin/bash\n")
-            with (
-                patch.object(setup_module, "ROOT_DIR", Path(tmp)),
-                patch.object(setup_module.subprocess, "Popen") as popen,
-            ):
-                self.assertTrue(setup_module._start_background_collection())
-            popen.assert_called_once()
-            self.assertEqual(popen.call_args.args[0], [str(script), "collect"])
-
-    def test_start_background_collection_without_script(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(setup_module, "ROOT_DIR", Path(tmp)):
-                self.assertFalse(setup_module._start_background_collection())
+    def test_start_background_collection_delegates_to_shared_util(self):
+        # Launch behavior itself is covered in test_collect_now.py, the
+        # implementation moved to utils/collect.py (shared with the
+        # Collect now button).
+        with patch.object(setup_module, "start_background_collection", return_value=True) as sbc:
+            self.assertTrue(setup_module._start_background_collection())
+        sbc.assert_called_once_with(setup_module.ROOT_DIR)
 
 
 class TestWriteEnvFiles(unittest.TestCase):
