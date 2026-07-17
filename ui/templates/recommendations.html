@@ -1175,6 +1175,22 @@
             return;
         }
 
+        // Busy state: the backend re-checks each resource live before acting,
+        // so a batch takes several seconds. Without feedback the silence
+        // reads as a bug; disable both button clusters (no double submit)
+        // and spin the button that was clicked until the response lands.
+        const busyIds = ['approveBtn', 'rejectBtn', 'dismissBtn',
+                         'approveManualBtn', 'rejectManualBtn', 'dismissManualBtn'];
+        const activeBtn = document.getElementById(
+            action + (AUTOMATED_TABS.includes(currentTab) ? '' : 'Manual') + 'Btn');
+        const origHtml = activeBtn ? activeBtn.innerHTML : null;
+        busyIds.forEach(id => { const b = document.getElementById(id); if (b) b.disabled = true; });
+        if (activeBtn) {
+            activeBtn.innerHTML = '<span style="display: inline-block; animation: spin 1s linear infinite;">&#8635;</span> '
+                + { approve: isManualApprove ? 'Marking…' : 'Applying…',
+                    reject: 'Skipping…', dismiss: 'Ignoring…' }[action];
+        }
+
         try {
             const response = await api('/api/actions', {
                 method: 'POST',
@@ -1274,6 +1290,9 @@
             }
         } catch (error) {
             showToast('Error: ' + error.message, 'error');
+        } finally {
+            busyIds.forEach(id => { const b = document.getElementById(id); if (b) b.disabled = false; });
+            if (activeBtn && origHtml !== null) activeBtn.innerHTML = origHtml;
         }
     }
 
@@ -1597,6 +1616,19 @@
         });
         if (!proceed) return;
 
+        // Same busy feedback as the tab action bar: the live re-check plus
+        // the AWS call take a few seconds, the modal must show it's working.
+        const modalBtnIds = ['resModalApply', 'resModalSkip', 'resModalIgnore'];
+        const modalActive = document.getElementById(
+            action === 'approve' ? 'resModalApply' : action === 'reject' ? 'resModalSkip' : 'resModalIgnore');
+        const modalOrigHtml = modalActive ? modalActive.innerHTML : null;
+        modalBtnIds.forEach(id => { const b = document.getElementById(id); if (b) b.disabled = true; });
+        if (modalActive) {
+            modalActive.innerHTML = '<span style="display: inline-block; animation: spin 1s linear infinite;">&#8635;</span> '
+                + (action === 'approve' ? (isManualApprove ? 'Marking…' : 'Applying…')
+                    : action === 'reject' ? 'Skipping…' : 'Ignoring…');
+        }
+
         try {
             const response = await api('/api/actions', {
                 method: 'POST',
@@ -1621,6 +1653,9 @@
             }
         } catch (error) {
             showToast('Error: ' + error.message, 'error');
+        } finally {
+            modalBtnIds.forEach(id => { const b = document.getElementById(id); if (b) b.disabled = false; });
+            if (modalActive && modalOrigHtml !== null) modalActive.innerHTML = modalOrigHtml;
         }
     }
 
