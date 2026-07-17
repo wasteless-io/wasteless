@@ -9,7 +9,7 @@
 #   -h, --help     Affiche cette aide
 #
 # Ce script configure automatiquement l'environnement WasteLess:
-# - Verifie les prerequis (Python, Docker, AWS CLI)
+# - Verifie les prerequis (Python, Docker; AWS CLI reste optionnel)
 # - Cree l'environnement virtuel Python
 # - Installe les dependances
 # - Configure la base de donnees
@@ -620,16 +620,16 @@ if [ "$IS_WSL" -eq 1 ]; then
     esac
 fi
 
-# Python 3.10+
+# Python 3.11+
 if check_command python3; then
     PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
     PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
     PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
-    if [ "$PYTHON_MAJOR" -ge 3 ] && [ "$PYTHON_MINOR" -ge 10 ]; then
+    if [ "$PYTHON_MAJOR" -gt 3 ] || { [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 11 ]; }; then
         print_step "Python $PYTHON_VERSION detecte"
     else
-        print_error "Python 3.10+ requis (trouve: $PYTHON_VERSION)"
+        print_error "Python 3.11+ requis (trouve: $PYTHON_VERSION)"
         MISSING_DEPS=1
     fi
 else

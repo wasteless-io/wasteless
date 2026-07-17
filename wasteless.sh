@@ -7,7 +7,7 @@
 #   wasteless stop        Stop the web UI
 #   wasteless logs        View server logs (tail -f)
 #   wasteless status      Check if server is running
-#   wasteless collect     Collect AWS metrics + detect idle instances
+#   wasteless collect     Run the complete collection and detection pipeline
 #
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -577,7 +577,7 @@ case "$CMD" in
         echo "  stop         Stop the web UI"
         echo "  logs         View server logs (tail -f)"
         echo "  status       Check if server + auto-collection are running"
-        echo "  collect      Collect AWS metrics and detect idle instances (once)"
+        echo "  collect      Run the complete collection and detection pipeline once"
         echo "  schedule     Install OS-level auto-collection every 5 min (survives reboot)"
         echo "  unschedule   Remove the OS-level auto-collection"
         echo ""
