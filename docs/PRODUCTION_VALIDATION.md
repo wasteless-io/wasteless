@@ -97,6 +97,13 @@ aws ec2 describe-instances --instance-ids <target-instance-id> \
 
 The whole point of the exercise — these rows are the proof:
 
+After at least seven days of post-action Cost Explorer data, run the standalone
+savings tracker before querying `savings_realized`:
+
+```bash
+./venv/bin/python src/trackers/savings_tracker.py
+```
+
 ```sql
 -- the action itself
 SELECT id, resource_id, action_type, status, created_at

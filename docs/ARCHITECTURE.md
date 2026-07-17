@@ -9,7 +9,7 @@
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                       AWS Account                        │
-│   CloudWatch API · Cost Explorer · EC2 / EBS / ELB APIs  │
+│   CloudWatch · Cost Explorer · EC2 / EBS / ELB / RDS APIs│
 └──────────────────────┬───────────────────────────────────┘
                        │ boto3 / Steampipe
 ┌──────────────────────▼───────────────────────────────────┐
@@ -17,9 +17,9 @@
 │                                                          │
 │  collectors/   CloudWatch metrics + Steampipe inventory  │
 │  aws_collector Cost Explorer costs                       │
-│  detectors/    8 waste detection rules                   │
-│  remediators/  Stop / release / delete (safeguarded)     │
-│  trackers/     Verified savings via Cost Explorer        │
+│  detectors/    13 waste detection rules                  │
+│  remediators/  Controlled write paths                    │
+│  trackers/     Eligible EC2 stop verification            │
 │  core/         database · config · safeguards · llm      │
 └──────────────────────┬───────────────────────────────────┘
                        │ psycopg2
@@ -53,9 +53,8 @@ Two collection paths feed PostgreSQL:
    instances, fetches per-instance CPU/network metrics, writes daily rows to
    `ec2_metrics`.
 2. **Steampipe** (`src/collectors/steampipe.py` + `sql/steampipe/*.sql`) —
-   runs inventory SQL against the AWS plugin (unused NAT gateways, gp2
-   volumes eligible for gp3 migration, unused ELBs, unused VPCs). Each
-   detector owns one SQL file.
+   runs inventory SQL against the AWS plugin for ELB, NAT, VPC, gp2, AMI and
+   RDS detection. Each detector owns one SQL file.
 
 `src/aws_collector.py` additionally pulls Cost Explorer daily costs into
 `cloud_costs_raw`.
@@ -69,13 +68,14 @@ Detectors live in `src/detectors/` and follow one of two patterns:
 
 | Pattern | Base | Example |
 |---------|------|---------|
-| boto3-based | direct `describe_*` calls | `ec2_idle.py` (avg CPU < 5% over 7 days), `ebs_orphan.py`, `eip_orphan.py`, `snapshot_orphan.py` |
-| Steampipe-based | `steampipe_base.py` + SQL file | `vpc_unused.py`, `nat_gateway_unused.py`, `elb_unused.py`, `ebs_gp2_migration.py` |
+| boto3-based | direct `describe_*` calls | `ec2_idle.py`, `ec2_stopped.py`, `ebs_orphan.py`, `eip_orphan.py`, `snapshot_orphan.py` |
+| Steampipe-based | `steampipe_base.py` + SQL file | `vpc_unused.py`, `ami_orphan.py`, `rds_idle.py`, `rds_stopped.py`, `rds_snapshot_orphan.py` |
 
 Current detectors: `ec2_idle`, `ec2_stopped`, `ebs_orphan`, `eip_orphan`,
 `snapshot_orphan` (boto3); `ebs_gp2_migration`, `elb_unused`,
-`nat_gateway_unused`, `vpc_unused` (Steampipe). Each resource type has
-exactly one canonical detector — no boto3/Steampipe duplicates.
+`nat_gateway_unused`, `vpc_unused`, `ami_orphan`, `rds_idle`, `rds_stopped`
+and `rds_snapshot_orphan` (Steampipe). Each rule has one canonical
+implementation — no boto3/Steampipe duplicates.
 
 Each detection produces:
 - a row in `waste_detected` (confidence score 0–1, estimated monthly waste in
@@ -84,20 +84,23 @@ Each detection produces:
 
 ### Remediation
 
-`src/remediators/` executes approved actions (stop instance, release EIP,
-delete volume/snapshot…). Every action:
+The action registry routes each approved recommendation to one of three modes:
+direct EC2 execution through boto3, a backend remediator, or a manual task that
+never writes to AWS. Eligible recommendations can instead open a Terraform PR
+when GitOps routing is configured.
 
-1. passes through the **7 safeguard checks** (see below),
-2. takes a rollback snapshot when applicable (`rollback_snapshots`),
-3. is written to the audit trail (`actions_log`).
-
-All actions default to **dry-run**; auto-remediation is opt-in per action type
-in `config/remediation.yaml`.
+Dry-run is enabled by default. The UI applies server-side dry-run, per-action
+switches and an optional grace period. Backend remediators additionally
+re-fetch live state and enforce the controls supported for that resource. All
+decisions are recorded; pre-action state is stored when applicable, but not
+every AWS operation is reversible. See [REMEDIATION.md](REMEDIATION.md).
 
 ### Verification
 
-`src/trackers/savings_tracker.py` compares actual Cost Explorer spend after an
-action and records verified savings in `savings_realized`.
+`src/trackers/savings_tracker.py` compares Cost Explorer spend for successful
+EC2 stop actions and records verified savings in `savings_realized` after at
+least seven days. It is currently a standalone component rather than a step in
+`wasteless collect`; run it explicitly or schedule it separately.
 
 ### AI insights
 
@@ -107,21 +110,23 @@ configurable; the feature degrades gracefully when no API key is set.
 
 ---
 
-## Safeguards
+## Remediation controls
 
-`src/core/safeguards.py` runs 7 sequential checks before any AWS action.
-**Any failure aborts the action and logs the reason:**
+Controls are layered rather than described as one universal checklist:
 
-1. Auto-remediation enabled in config
-2. Instance not whitelisted (by ID or tag)
-3. Instance age ≥ 30 days
-4. Detection confidence ≥ 0.80
-5. Idle duration ≥ 14 consecutive days
-6. Current time within the allowed schedule window
-7. Instances stopped this run < max limit
+1. detection uses a read-only IAM role;
+2. writes require a separate remediation role;
+3. dry-run is enabled by default;
+4. automated actions can be disabled individually;
+5. a grace period can delay and cancel real execution;
+6. backend remediators add live-state, whitelist, confidence, schedule and
+   global automation checks;
+7. EC2 safeguard flows additionally enforce age, idle-duration and per-run
+   limits.
 
-Thresholds live in `config/remediation.yaml`
-(`RemediationConfig.from_yaml()` in `src/core/config.py`).
+Thresholds live in `config/remediation.yaml`. The exact mode and recovery
+characteristics of every action are documented in
+[REMEDIATION.md](REMEDIATION.md).
 
 ---
 
@@ -137,7 +142,7 @@ Key tables (`sql/init.sql` + `sql/migrations/`):
 | `recommendations` | Actions linked to waste (status: pending / applied / rejected / obsolete) |
 | `actions_log` | Audit trail of every executed action |
 | `rollback_snapshots` | Pre-action state for rollback |
-| `savings_realized` | Verified actual savings (Cost Explorer) |
+| `savings_realized` | Cost Explorer verification for eligible EC2 stop actions |
 
 The `active_waste` **view** is the single source of truth for waste aggregates
 shown in the UI (it excludes obsolete/rejected items).
@@ -149,14 +154,14 @@ Relations: `waste_detected 1—n recommendations 1—n actions_log / savings_rea
 ## Web UI
 
 FastAPI app (`ui/main.py`) with Jinja2 templates, running on port 8888 in its
-**own virtualenv** (`ui/venv/`). It imports the backend remediator by injecting
-the repo root into `sys.path` (`ui/utils/remediator.py`).
+**own virtualenv** (`ui/venv/`). The backend package is installed in editable
+mode in that environment so the UI can import the remediators directly.
 
 - **Pages**: Dashboard, Recommendations, History, Settings, Cloud Resources,
   plus a public landing page.
-- **Background sync**: APScheduler checks live EC2 state every 5 minutes and
-  reconciles recommendation statuses (instances stopped/terminated outside
-  Wasteless are marked obsolete).
+- **Background jobs**: APScheduler reconciles live resource state, executes
+  expired grace-period actions, tracks Terraform PRs and refreshes Cost
+  Explorer data.
 - **API routes** under `/api/`: metrics, approve/reject actions, config
   updates, whitelist, manual AWS sync.
 
@@ -181,13 +186,15 @@ are recorded as lightweight ADRs in [`adr/`](adr/).
 
 ## Security
 
-- **IAM**: read-only policy for detection; remediation actions require
-  explicitly added write permissions (see [AWS_SETUP.md](AWS_SETUP.md)).
+- **IAM**: the recommended role-based boto3 path separates read-only detection
+  from write permissions; Steampipe has its own connection and legacy mode
+  inherits the default credential chain (see [AWS_SETUP.md](AWS_SETUP.md)).
 - **Secrets**: `.env` files (gitignored), boto3 credential chain supported
   (IAM roles work).
-- **Blast radius**: safeguards + dry-run default + per-action-type automation
-  toggles + whitelist.
-- **Audit**: every action logged with rollback snapshot.
+- **Blast radius**: dry-run default, per-action automation toggles, grace
+  period, whitelist and resource-specific backend controls.
+- **Audit**: decisions and execution attempts are logged; pre-action state is
+  retained when the execution path supports it.
 - **Network**: PostgreSQL bound to localhost; the UI is meant to sit behind a
   reverse proxy with TLS when exposed (see [DEPLOYMENT.md](DEPLOYMENT.md)).
 
@@ -207,17 +214,10 @@ are recorded as lightweight ADRs in [`adr/`](adr/).
 
 ---
 
-## Roadmap
+## Current scope
 
-Done:
-- EC2 idle/stopped detection and remediation
-- EBS orphan + gp2 migration, EIP orphan, ELB unused, NAT gateway unused,
-  snapshot orphan detectors (Steampipe layer)
-- FastAPI dashboard, safeguards, dry-run, savings verification
-- AI insights per recommendation
-
-Planned:
-- RDS / S3 detection
-- Multi-account AWS support
-- Slack / Teams notifications
-- Azure and GCP support
+The current pipeline covers EC2, EBS, EIP, ELB, NAT gateway, VPC, AMI and RDS
+recommendations. One installation manages one AWS account. S3, EKS, native
+multi-account operation, Azure and GCP are outside the current scope. Track
+future work through [GitHub issues](https://github.com/wasteless-io/wasteless/issues)
+instead of treating this document as a release roadmap.

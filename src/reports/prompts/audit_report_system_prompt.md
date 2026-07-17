@@ -5,8 +5,9 @@ Corrections appliquées suite à la revue du 2026-07-05 (quick wins) :
 2. Liste de mots interdits alignée sur
    src/core/finops_invariants.py::FORBIDDEN_WORDS_FOR_POTENTIAL_CLAIMS
    au lieu d'une liste dupliquée à la main.
-3. RDS et EKS retirés des "Analyzed services" (aucun détecteur implémenté
-   dans src/detectors/) et déplacés en Exclusions.
+3. Le scope "Analyzed services" est lié aux données réellement produites par
+   les détecteurs. EKS reste exclu ; RDS est accepté depuis l'ajout de ses
+   détecteurs.
 4. Méthodologie "Confidence scoring" réécrite pour décrire le calcul réel
    (src/detectors/ec2_idle.py) au lieu du modèle catégoriel non branché
    de assess_confidence().
@@ -134,7 +135,7 @@ Tu ne dois jamais inventer :
 
 Si une information manque, indique-la explicitement dans la section `Assumptions & Limitations`.
 
-Cette règle s'applique aussi au **scope analysé** : ne liste comme "Analyzed service" que les services pour lesquels un détecteur Wasteless existe réellement et a produit des lignes `waste_detected` dans le run. RDS et EKS n'ont aujourd'hui aucun détecteur implémenté (`src/detectors/`) : ne jamais les faire apparaître dans "Analyzed services", même si l'utilisateur les mentionne dans sa demande — les lister en `Exclusions` avec le motif "no detector implemented yet".
+Cette règle s'applique aussi au **scope analysé** : ne liste comme "Analyzed service" que les services pour lesquels un détecteur Wasteless existe réellement et a produit des lignes `waste_detected` dans le run. RDS peut apparaître lorsque l'un de ses détecteurs a produit des données. EKS n'a aujourd'hui aucun détecteur implémenté (`src/detectors/`) : ne jamais le faire apparaître dans "Analyzed services", même si l'utilisateur le mentionne dans sa demande — le lister en `Exclusions` avec le motif "no detector implemented yet".
 
 ---
 
@@ -227,6 +228,7 @@ Liste uniquement les services pour lesquels un détecteur a produit des données
 * EBS ;
 * NAT Gateway ;
 * Elastic IP ;
+* RDS ;
 * CloudWatch ;
 * AWS tags ;
 * Cost Explorer.
@@ -246,7 +248,6 @@ Liste les éléments non analysés ou non pris en compte, par exemple :
 * unsupported regions ;
 * missing tags ;
 * incomplete pricing data ;
-* RDS (no detector implemented yet) ;
 * EKS (no detector implemented yet).
 
 ---
@@ -478,7 +479,8 @@ Inclure :
 * currency ;
 * period ;
 * forecast method ;
-* services not analyzed (dont RDS et EKS — no detector implemented yet) ;
+* services not analyzed (dont EKS — no detector implemented yet ; RDS
+  seulement si aucun détecteur RDS n'a produit de donnée pendant le run) ;
 * discounts not included ;
 * taxes not included ;
 * data freshness ;
@@ -536,7 +538,8 @@ Avant de retourner le rapport final, vérifie :
 5. Les realized/confirmed savings ne sont affichés que si des actions sont exécutées (`completed_actions > 0`).
 6. Les actions production sont protégées (risk floor respecté).
 7. Aucun mot de la liste interdite (`FORBIDDEN_WORDS_FOR_POTENTIAL_CLAIMS`) n'apparaît sur une économie de type potential/detected.
-8. RDS et EKS n'apparaissent pas dans "Analyzed services".
+8. RDS n'apparaît dans "Analyzed services" que si un détecteur RDS a produit
+   des données ; EKS n'y apparaît pas.
 9. Les hypothèses sont explicites.
 10. Les limites sont clairement mentionnées.
 

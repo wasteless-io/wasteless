@@ -24,7 +24,7 @@ just the EC2 idle detector.
 
 ### The collection pipeline (`wasteless collect`, every 5 minutes)
 
-One run executes 10 steps against the root `venv`:
+One run executes 14 steps against the root `venv`:
 
 1. CloudWatch metrics collection (`src/collectors/aws_cloudwatch.py`)
 2. Idle EC2 detection
@@ -36,8 +36,12 @@ One run executes 10 steps against the root `venv`:
 8. Unused NAT gateway detection (Steampipe)
 9. Unused VPC detection (Steampipe)
 10. gp2→gp3 migration candidates (Steampipe)
+11. Orphaned AMI detection (Steampipe)
+12. Stopped RDS instance detection (Steampipe)
+13. Idle RDS instance detection (Steampipe)
+14. Old manual RDS snapshot detection (Steampipe)
 
-Steps 7–10 need the `steampipe` CLI (`brew install turbot/tap/steampipe &&
+Steps 7–14 need the `steampipe` CLI (`brew install turbot/tap/steampipe &&
 steampipe plugin install aws`). Without it they are skipped with a single
 warning, and the run is recorded as **partial** in the `collection_runs`
 table so the UI can flag under-reporting instead of hiding it.
@@ -47,14 +51,15 @@ Concurrent runs are prevented by an atomic lock
 
 ### UI background jobs (APScheduler, inside the FastAPI process)
 
-While the UI is running, three jobs fire every 5 minutes on their own —
-nothing to install:
+While the UI is running, three control jobs fire every 5 minutes and one cost
+job runs every 6 hours. Nothing else needs to be installed:
 
 | Job | Purpose |
 |---|---|
 | `sync_aws_job` | Syncs EC2 states and marks recommendations `obsolete` when the underlying resource no longer exists (all resource types — see [CLEANUP_GUIDE.md](CLEANUP_GUIDE.md)) |
 | `grace_executor_job` | Executes scheduled remediations whose grace period expired |
 | `terraform_pr_sync_job` | Tracks the state of open Terraform remediation PRs |
+| `cost_collector_job` | Refreshes Cost Explorer data; skips the paid call when the latest daily data is already stored |
 
 ---
 
@@ -110,14 +115,13 @@ crontab -l | grep wasteless-collect
 
 ## Cost considerations
 
-The 5-minute cadence keeps dashboards near-real-time. The AWS API cost is
-dominated by CloudWatch `GetMetricStatistics` calls and scales with instance
-count — on the order of **a few euros per month** for a typical account
-(CloudWatch API requests are ~$0.01 per 1,000). Detection steps read from
-PostgreSQL and Steampipe's cached inventory, not from AWS directly. The
-savings surfaced by detection exceed this by orders of magnitude; if it ever
-matters, the interval is `COLLECT_INTERVAL_SEC` at the top of
-`wasteless.sh` (re-run `wasteless schedule` after changing it).
+The 5-minute cadence keeps dashboards current. CloudWatch request volume scales
+with the number of instances and Cost Explorer can charge per request, so API
+cost depends on the account and current AWS pricing. The Cost Explorer job
+caches daily data to avoid repeating a paid call unnecessarily. Monitor the
+account's API usage before changing the interval. The collection interval is
+`COLLECT_INTERVAL_SEC` at the top of `wasteless.sh`; re-run
+`wasteless schedule` after changing it.
 
 ---
 
@@ -138,7 +142,7 @@ with the new value.
 
 **What replaced `scripts/install_automation.sh`?** That legacy cron
 installer only ran the CloudWatch collector and the EC2 idle detector — 2 of
-the 10 pipeline steps — and drifted out of sync as detectors were added. It
+the 14 pipeline steps — and drifted out of sync as detectors were added. It
 was removed; `wasteless schedule` is the single canonical path.
 
 ---
@@ -149,7 +153,7 @@ was removed; `wasteless schedule` is the single canonical path.
 |---|---|
 | No new data in the UI | `tail ~/.wasteless.log`; run `./wasteless.sh collect` manually and read the step output |
 | Schedule inactive after reboot (Linux) | `loginctl show-user $USER` must show `Linger=yes`; fix with `sudo loginctl enable-linger $USER` |
-| Steps 7–10 always skipped | `command -v steampipe`; install it and the AWS plugin |
+| Steps 7–14 always skipped | `command -v steampipe`; install it and the AWS plugin |
 | `venv not found` in the log | Recreate the root venv: `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.lock` |
 | AWS credential errors | The pipeline loads `.env` itself (`load_dotenv`); check `AWS_ROLE_ARN` / source credentials, then `aws sts get-caller-identity` |
 | DB connection errors | `docker ps` shows the postgres container? If not: `docker compose up -d postgres` |

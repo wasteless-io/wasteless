@@ -10,14 +10,14 @@ Estimated Time: 10-15 minutes
 
 ## 🔐 How wasteless accesses AWS
 
-Wasteless uses **two separate IAM roles** in your account, assumed via
-`sts:AssumeRole`:
+The recommended Wasteless setup uses **two separate IAM roles** in your
+account, assumed via `sts:AssumeRole`:
 
 ```
                        sts:AssumeRole
 wasteless ──────────────────────────────────────► your AWS account
    │
-   ├── AWS_ROLE_ARN        → wasteless-readonly     (always)
+   ├── AWS_ROLE_ARN        → wasteless-readonly     (recommended)
    │                          Describe/Get/List only.
    │                          Collection + detection. Cannot modify anything.
    │
@@ -28,20 +28,24 @@ wasteless ───────────────────────�
 
 Key guarantees:
 
-- **Read-only by default.** Detection and collection only ever use the
-  `wasteless-readonly` role. If you don't create the remediation role,
-  wasteless physically cannot modify your infrastructure.
-- **Write is opt-in and fail-closed.** If `AWS_ROLE_ARN` is set but
+- **Read-only in the recommended boto3 path.** When `AWS_ROLE_ARN` is set,
+  boto3 detection and collection assume `wasteless-readonly`. Configure
+  Steampipe separately to assume the same role. Without a remediation role,
+  this role-based setup cannot perform boto3 writes.
+- **Write is opt-in and fail-closed in role-based mode.** If `AWS_ROLE_ARN` is set but
   `AWS_WRITE_ROLE_ARN` is not, any write action raises a configuration
   error — wasteless never falls back to broader credentials for a write.
-- **Safeguards on top.** Even with the write role, auto-remediation is
-  disabled by default and every action passes the 7 safeguard checks
-  described in the [README](../README.md#safeguards).
-- **Short-lived credentials.** STS sessions last at most 1 hour and are
-  refreshed automatically; there are no long-lived keys to leak.
-- **Auditable.** Every wasteless call in CloudTrail shows up as
+- **Controls on top.** Even with the write role, dry-run and automatic
+  remediation are disabled for real writes by default. Exact controls depend
+  on whether an action is direct, handled by a backend remediator, routed to
+  Terraform, or manual. See [Remediation and controls](REMEDIATION.md).
+- **Short-lived assumed sessions.** Credentials returned by STS are temporary
+  and refreshed automatically. The source identity may still use long-lived
+  keys; prefer an instance profile or another short-lived source.
+- **Auditable role-based calls.** boto3 calls appear in CloudTrail under
   `assumed-role/wasteless-readonly/...` or
-  `assumed-role/wasteless-remediation/...`.
+  `assumed-role/wasteless-remediation/...`. Steampipe follows the identity in
+  its own connection configuration.
 
 The exact permissions are versioned in
 [`onboarding/policies/`](../onboarding/policies/) and explained
@@ -150,8 +154,10 @@ AWS_WRITE_ROLE_ARN=arn:aws:iam::123456789012:role/wasteless-remediation
 
 The identity that *assumes* the roles (the "source credentials") comes
 from the default AWS credential chain: `~/.aws/credentials`, environment
-variables, or an instance profile. It needs **no permissions at all**
-except being listed as the trusted principal of the roles.
+variables, or an instance profile. It must be allowed to call
+`sts:AssumeRole` on the target roles. In cross-account setups this requires an
+identity policy on the source side in addition to the target role's trust
+policy.
 
 ### 2. Steampipe (`~/.steampipe/config/aws.spc`) — required in tandem
 
@@ -254,29 +260,35 @@ If `AWS_ROLE_ARN` is not set, wasteless uses the default boto3 credential
 chain as before — an IAM user with `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`
 in `.env` keeps working. This mode is deprecated because long-lived keys
 with broad scope are precisely what makes connecting a cost tool scary.
-Migrate by deploying the onboarding stack and setting the two role ARNs;
-the old keys can then be reduced to a permissionless "assumer" identity.
+Migrate by deploying the onboarding stack and setting the two role ARNs. The
+source identity should then retain only the permissions required to call
+`sts:AssumeRole` on those roles.
 
 ---
 
 ## ❓ FAQ
 
 **Does the Cost Explorer API cost money?**
-Yes, ~$0.01 per API call. Wasteless batches its requests; typical usage
-is a few cents per day.
+Cost Explorer API requests can be billed. Wasteless caches daily data to avoid
+repeating a paid request unnecessarily; consult current AWS pricing for the
+account and region.
 
 **Why does the savings tracker talk to us-east-1?**
 Cost Explorer is only served from `us-east-1`, regardless of your
 region. This is an AWS constraint, not a data-location choice.
 
 **Can wasteless delete something I didn't approve?**
-No. Auto-remediation is disabled by default (`auto_remediation.enabled:
-false`), every action passes the safeguards, and without the
-`wasteless-remediation` role the AWS API itself refuses any write.
+The UI only routes write-capable recommendations after approval. Dry-run is
+enabled by default, automated actions can use a cancellable grace period, and
+in the recommended role-based setup a missing `wasteless-remediation` role
+causes boto3 writes to fail closed. Legacy credentials inherit their existing
+permissions. Review the exact mode and controls for each action in
+[REMEDIATION.md](REMEDIATION.md).
 
 **How do I revoke wasteless's access instantly?**
 Delete the CloudFormation stack (or `terraform destroy` the module).
-Both roles disappear and every wasteless call fails immediately.
+Both roles disappear and role-based boto3 calls fail. Revoke any separate
+Steampipe or legacy source credentials independently.
 `./uninstall.sh` also offers this cleanup as its last step, using your
 own AWS credentials (the wasteless roles cannot delete themselves).
 
@@ -295,4 +307,4 @@ own AWS credentials (the wasteless roles cannot delete themselves).
 
 - [IAM Best Practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html)
 - [Cross-account access with roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_common-scenarios_aws-accounts.html)
-- [Architecture](ARCHITECTURE.md) · [README](../README.md) · [Development](DEVELOPMENT.md)
+- [Architecture](ARCHITECTURE.md) · [Remediation](REMEDIATION.md) · [README](../README.md) · [Development](DEVELOPMENT.md)
