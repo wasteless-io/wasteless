@@ -1072,14 +1072,31 @@
 
         // Deep-link a resource id to its AWS console page (region may carry an
         // AZ suffix 'eu-west-1a' → strip a single trailing letter).
-        function _awsConsoleUrl(resourceId, region) {
+        function _awsConsoleUrl(resourceId, region, recType) {
             region = (region || 'eu-west-1').replace(/([0-9])[a-z]$/, '$1');
+            const r = encodeURIComponent(region);
+            // RDS identifiers are bare names with no prefix: dispatch on the
+            // recommendation type instead of the id.
+            if (recType && recType.indexOf('rds') !== -1) {
+                return 'https://console.aws.amazon.com/rds/home?region=' + r
+                    + (recType === 'delete_rds_snapshot'
+                        ? '#db-snapshot:id=' + resourceId
+                        : '#database:id=' + resourceId + ';is-cluster=false');
+            }
+            if (resourceId.startsWith('nat-')) {
+                return 'https://console.aws.amazon.com/vpcconsole/home?region=' + r + '#NatGatewayDetails:natGatewayId=' + resourceId;
+            }
+            if (resourceId.startsWith('vpc-')) {
+                return 'https://console.aws.amazon.com/vpcconsole/home?region=' + r + '#VpcDetails:VpcId=' + resourceId;
+            }
             const frag = resourceId.startsWith('i-') ? '#InstanceDetails:instanceId=' + resourceId
                 : resourceId.startsWith('vol-') ? '#VolumeDetails:volumeId=' + resourceId
                 : resourceId.startsWith('eipalloc-') ? '#ElasticIpDetails:AllocationId=' + resourceId
                 : resourceId.startsWith('snap-') ? '#SnapshotDetails:snapshotId=' + resourceId
+                : resourceId.startsWith('ami-') ? '#ImageDetails:imageId=' + resourceId
+                : resourceId.startsWith('arn:aws:elasticloadbalancing') ? '#LoadBalancer:loadBalancerArn=' + resourceId
                 : '';
-            return 'https://console.aws.amazon.com/ec2/v2/home?region=' + encodeURIComponent(region) + frag;
+            return 'https://console.aws.amazon.com/ec2/v2/home?region=' + r + frag;
         }
 
         function _notifCopyId(text, btn) {
@@ -1165,7 +1182,7 @@
                             actionLabel: String(t.recommendation_type || '').replace(/_/g, ' '),
                             savings: t.estimated_monthly_savings_eur,
                             // The action for a to-do is the deletion on AWS.
-                            href: _awsConsoleUrl(t.resource_id || '', t.region),
+                            href: _awsConsoleUrl(t.resource_id || '', t.region, t.recommendation_type),
                             newTab: true,
                             manual: true
                         }));
