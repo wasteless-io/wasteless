@@ -14,9 +14,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from core.safeguards import SafeguardException
 from remediators.resource_remediator import (
+    AMIDeregisterRemediator,
+    DELETION_MIN_AGE_DAYS,
+    EIPReleaseRemediator,
     Gp2MigrationRemediator,
     LoadBalancerRemediator,
     NATGatewayRemediator,
+    SnapshotDeleteRemediator,
     VolumeDeleteRemediator,
     REMEDIATORS_BY_RECOMMENDATION,
 )
@@ -258,6 +262,145 @@ class TestExecuteActions:
         client.delete_load_balancer.assert_called_with(LoadBalancerName="my-classic-lb")
 
 
+class TestEIPRelease:
+
+    def _unassociated(self):
+        return {
+            "allocation_id": "eipalloc-1",
+            "public_ip": "52.0.0.1",
+            "association_id": None,
+            "instance_id": None,
+            "network_interface_id": None,
+            "tags": {},
+        }
+
+    def test_unassociated_eip_passes(self):
+        r = _bare(EIPReleaseRemediator)
+        r.verify_still_wasteful(self._unassociated(), "eipalloc-1", "eu-west-3")
+
+    def test_associated_eip_blocks(self):
+        r = _bare(EIPReleaseRemediator)
+        state = dict(self._unassociated(), association_id="eipassoc-1", instance_id="i-0abc")
+        with pytest.raises(SafeguardException) as exc_info:
+            r.verify_still_wasteful(state, "eipalloc-1", "eu-west-3")
+        assert "i-0abc" in str(exc_info.value)
+        assert "not releasing" in str(exc_info.value)
+
+    def test_eni_associated_eip_blocks(self):
+        r = _bare(EIPReleaseRemediator)
+        state = dict(self._unassociated(), network_interface_id="eni-1")
+        with pytest.raises(SafeguardException):
+            r.verify_still_wasteful(state, "eipalloc-1", "eu-west-3")
+
+    @patch("remediators.resource_remediator.get_client")
+    def test_release_calls_release_address(self, mock_get_client):
+        ec2 = MagicMock()
+        mock_get_client.return_value = ec2
+        _bare(EIPReleaseRemediator).execute_action("eipalloc-1", "eu-west-3", {})
+        ec2.release_address.assert_called_once_with(AllocationId="eipalloc-1")
+
+
+class TestSnapshotDelete:
+
+    def _old_orphan(self):
+        return {
+            "snapshot_id": "snap-1",
+            "volume_id": "vol-gone",
+            "size_gb": 8,
+            "age_days": 200,
+            "ami_ids": [],
+            "tags": {},
+        }
+
+    def test_old_orphan_passes(self):
+        r = _bare(SnapshotDeleteRemediator)
+        r.verify_still_wasteful(self._old_orphan(), "snap-1", "eu-west-3")
+
+    def test_ami_backed_snapshot_blocks(self):
+        r = _bare(SnapshotDeleteRemediator)
+        state = dict(self._old_orphan(), ami_ids=["ami-1"])
+        with pytest.raises(SafeguardException) as exc_info:
+            r.verify_still_wasteful(state, "snap-1", "eu-west-3")
+        assert "ami-1" in str(exc_info.value)
+        assert "not deleting" in str(exc_info.value)
+
+    def test_young_snapshot_blocks(self):
+        r = _bare(SnapshotDeleteRemediator)
+        state = dict(self._old_orphan(), age_days=DELETION_MIN_AGE_DAYS - 1)
+        with pytest.raises(SafeguardException) as exc_info:
+            r.verify_still_wasteful(state, "snap-1", "eu-west-3")
+        assert str(DELETION_MIN_AGE_DAYS) in str(exc_info.value)
+
+    @patch("remediators.resource_remediator.get_client")
+    def test_delete_calls_delete_snapshot(self, mock_get_client):
+        ec2 = MagicMock()
+        mock_get_client.return_value = ec2
+        _bare(SnapshotDeleteRemediator).execute_action("snap-1", "eu-west-3", {})
+        ec2.delete_snapshot.assert_called_once_with(SnapshotId="snap-1")
+
+
+class TestAMIDeregister:
+
+    def _old_orphan(self):
+        return {
+            "image_id": "ami-1",
+            "name": "old-build",
+            "age_days": 200,
+            "instance_ids": [],
+            "snapshot_ids": ["snap-a", "snap-b"],
+            "tags": {},
+        }
+
+    def test_old_orphan_passes(self):
+        r = _bare(AMIDeregisterRemediator)
+        r.verify_still_wasteful(self._old_orphan(), "ami-1", "eu-west-3")
+
+    def test_ami_backing_instances_blocks(self):
+        r = _bare(AMIDeregisterRemediator)
+        state = dict(self._old_orphan(), instance_ids=["i-0abc"])
+        with pytest.raises(SafeguardException) as exc_info:
+            r.verify_still_wasteful(state, "ami-1", "eu-west-3")
+        assert "i-0abc" in str(exc_info.value)
+        assert "not deregistering" in str(exc_info.value)
+
+    def test_young_ami_blocks(self):
+        r = _bare(AMIDeregisterRemediator)
+        state = dict(self._old_orphan(), age_days=DELETION_MIN_AGE_DAYS - 1)
+        with pytest.raises(SafeguardException):
+            r.verify_still_wasteful(state, "ami-1", "eu-west-3")
+
+    @patch("remediators.resource_remediator.get_client")
+    def test_deregister_then_backing_snapshots_deleted(self, mock_get_client):
+        """Deregister first, then delete the backing snapshots: deleting a
+        snapshot still referenced by a registered AMI would fail anyway."""
+        calls = []
+        ec2 = MagicMock()
+        ec2.deregister_image.side_effect = lambda **kw: calls.append("deregister")
+        ec2.delete_snapshot.side_effect = lambda **kw: calls.append(kw["SnapshotId"])
+        mock_get_client.return_value = ec2
+        _bare(AMIDeregisterRemediator).execute_action("ami-1", "eu-west-3", self._old_orphan())
+        assert calls == ["deregister", "snap-a", "snap-b"]
+
+    @patch("remediators.resource_remediator.get_client")
+    def test_failed_backing_snapshot_surfaces_as_error(self, mock_get_client):
+        """A backing snapshot that cannot be deleted must fail the action
+        (with the ids in the message) so a human finishes the cleanup."""
+
+        class FakeClientError(Exception):
+            pass
+
+        ec2 = MagicMock()
+        ec2.exceptions.ClientError = FakeClientError
+        ec2.delete_snapshot.side_effect = [FakeClientError("denied"), None]
+        mock_get_client.return_value = ec2
+        with pytest.raises(RuntimeError) as exc_info:
+            _bare(AMIDeregisterRemediator).execute_action("ami-1", "eu-west-3", self._old_orphan())
+        assert "snap-a" in str(exc_info.value)
+        assert "snap-b" not in str(exc_info.value)
+        # the second snapshot was still attempted
+        assert ec2.delete_snapshot.call_count == 2
+
+
 class TestRegistry:
 
     def test_all_new_recommendation_types_covered(self):
@@ -266,6 +409,9 @@ class TestRegistry:
             "delete_volume",
             "delete_nat_gateway",
             "delete_load_balancer",
+            "release_ip",
+            "delete_snapshot",
+            "deregister_ami",
         }
 
     def test_rollback_flags(self):
@@ -273,3 +419,6 @@ class TestRegistry:
         assert VolumeDeleteRemediator.can_rollback is True  # snapshot-first
         assert NATGatewayRemediator.can_rollback is False
         assert LoadBalancerRemediator.can_rollback is False
+        assert EIPReleaseRemediator.can_rollback is True  # IP recoverable
+        assert SnapshotDeleteRemediator.can_rollback is False
+        assert AMIDeregisterRemediator.can_rollback is False

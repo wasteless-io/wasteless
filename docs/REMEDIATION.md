@@ -28,8 +28,16 @@ fails when a detector introduces an undeclared recommendation type.
 | Mode | Recommendation types | What approval does |
 |---|---|---|
 | **Direct AWS** (`boto3`) | `stop_instance`, `terminate_instance` | Uses the write role to stop or terminate the EC2 instance when dry-run is disabled. |
-| **Backend remediator** | `migrate_gp2_to_gp3`, `delete_volume`, `delete_nat_gateway`, `delete_load_balancer` | Re-fetches the live resource, re-validates the waste condition, applies supported policy checks, records pre-action state, then calls AWS when dry-run is disabled. |
-| **Manual** | `downsize_instance`, `delete_snapshot`, `release_ip`, `delete_vpc`, `deregister_ami`, `delete_rds_instance`, `downsize_rds_instance`, `delete_rds_snapshot` | Records the decision as a manual task. Wasteless does not call an AWS write API. |
+| **Backend remediator** | `migrate_gp2_to_gp3`, `delete_volume`, `delete_nat_gateway`, `delete_load_balancer`, `release_ip`, `delete_snapshot`, `deregister_ami` | Re-fetches the live resource, re-validates the waste condition, applies supported policy checks, records pre-action state, then calls AWS when dry-run is disabled. |
+| **Manual** | `downsize_instance`, `delete_vpc`, `delete_rds_instance`, `downsize_rds_instance`, `delete_rds_snapshot` | Records the decision as a manual task. Wasteless does not call an AWS write API. |
+
+Remediator-specific live safeguards: `release_ip` refuses if the Elastic IP
+got associated since detection (the released address stays recoverable via
+`allocate-address --address <ip>` until AWS reallocates it); `delete_snapshot`
+and `deregister_ami` refuse under 90 days of age or when the snapshot backs
+an AMI / the AMI backs a non-terminated instance. `deregister_ami` also
+deletes the AMI's backing snapshots (that storage is the actual waste) and
+fails loudly if one of them cannot be deleted.
 
 Disabling an automated recommendation type in Settings degrades that type to
 manual review instead of silently executing it.

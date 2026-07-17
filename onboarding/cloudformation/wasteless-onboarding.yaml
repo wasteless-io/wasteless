@@ -169,7 +169,9 @@ Resources:
                 Action:
                   - ec2:CreateSnapshot
                   - ec2:DeleteNatGateway
+                  - ec2:DeleteSnapshot
                   - ec2:DeleteVolume
+                  - ec2:DeregisterImage
                   - ec2:ModifyVolume
                   - ec2:ReleaseAddress
                   - ec2:StartInstances
