@@ -87,3 +87,21 @@ def api_sync_aws(conn=Depends(get_db)):
         error_detail = traceback.format_exc()
         logger.error(f"Sync AWS error: {error_detail}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}") from e
+
+
+@router.post("/api/collect-now")
+def api_collect_now():
+    """Fire-and-forget full collection run (wasteless.sh collect).
+
+    Behind the "Collect now" button on the empty Recommendations page:
+    detection, unlike /api/sync-aws which only reconciles EXISTING
+    recommendations with AWS. The collect lock in wasteless.sh makes an
+    overlap with the 5-minute loop (or a double click) harmless."""
+    from utils.collect import start_background_collection
+
+    if not start_background_collection():
+        raise HTTPException(
+            status_code=500, detail="could not start the collection (wasteless.sh not found)"
+        )
+    logger.info("Manual collection started from the UI (collect-now)")
+    return {"started": True}

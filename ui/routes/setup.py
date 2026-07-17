@@ -9,7 +9,6 @@ values to the running process so no restart is needed.
 
 import os
 import re
-import subprocess
 from pathlib import Path
 
 import boto3
@@ -19,6 +18,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from schemas import AwsSetupRequest
 from state import templates, _aws_status, check_aws_reachable
+from utils.collect import start_background_collection
 from utils.env_files import apply_to_env, write_env_files
 from utils.logger import get_logger
 
@@ -129,24 +129,9 @@ def _write_env_files(values: dict) -> None:
 def _start_background_collection() -> bool:
     """Fire-and-forget first collection right after a successful save: the
     user just connected AWS, the next scheduled run is up to 5 minutes away,
-    and this is exactly when they are staring at an empty dashboard. The
-    collect lock in wasteless.sh makes an overlap with a scheduled run
-    harmless, and a failure here never fails the save itself."""
-    script = ROOT_DIR / "wasteless.sh"
-    if not script.exists():
-        return False
-    try:
-        subprocess.Popen(
-            [str(script), "collect"],
-            cwd=ROOT_DIR,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        return True
-    except Exception as e:
-        logger.warning(f"Post-save collection not started: {e}")
-        return False
+    and this is exactly when they are staring at an empty dashboard. Shared
+    implementation in utils/collect.py (also behind /api/collect-now)."""
+    return start_background_collection(ROOT_DIR)
 
 
 def _apply_to_process(values: dict) -> None:
