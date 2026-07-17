@@ -145,7 +145,8 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     cursor = conn.cursor()
 
     # Fetch KPIs including new CTO metrics
-    cursor.execute("""
+    cursor.execute(
+        """
         WITH metrics AS (
             SELECT COALESCE(SUM(estimated_monthly_savings_eur), 0) as potential_monthly
             FROM recommendations WHERE status = 'pending'
@@ -229,7 +230,9 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         CROSS JOIN pending p
         CROSS JOIN wasted wd
         CROSS JOIN last_scan l;
-    """, (DAYS_PER_MONTH,))
+    """,
+        (DAYS_PER_MONTH,),
+    )
     kpis = cursor.fetchone()
 
     # Cost of inaction: first detection date + daily burn rate (active waste)
