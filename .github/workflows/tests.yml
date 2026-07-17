@@ -276,4 +276,4 @@ jobs:
           row=$(psql -h localhost -U wasteless -d wasteless -tAc \
             "SELECT full_run, skipped_steps FROM collection_runs ORDER BY ran_at DESC LIMIT 1")
           echo "collection_runs row: $row"
-          [ "$row" = 'f|{elb_unused,nat_gateway_unused,vpc_unused,ebs_gp2_migration}' ]
+          [ "$row" = 'f|{elb_unused,nat_gateway_unused,vpc_unused,ebs_gp2_migration,ami_orphan,rds_stopped,rds_idle,rds_snapshot_orphan}' ]

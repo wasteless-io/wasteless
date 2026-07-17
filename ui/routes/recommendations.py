@@ -184,37 +184,6 @@ def recommendations(
     # is disclosed as a "realistic" note under it when the cap bites.
     savings_over_spend = savings_capped < total_savings - 0.005
 
-    # "Wasted so far": what the filtered resources have already cost since
-    # their creation — monthly cost prorated per day of age (365/12 days per
-    # month, same convention as everywhere else). Backward-looking cumulative
-    # amount, unlike Savings/mo (a forward monthly rate); notably it stays
-    # honest for resources younger than the 30-day billing window, which the
-    # per-service cap squashes. Aggregated over every matching row (same
-    # where_clause), not just the 500 displayed.
-    # Age in FRACTIONAL days — "from creation until now", per the tile's
-    # promise: a resource created this morning has already consumed a few
-    # cents, and integer days would show 0.00 for its whole first day.
-    # GREATEST covers both directions: metadata age_days wins for resources
-    # older than their detection; hours-since-detection wins for fresh ones.
-    age_frac_sql = """GREATEST(
-            COALESCE((w.metadata->>'age_days')::numeric, 0),
-            EXTRACT(EPOCH FROM (NOW() - w.created_at)) / 86400.0
-        )"""
-    cursor.execute(
-        f"""
-        SELECT COALESCE(SUM(
-            COALESCE((w.metadata->>'monthly_cost_eur')::numeric,
-                     r.estimated_monthly_savings_eur, 0)
-            * {age_frac_sql}
-        ), 0) / %s AS wasted
-        FROM recommendations r
-        JOIN waste_detected w ON r.waste_id = w.id
-        {where_clause}
-    """,  # noqa: S608 — constant SQL fragments; values are %s params
-        [DAYS_PER_MONTH] + params,
-    )
-    wasted_so_far_total = float(cursor.fetchone()["wasted"])
-
     # Per-row realism factor: scale each service's rows by min(1, spend/est) so
     # the displayed per-row Savings sum to the capped headline (a row can't
     # claim more than its share of the service's real spend). Raw estimate kept
@@ -248,9 +217,6 @@ def recommendations(
         mc_raw = float(row["monthly_cost"]) if row["monthly_cost"] is not None else raw
         row["monthly_cost_raw"] = mc_raw
         row["monthly_cost_capped"] = mc_raw * factor
-        # Row's share of "Wasted so far" (same fractional-age formula as the
-        # SQL aggregate); carried on the checkbox so live KPI deltas stay exact.
-        row["wasted_so_far"] = mc_raw * float(row["age_days_frac"] or 0) / DAYS_PER_MONTH
 
     ec2_recs = [r for r in recommendations if r["resource_type"] == "ec2_instance"]
     # The EBS tab renders deletion semantics ("unattached", "why delete?"),
@@ -377,7 +343,6 @@ def recommendations(
             "total_savings": total_savings,
             "savings_capped": savings_capped,
             "savings_over_spend": savings_over_spend,
-            "wasted_so_far_total": wasted_so_far_total,
             "savings_buckets": savings_buckets,
             "avg_confidence": avg_confidence,
             "type_filter": type_filter,
