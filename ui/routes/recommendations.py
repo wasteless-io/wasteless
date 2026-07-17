@@ -818,11 +818,24 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
     Powers the chat in the summary tile (not scoped to one row). Stateless;
     sync route because the LLM call blocks and must run in the threadpool.
     """
-    from core.llm import answer_estate_question
+    from core.llm import LLMUnavailableError, answer_estate_question, is_enabled
 
     question = (body.question or "").strip()
     if not question:
         raise HTTPException(status_code=400, detail="question must not be empty")
+
+    # Checked before the (non-trivial) DB work, and separately from provider
+    # failures: "not configured" and "your key is invalid" need different
+    # fixes and used to be collapsed into one vague 503.
+    if not is_enabled():
+        return JSONResponse(
+            {
+                "answer": None,
+                "error": "AI insights are not configured. Set a model and API key "
+                "in Settings → AI Insights (LLM)",
+            },
+            status_code=503,
+        )
 
     cursor = conn.cursor()
     # Pull every column the recommendations table shows (plus the confidence
@@ -905,16 +918,21 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
         for r in rows
     )
 
-    answer = answer_estate_question(
-        question,
-        count,
-        f"{total_savings:.2f}",
-        f"{avg_conf:.0f}",
-        lines,
-        conn=conn,
-        capped_savings=capped_savings,
-        wasted_so_far=f"{wasted_total:.2f}",
-    )
+    try:
+        answer = answer_estate_question(
+            question,
+            count,
+            f"{total_savings:.2f}",
+            f"{avg_conf:.0f}",
+            lines,
+            conn=conn,
+            capped_savings=capped_savings,
+            wasted_so_far=f"{wasted_total:.2f}",
+        )
+    except LLMUnavailableError as e:
+        # User-safe classification from core.llm (bad key, rate limit,
+        # timeout...), actionable, unlike the old generic message.
+        return JSONResponse({"answer": None, "error": str(e)}, status_code=503)
     if answer is None:
         return JSONResponse(
             {"answer": None, "error": "AI is not configured or the request failed"},

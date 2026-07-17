@@ -8,4 +8,7 @@ brew "python@3.13"   # version épinglée dans .python-version
 brew "uv"            # optionnel mais recommandé — installations rapides et atomiques
 brew "awscli"        # optionnel — credentials via `aws configure`
 
+tap "turbot/tap"
+brew "turbot/tap/steampipe"  # détecteurs ELB/NAT/VPC/gp2/AMI/RDS (install.sh installe le plugin AWS)
+
 cask "docker-desktop"

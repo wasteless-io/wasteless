@@ -399,6 +399,87 @@ ensure_docker() {
 }
 
 # =============================================================================
+# REMEDIATION STEAMPIPE : installe le CLI + plugin AWS apres accord utilisateur
+# (les detecteurs 7-14 de wasteless.sh en dependent : ELB, NAT, VPC, gp2->gp3,
+# AMI, RDS ; sans eux chaque collecte est marquee "partielle" sur le dashboard)
+# =============================================================================
+steampipe_aws_plugin_present() {
+    # Le CLI seul ne suffit pas : les detecteurs interrogent AWS via le
+    # plugin turbot/aws, installe sous ~/.steampipe (sans sudo).
+    ls "$HOME"/.steampipe/plugins/hub.steampipe.io/plugins/turbot/aws* >/dev/null 2>&1
+}
+
+install_steampipe_binary() {
+    if [ "$OS_ID" = "macos" ]; then
+        if ! check_command brew; then
+            print_warning "Homebrew requis pour installer Steampipe sur macOS (https://brew.sh)"
+            return 1
+        fi
+        print_info "Installation de Steampipe via Homebrew..."
+        brew install turbot/tap/steampipe
+    else
+        # Script officiel Turbot : depose le binaire dans /usr/local/bin (sudo).
+        # curl d'abord dans une variable : sous set -e, un echec reseau dans
+        # $(...) donnerait un script vide que `sh -c` executerait avec succes.
+        print_info "Installation de Steampipe via le script officiel (steampipe.io)..."
+        local installer
+        if ! installer="$(curl -fsSL https://steampipe.io/install/steampipe.sh)"; then
+            print_error "Telechargement du script d'installation Steampipe echoue (reseau ?)"
+            return 1
+        fi
+        sudo_cmd /bin/sh -c "$installer"
+    fi
+}
+
+ensure_steampipe() {
+    # accord deja donne pour "CLI + plugin" -> pas de 2e question pour le plugin
+    local approved=0
+    if ! check_command steampipe; then
+        print_warning "Steampipe non trouve : les detecteurs ELB/NAT/VPC/gp2/AMI/RDS seraient ignores (collecte partielle)"
+        if ! confirm_system_change "Steampipe est absent. Le script peut installer le CLI et son plugin AWS."; then
+            if [ "$OS_ID" = "macos" ]; then
+                print_info "Installation manuelle: brew install turbot/tap/steampipe && steampipe plugin install aws"
+            else
+                print_info "Installation manuelle: sudo /bin/sh -c \"\$(curl -fsSL https://steampipe.io/install/steampipe.sh)\" && steampipe plugin install aws"
+            fi
+            return 1
+        fi
+        approved=1
+        if ! install_steampipe_binary; then
+            print_error "Installation de Steampipe echouee, la collecte restera partielle (https://steampipe.io/downloads)"
+            return 1
+        fi
+        # Le shell courant peut ne pas encore voir le binaire (ex: premier
+        # paquet Homebrew installe), meme prepend que wasteless.sh.
+        export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+        if ! check_command steampipe; then
+            print_error "Steampipe installe mais introuvable dans le PATH. Ouvrez un nouveau terminal puis relancez ./install.sh"
+            return 1
+        fi
+    fi
+    print_step "Steampipe detecte"
+
+    if steampipe_aws_plugin_present; then
+        print_step "Plugin AWS de Steampipe detecte"
+        return 0
+    fi
+    if [ "$approved" -eq 0 ]; then
+        print_warning "Plugin AWS de Steampipe absent : les detecteurs Steampipe echoueraient"
+        if ! confirm_system_change "Le script peut installer le plugin AWS de Steampipe (sous ~/.steampipe, sans sudo)."; then
+            print_info "Installation manuelle: steampipe plugin install aws"
+            return 1
+        fi
+    fi
+    print_info "Installation du plugin AWS de Steampipe..."
+    if steampipe plugin install aws; then
+        print_step "Plugin AWS de Steampipe installe"
+        return 0
+    fi
+    print_error "Installation du plugin AWS echouee. Reessayez: steampipe plugin install aws"
+    return 1
+}
+
+# =============================================================================
 # ATTENTE POSTGRESQL ROBUSTE + DUMP DIAGNOSTIC EN CAS D'ECHEC
 # =============================================================================
 check_port_conflict() {
@@ -597,24 +678,22 @@ else
     print_info "Installez AWS CLI: https://aws.amazon.com/cli/"
 fi
 
-# Steampipe (optionnel — 4 detecteurs sur 10 en dependent : ELB, NAT
-# gateways, VPC inutilises, migration gp2->gp3 ; sans lui chaque collecte
-# est marquee partielle sur le dashboard)
-if check_command steampipe; then
-    print_step "Steampipe detecte"
-    # Le CLI seul ne suffit pas : les detecteurs interrogent AWS via le
-    # plugin turbot/aws, installe sous ~/.steampipe.
-    if ! ls "$HOME"/.steampipe/plugins/hub.steampipe.io/plugins/turbot/aws* >/dev/null 2>&1; then
-        print_warning "Plugin AWS de Steampipe absent — les detecteurs Steampipe echoueront"
-        print_info "Installez-le: steampipe plugin install aws"
+# Steampipe (les detecteurs 7-14 en dependent : ELB, NAT gateways, VPC,
+# migration gp2->gp3, AMI orphelines, RDS ; sans lui chaque collecte est
+# marquee partielle sur le dashboard). Absent -> proposition d'installation
+# automatique apres accord utilisateur, comme Docker.
+if [ "$DOCTOR_ONLY" -eq 1 ]; then
+    if ! check_command steampipe; then
+        print_warning "Steampipe absent (relancez sans --doctor pour l'installer), collecte partielle"
+    elif ! steampipe_aws_plugin_present; then
+        print_step "Steampipe detecte"
+        print_warning "Plugin AWS de Steampipe absent (relancez sans --doctor pour l'installer)"
+    else
+        print_step "Steampipe + plugin AWS detectes"
     fi
 else
-    print_warning "Steampipe non trouve (optionnel) — detecteurs ELB/NAT/VPC/gp2 ignores (collecte partielle)"
-    if [ "$OS_ID" = "macos" ]; then
-        print_info "Installez-le: brew install turbot/tap/steampipe && steampipe plugin install aws"
-    else
-        print_info "Installez-le: sudo /bin/sh -c \"\$(curl -fsSL https://steampipe.io/install/steampipe.sh)\" && steampipe plugin install aws"
-    fi
+    # Optionnel : un refus ou un echec n'empeche pas l'installation de continuer.
+    ensure_steampipe || true
 fi
 
 # Git
@@ -800,16 +879,27 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
     # Charset restreint volontairement : le mot de passe transite par .env (lu
     # sans `source`) et par docker-compose (substitution ${DB_PASSWORD}). On
     # exclut $, `, ", ', #, espace et \ qui casseraient l'un ou l'autre.
+    # Double saisie : la frappe est masquee (read -s), une faute de frappe
+    # invisible ici donnerait un mot de passe irrecuperable au premier
+    # demarrage (le volume postgres est initialise avec).
     while true; do
         read -sp "Creez un mot de passe pour la base de donnees: " DB_PASSWORD
         echo ""
         if [ ${#DB_PASSWORD} -lt 8 ]; then
             print_error "Le mot de passe doit contenir au moins 8 caracteres"
+            continue
         elif [[ ! "$DB_PASSWORD" =~ ^[A-Za-z0-9_@%+=:,.~-]+$ ]]; then
             print_error "Caracteres autorises: lettres, chiffres et _ @ % + = : , . ~ -"
-        else
-            break
+            continue
         fi
+        read -sp "Confirmez le mot de passe: " DB_PASSWORD_CONFIRM
+        echo ""
+        if [ "$DB_PASSWORD" != "$DB_PASSWORD_CONFIRM" ]; then
+            print_error "Les deux saisies ne correspondent pas, recommencez"
+            continue
+        fi
+        unset DB_PASSWORD_CONFIRM
+        break
     done
 
     echo ""
@@ -1342,16 +1432,19 @@ fi
 # Test credentials AWS. load_dotenv est indispensable : boto3 ne lit pas
 # .env tout seul, et sans ca le test annoncait "invalides" meme quand les
 # cles venaient d'etre ecrites dans .env (seul ~/.aws etait vu).
+# Toujours &>/dev/null (pas `silence`) : cette sonde echoue normalement
+# quand AWS n'est pas encore configure, et son traceback NoCredentialsError
+# ne doit jamais s'afficher : le diagnostic passe par les messages ci-dessous.
 print_info "Verification des credentials AWS..."
 AWS_CHECK_OK=0
-if silence python3 -c "
+if python3 -c "
 import os
 from dotenv import load_dotenv
 load_dotenv()
 import boto3
 sts = boto3.client('sts', region_name=os.getenv('AWS_REGION') or 'eu-west-1')
 sts.get_caller_identity()
-"; then
+" &>/dev/null; then
     AWS_CHECK_OK=1
     print_step "Credentials AWS valides"
 elif grep -qE '^(AWS_ACCESS_KEY_ID|AWS_ROLE_ARN)=' .env 2>/dev/null; then

@@ -268,6 +268,38 @@
     </div>
 </div>
 
+<!-- AI Insights (LLM) -->
+<div class="card mb-2" style="padding: 1rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+        <h3 style="margin: 0;">AI Insights</h3>
+        <span class="badge {{ 'badge-success' if llm_model else 'badge-info' }}" style="font-size: 0.65rem;">
+            {{ llm_model if llm_model else 'not configured' }}
+        </span>
+    </div>
+    <p class="text-muted" style="margin: 0 0 0.75rem 0; font-size: 0.8rem;">
+        Explains each recommendation and powers the recommendations chat. Any litellm model id
+        (<code>provider/model</code>) works; your AWS resource metadata is sent to the chosen provider.
+        Test runs one tiny completion against the provider; nothing is saved until you click Test &amp; Save.
+    </p>
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <input type="text" id="llmModel" class="form-input" list="llmModelSuggestions"
+               style="flex: 2 1 260px; padding: 0.4rem;" value="{{ llm_model }}"
+               placeholder="e.g. anthropic/claude-haiku-4-5-20251001">
+        <datalist id="llmModelSuggestions">
+            <option value="deepseek/deepseek-chat"></option>
+            <option value="anthropic/claude-haiku-4-5-20251001"></option>
+            <option value="openai/gpt-4o-mini"></option>
+            <option value="ollama/llama3.1"></option>
+        </datalist>
+        <input type="password" id="llmApiKey" class="form-input" autocomplete="off"
+               style="flex: 2 1 220px; padding: 0.4rem;"
+               placeholder="{{ 'API key (saved, leave empty to keep it)' if llm_key_set else 'API key (ollama needs none)' }}">
+        <button onclick="testLlm(false)" id="llmTestBtn" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Test</button>
+        <button onclick="testLlm(true)" id="llmSaveBtn" class="btn btn-primary" style="padding: 0.4rem 0.75rem;">Test &amp; Save</button>
+    </div>
+    <div id="llmStatus" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>
+</div>
+
 <!-- Policy as Code -->
 <div class="card mb-2" style="padding: 1rem; border: 1px solid var(--gray-300);">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
@@ -329,6 +361,44 @@
 
 {% block extra_js %}
 <script>
+    async function testLlm(save) {
+        const model = document.getElementById('llmModel').value.trim();
+        const apiKey = document.getElementById('llmApiKey').value.trim();
+        const status = document.getElementById('llmStatus');
+        const buttons = [document.getElementById('llmTestBtn'), document.getElementById('llmSaveBtn')];
+        if (!model) {
+            status.textContent = 'Enter a model id first (provider/model).';
+            status.style.color = 'var(--danger, #ef4444)';
+            return;
+        }
+        buttons.forEach(b => b.disabled = true);
+        status.textContent = save ? 'Testing, then saving…' : 'Testing (one tiny completion, a few seconds)…';
+        status.style.color = 'var(--gray-500, #6b7280)';
+        try {
+            const resp = await fetch(save ? '/api/llm/save' : '/api/llm/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: model, api_key: apiKey })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                status.textContent = save
+                    ? 'Saved. AI insights are live (' + data.model + '). New insights appear on the next collection.'
+                    : 'Connection OK (' + data.model + ').';
+                status.style.color = 'var(--success, #22c55e)';
+                if (save) document.getElementById('llmApiKey').value = '';
+            } else {
+                status.textContent = data.error || ('Request failed (HTTP ' + resp.status + ')');
+                status.style.color = 'var(--danger, #ef4444)';
+            }
+        } catch (e) {
+            status.textContent = 'Request failed: ' + e;
+            status.style.color = 'var(--danger, #ef4444)';
+        } finally {
+            buttons.forEach(b => b.disabled = false);
+        }
+    }
+
     async function importPolicy() {
         const fileInput = document.getElementById('policyFile');
         const status = document.getElementById('policyImportStatus');

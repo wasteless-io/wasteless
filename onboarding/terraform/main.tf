@@ -25,6 +25,7 @@ data "aws_iam_policy_document" "trust" {
 
 resource "aws_iam_role" "readonly" {
   name                 = "${var.role_name_prefix}-readonly"
+  description          = "Read-only analysis role for wasteless (cloud cost waste detection). Grants only Describe/Get/List calls on resource metadata, CloudWatch metrics and Cost Explorer: wasteless can see which resources exist and how much they are used, but can never read the data they contain, never create, modify or delete anything, and never touch IAM. Sessions last 1 hour max; delete this role to revoke all access instantly."
   assume_role_policy   = data.aws_iam_policy_document.trust.json
   max_session_duration = 3600
 
@@ -43,6 +44,7 @@ resource "aws_iam_role" "remediation" {
   count = var.create_remediation_role ? 1 : 0
 
   name                 = "${var.role_name_prefix}-remediation"
+  description          = "Remediation role for wasteless, assumed only to execute waste cleanup actions approved by a human in the wasteless UI (stop an idle instance, delete an orphaned volume, ...). Limited to the listed EC2/ELB cleanup actions: no IAM access, and the only thing it can create is a rollback snapshot taken before destructive EBS actions. Sessions last 1 hour max; delete this role to revoke all access instantly (wasteless then falls back to detection mode)."
   assume_role_policy   = data.aws_iam_policy_document.trust.json
   max_session_duration = 3600
 
