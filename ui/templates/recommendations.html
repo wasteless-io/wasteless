@@ -343,6 +343,24 @@
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Snapshots <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ snap_recs|length }}</span></span>
             <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
+        {% if nat_recs %}
+        <button id="tab-btn-nat" onclick="switchTab('nat')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">NAT Gateways <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ nat_recs|length }}</span></span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
+        </button>
+        {% endif %}
+        {% if lb_recs %}
+        <button id="tab-btn-lb" onclick="switchTab('lb')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Load Balancers <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ lb_recs|length }}</span></span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
+        </button>
+        {% endif %}
+        {% if ami_recs %}
+        <button id="tab-btn-ami" onclick="switchTab('ami')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">AMIs <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ami_recs|length }}</span></span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
+        </button>
+        {% endif %}
         {% if rds_recs %}
         <button id="tab-btn-rds" onclick="switchTab('rds')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">RDS <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ rds_recs|length }}</span></span>
@@ -352,11 +370,12 @@
         {% if other_recs %}
         <button id="tab-btn-other" onclick="switchTab('other')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Other <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ other_recs|length }}</span></span>
-            {# Mixed bag by construction (catch-all bucket): gp2/NAT/LB/AMI
-               execute for real, VPC and friends only queue a to-do. This
-               label used to say MANUAL REVIEW while the tab sat in
-               AUTOMATED_TABS, which fed a real user mixup; the confirmation
-               dialog now spells out the per-type behavior. #}
+            {# Mixed bag by construction (catch-all bucket): gp2 migrations
+               execute for real, VPC and friends only queue a to-do. NAT,
+               LB and AMIs moved to their own tabs. This label used to say
+               MANUAL REVIEW while the tab sat in AUTOMATED_TABS, which fed
+               a real user mixup; the confirmation dialog now spells out
+               the per-type behavior. #}
             <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MIXED</span>
         </button>
         {% endif %}
@@ -698,13 +717,17 @@
             {% endif %}
         </div>
 
-        <div id="tab-other" style="display: none;">
-            {% if other_recs %}
+        {# Generic panel shared by the typed steampipe tabs (NAT / LB / AMI)
+           and the Other catch-all: same columns, only the checkbox class,
+           selectAll id and empty label change per tab. #}
+        {% macro generic_panel(key, recs, empty_label) %}
+        <div id="tab-{{ key }}" style="display: none;">
+            {% if recs %}
             <div class="table-container">
                 <table style="font-size: 0.85rem;">
                     <thead>
                         <tr>
-                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-other" onclick="toggleAll('other')"></th>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-{{ key }}" onclick="toggleAll('{{ key }}')"></th>
                             <th style="padding: 0.5rem;">Resource</th>
                             <th style="padding: 0.5rem;">Type</th>
                             <th style="padding: 0.5rem;">Region</th>
@@ -713,15 +736,15 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for rec in other_recs %}
+                        {% for rec in recs %}
                         {% set savings = rec.estimated_monthly_savings_eur or 0 %}
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-other" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-{{ key }}" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.action_required %}{% if rec.ai_insight %}{% set reason = reason ~ ' — ' ~ rec.ai_insight %}{% endif %}
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.volume_name or rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;">
+                            <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <strong class="text-success"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.savings_capped) }} € — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong>
                                     <span style="font-size: 0.75rem; color: var(--gray-500);">€/mo</span>
@@ -741,9 +764,14 @@
                 </table>
             </div>
             {% else %}
-            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No other recommendations</div>
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">{{ empty_label }}</div>
             {% endif %}
         </div>
+        {% endmacro %}
+        {{ generic_panel('nat', nat_recs, 'No unused NAT gateway recommendations') }}
+        {{ generic_panel('lb', lb_recs, 'No unused load balancer recommendations') }}
+        {{ generic_panel('ami', ami_recs, 'No orphaned AMI recommendations') }}
+        {{ generic_panel('other', other_recs, 'No other recommendations') }}
     </form>
 </div>
 
@@ -869,13 +897,14 @@
     const DRY_RUN = {{ 'true' if get_dry_run() else 'false' }};
     let currentTab = 'ec2';
 
-    const ALL_TABS = ['ec2', 'ebs', 'eip', 'snap', 'rds', 'other'];
+    const ALL_TABS = ['ec2', 'ebs', 'eip', 'snap', 'nat', 'lb', 'ami', 'rds', 'other'];
     // 'ebs' (delete_volume, snapshot-first), 'eip' (release_ip), 'snap'
-    // (delete_snapshot, live-checked 90d+ and AMI-free) and 'other' (gp2
-    // migrations, NAT gateways, load balancers, AMI deregistration) have
-    // automated remediators. 'rds' is manual review (deleting a database
+    // (delete_snapshot, live-checked 90d+ and AMI-free), 'nat', 'lb' and
+    // 'ami' all run automated remediators; 'other' is the catch-all (gp2
+    // migrations + manual types like VPCs, disclosed per type in the
+    // confirmation dialog). 'rds' is manual review (deleting a database
     // is never auto-executed).
-    const AUTOMATED_TABS = ['ec2', 'ebs', 'eip', 'snap', 'other'];
+    const AUTOMATED_TABS = ['ec2', 'ebs', 'eip', 'snap', 'nat', 'lb', 'ami', 'other'];
 
     // What each recommendation type actually does when applied, spelled out
     // in the confirmation dialog. The Other tab mixes very different actions

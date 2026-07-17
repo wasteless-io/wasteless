@@ -62,6 +62,15 @@
     <button class="tab-btn" id="tab-snapshots" onclick="switchTab('snapshots')">
         Snapshots <span class="tab-count">{{ snap_count }}</span>
     </button>
+    <button class="tab-btn" id="tab-nat" onclick="switchTab('nat')">
+        NAT Gateways <span class="tab-count">{{ nat_count }}</span>
+    </button>
+    <button class="tab-btn" id="tab-lb" onclick="switchTab('lb')">
+        Load Balancers <span class="tab-count">{{ lb_count }}</span>
+    </button>
+    <button class="tab-btn" id="tab-amis" onclick="switchTab('amis')">
+        AMIs <span class="tab-count">{{ ami_count }}</span>
+    </button>
     <button class="tab-btn" id="tab-rds" onclick="switchTab('rds')">
         RDS <span class="tab-count">{{ rds_count }}</span>
     </button>
@@ -359,6 +368,138 @@
 {% endif %}
 </div>
 
+<!-- ===== TAB: NAT Gateways ===== -->
+<div id="panel-nat" style="display:none">
+{% if nat_gateways %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">NAT Gateway ID</th>
+                    <th style="padding: 0.5rem;">Name</th>
+                    <th style="padding: 0.5rem;">State</th>
+                    <th style="padding: 0.5rem;">Type</th>
+                    <th style="padding: 0.5rem;">VPC</th>
+                    <th style="padding: 0.5rem;">Created</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for nat in nat_gateways %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ nat.nat_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ nat.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if nat.state == 'available' %}<span class="badge badge-success">available</span>
+                        {% else %}<span class="badge">{{ nat.state }}</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ nat.type }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ nat.vpc_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ nat.created.strftime('%d %b %Y') if nat.created else '-' }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ nat.region }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No NAT gateways found</p>
+</div>
+{% endif %}
+</div>
+
+<!-- ===== TAB: Load Balancers ===== -->
+<div id="panel-lb" style="display:none">
+{% if load_balancers %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Name</th>
+                    <th style="padding: 0.5rem;">Type</th>
+                    <th style="padding: 0.5rem;">Scheme</th>
+                    <th style="padding: 0.5rem;">State</th>
+                    <th style="padding: 0.5rem;">VPC</th>
+                    <th style="padding: 0.5rem;">Created</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lb in load_balancers %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ lb.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span class="badge badge-info">{{ lb.lb_type }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ lb.scheme }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if lb.state == 'active' %}<span class="badge badge-success">active</span>
+                        {% else %}<span class="badge">{{ lb.state }}</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ lb.vpc_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ lb.created.strftime('%d %b %Y') if lb.created else '-' }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ lb.region }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No load balancers found</p>
+</div>
+{% endif %}
+</div>
+
+<!-- ===== TAB: AMIs ===== -->
+<div id="panel-amis" style="display:none">
+{% if amis %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">AMI ID</th>
+                    <th style="padding: 0.5rem;">Name</th>
+                    <th style="padding: 0.5rem;">State</th>
+                    <th style="padding: 0.5rem;">Backing snapshots</th>
+                    <th style="padding: 0.5rem;">Visibility</th>
+                    <th style="padding: 0.5rem;">Created</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ami in amis %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ ami.image_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500; word-break: break-all;">{{ ami.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if ami.state == 'available' %}<span class="badge badge-success">available</span>
+                        {% else %}<span class="badge">{{ ami.state }}</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ ami.snapshot_count }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if ami.public %}<span class="badge badge-warning">public</span>
+                        {% else %}<span class="text-muted" style="font-size: 0.8rem;">private</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ ami.created[:10] if ami.created and ami.created != '-' else '-' }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ ami.region }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No AMIs found</p>
+</div>
+{% endif %}
+</div>
+
 <!-- ===== TAB: RDS ===== -->
 <div id="panel-rds" style="display:none">
 {% if databases %}
@@ -471,7 +612,7 @@
 
 <script>
 function switchTab(tab) {
-    ['ec2', 'volumes', 'ips', 'vpcs', 'snapshots', 'rds', 's3'].forEach(t => {
+    ['ec2', 'volumes', 'ips', 'vpcs', 'snapshots', 'nat', 'lb', 'amis', 'rds', 's3'].forEach(t => {
         document.getElementById('panel-' + t).style.display = t === tab ? '' : 'none';
         document.getElementById('tab-' + t).classList.toggle('active', t === tab);
     });
