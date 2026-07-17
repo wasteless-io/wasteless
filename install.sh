@@ -879,16 +879,27 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
     # Charset restreint volontairement : le mot de passe transite par .env (lu
     # sans `source`) et par docker-compose (substitution ${DB_PASSWORD}). On
     # exclut $, `, ", ', #, espace et \ qui casseraient l'un ou l'autre.
+    # Double saisie : la frappe est masquee (read -s), une faute de frappe
+    # invisible ici donnerait un mot de passe irrecuperable au premier
+    # demarrage (le volume postgres est initialise avec).
     while true; do
         read -sp "Creez un mot de passe pour la base de donnees: " DB_PASSWORD
         echo ""
         if [ ${#DB_PASSWORD} -lt 8 ]; then
             print_error "Le mot de passe doit contenir au moins 8 caracteres"
+            continue
         elif [[ ! "$DB_PASSWORD" =~ ^[A-Za-z0-9_@%+=:,.~-]+$ ]]; then
             print_error "Caracteres autorises: lettres, chiffres et _ @ % + = : , . ~ -"
-        else
-            break
+            continue
         fi
+        read -sp "Confirmez le mot de passe: " DB_PASSWORD_CONFIRM
+        echo ""
+        if [ "$DB_PASSWORD" != "$DB_PASSWORD_CONFIRM" ]; then
+            print_error "Les deux saisies ne correspondent pas — recommencez"
+            continue
+        fi
+        unset DB_PASSWORD_CONFIRM
+        break
     done
 
     echo ""
