@@ -12,3 +12,9 @@ CREATE TABLE IF NOT EXISTS collection_runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_collection_runs_ran_at ON collection_runs(ran_at DESC);
+
+-- Steps dont le process python a echoue pendant le run (ex: AccessDenied
+-- AWS) : un run peut "tourner" sans rien rapporter, et l'UI affichait alors
+-- son heure comme si les donnees etaient fraiches. Cette colonne permet de
+-- distinguer "derniere collecte" et "derniere collecte reussie".
+ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS failed_steps TEXT[] NOT NULL DEFAULT '{}';

@@ -2,6 +2,22 @@
 
 {% block title %}Connect AWS - Wasteless.io{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Field hints: the long parenthetical explanations moved into the
+       shared dark tooltip (kpi-hover/data-tip, base.html). Only a small
+       dotted "optional" marker stays visible next to the label. */
+    .setup-hint {
+        font-size: 0.75rem;
+        font-weight: 400;
+        color: var(--gray-400);
+        border-bottom: 1px dotted var(--gray-400);
+        cursor: help;
+        margin-left: 0.3rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h1>Connect your AWS account</h1>
@@ -76,16 +92,20 @@
         <label style="font-size: 0.85rem;">Read-only role ARN
             <input class="form-input" id="setup-role-arn" value="{{ current_role_arn or suggested_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-readonly">
         </label>
-        <label style="font-size: 0.85rem;">Remediation role ARN <span class="text-muted">(optional &mdash; clear it if you chose detection-only)</span>
+        <label style="font-size: 0.85rem;">Remediation role ARN
+            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Lets wasteless execute the actions you approve in the UI. Clear this field if you created the stack with CreateRemediationRole=false (detection only).">optional</span>
             <input class="form-input" id="setup-write-role-arn" value="{{ current_write_role_arn or suggested_write_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-remediation">
         </label>
-        <label style="font-size: 0.85rem;">External ID <span class="text-muted">(optional)</span>
+        <label style="font-size: 0.85rem;">External ID
+            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional shared secret checked at AssumeRole time, recommended for cross-account setups. Type it before opening the Create stack link so it is baked into the role trust.">optional</span>
             <input class="form-input" id="setup-external-id" placeholder="">
         </label>
-        <label style="font-size: 0.85rem;">Access key ID <span class="text-muted">(optional &mdash; leave empty if this machine already has AWS credentials, e.g. via <code>aws configure</code>)</span>
+        <label style="font-size: 0.85rem;">Access key ID
+            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Leave empty if this machine already has AWS credentials (aws configure, instance profile). Fill it only if Test connection reports 'Unable to locate credentials'.">optional</span>
             <input class="form-input" id="setup-access-key" autocomplete="off" placeholder="AKIA...">
         </label>
-        <label style="font-size: 0.85rem;">Secret access key <span class="text-muted">(optional &mdash; goes with the access key ID)</span>
+        <label style="font-size: 0.85rem;">Secret access key
+            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Goes with the access key ID: both are only the source identity used to assume the wasteless roles.">optional</span>
             <input class="form-input" id="setup-secret-key" type="password" autocomplete="off" placeholder="{{ 'saved — leave empty to keep' if has_access_keys else '' }}">
         </label>
     </div>
@@ -111,6 +131,25 @@
         Nothing in your account is ever modified without an
         explicit approval in <a href="/recommendations">Recommendations</a>.
     </p>
+</div>
+
+<!-- Success overlay: shown by Test & save on success. This is the formal
+     conclusion of the onboarding: an unmissable confirmation, then an
+     automatic hand-off to the Overview (which greets with ?welcome=1). -->
+<div id="setup-success" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 1rem;">
+    <div style="background: white; border-radius: 16px; max-width: 480px; width: 100%; padding: 2rem; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.25);">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: #dcfce7; color: #166534; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h2 style="margin: 0 0 0.5rem 0;">Connection verified</h2>
+        <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">
+            AWS account <strong id="setup-success-account"></strong> is connected
+            with the permissions wasteless needs.
+        </p>
+        <p class="text-muted" id="setup-success-collection" style="margin: 0 0 1.25rem 0; font-size: 0.85rem;"></p>
+        <a href="/?welcome=1" class="btn btn-primary" style="margin-bottom: 0.75rem;">Go to Overview &rarr;</a>
+        <p class="text-muted" style="margin: 0; font-size: 0.75rem;">Taking you to the Overview in a few seconds…</p>
+    </div>
 </div>
 
 <script>
@@ -191,11 +230,13 @@ async function setupTest() {
 async function setupSave() {
     const data = await setupCall('/api/aws-setup', 'Testing and saving…');
     if (data) {
-        document.getElementById('setup-result').textContent = data.collection_started
-            ? 'Saved — account ' + data.account_id + ' connected, first collection running:'
-              + ' the dashboard fills up within a couple of minutes. Reloading…'
-            : 'Saved — account ' + data.account_id + ' connected. Reloading…';
-        setTimeout(() => window.location.reload(), data.collection_started ? 2500 : 1200);
+        document.getElementById('setup-result').textContent = '';
+        document.getElementById('setup-success-account').textContent = data.account_id;
+        document.getElementById('setup-success-collection').textContent = data.collection_started
+            ? 'Your first collection is already running: the dashboard fills up within a couple of minutes.'
+            : 'The next scheduled collection will fill the dashboard (or run "wasteless collect" now).';
+        document.getElementById('setup-success').style.display = 'flex';
+        setTimeout(() => { window.location.href = '/?welcome=1'; }, 5000);
     }
 }
 </script>

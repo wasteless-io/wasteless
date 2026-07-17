@@ -249,6 +249,19 @@
 {% endblock %}
 
 {% block content %}
+{# One-time greeting after the /setup success hand-off (?welcome=1). The
+   script cleans the URL so a refresh or bookmark does not repeat it. #}
+{% if welcome %}
+<div class="alert alert-success" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem;">
+    <span><strong>Welcome to wasteless!</strong> Your AWS account is connected.
+        Figures appear here within a couple of minutes and refresh every 5 minutes;
+        when the first recommendations show up, review them in
+        <a href="/recommendations">Recommendations</a>. Nothing is ever changed
+        in your account without your explicit approval.</span>
+    <button onclick="this.parentElement.remove()" style="background: none; border: none; cursor: pointer; color: inherit; font-size: 1.1rem; line-height: 1;" aria-label="Dismiss">&times;</button>
+</div>
+<script>history.replaceState(null, '', '/');</script>
+{% endif %}
 <!-- Hero Section -->
 {# Onboarding hint, only until a first scan has ever run #}
 {% if not last_sync %}
@@ -361,7 +374,7 @@
         {% if not last_sync %}
         No collection has run yet &mdash; run <code style="background: rgba(0,0,0,0.06); padding: 0.05rem 0.3rem; border-radius: 3px;">wasteless collect</code> to populate these figures.
         {% elif collection_stale %}
-        Last collection: {{ last_sync|localtime }} &mdash; the 5-minute auto-collection loop is not currently running.
+        Last collection: {{ last_sync|localtime }}. No successful collection since then: the 5-minute loop is stopped, or it runs but cannot reach AWS (see /logs).
         {% else %}
         <span class="kpi-hover" tabindex="0" data-tip="Waste figures are collected automatically every 5 minutes">Last collection: {{ last_sync|localtime }}</span>
         {% endif %}

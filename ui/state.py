@@ -181,6 +181,58 @@ scheduler = AsyncIOScheduler()
 # Cached AWS reachability status (refreshed by sync job)
 _aws_status: dict = {"reachable": None, "checked_at": None}
 
+# Cached "most recent collected data" timestamp. Lets the base.html banner
+# distinguish "never connected" (empty database, onboarding message) from
+# "connection lost" (data exists but the AWS check fails: the pages show
+# stale figures and must say so). TTL-cached because base.html renders on
+# every page and this must never add a query per request.
+_data_status: dict = {"last_data_at": None, "checked_at": None}
+_DATA_STATUS_TTL_SECONDS = 300
+
+
+def get_last_data_at():
+    """Timestamp of the most recent data written by a collection (waste or
+    Cost Explorer costs), or None when the database is empty. Never raises:
+    on DB trouble it returns the cached value (the banner then degrades to
+    the onboarding wording, which is still true enough)."""
+    now = datetime.now()
+    checked = _data_status["checked_at"]
+    if checked and (now - checked).total_seconds() < _DATA_STATUS_TTL_SECONDS:
+        return _data_status["last_data_at"]
+    try:
+        pool = _get_pool()
+        conn = pool.getconn()
+        try:
+            cursor = conn.cursor()
+            # created_at (new findings/costs actually inserted) plus runs
+            # with no failed step: updated_at would look fresh forever,
+            # detectors re-confirm findings from DB-cached metrics on every
+            # tick even when AWS is unreachable. Same expression as the
+            # Overview's "Last collection" (routes/home.py).
+            cursor.execute("""
+                SELECT GREATEST(
+                    (SELECT MAX(created_at) FROM waste_detected),
+                    (SELECT MAX(created_at) FROM cloud_costs_raw),
+                    (SELECT MAX(ran_at) FROM collection_runs
+                     WHERE failed_steps = '{}')
+                ) AS last_data_at
+            """)
+            row = cursor.fetchone()
+            cursor.close()
+            _data_status["last_data_at"] = row["last_data_at"] if row else None
+            _data_status["checked_at"] = now
+        finally:
+            conn.rollback()
+            pool.putconn(conn)
+    except Exception as e:
+        logging.getLogger("wasteless_ui.state").debug(f"last-data check failed: {e}")
+    return _data_status["last_data_at"]
+
+
+# Tri-state companion of aws_reachable() for the banner: a datetime when
+# collected data exists, None otherwise.
+templates.env.globals["aws_data_at"] = get_last_data_at
+
 
 def aws_connection_configured() -> bool:
     """Une connexion AWS est-elle configurée ? Même heuristique large que

@@ -874,13 +874,24 @@
         </div>
 
         <main class="main">
-            {# Global onboarding banner: distinct from the "partial collection"
-               banner (steampipe) — this one means NO AWS data at all. #}
+            {# Global AWS banner, two states: onboarding (nothing was ever
+               collected, the database is empty) vs connection lost (the
+               pages still show data, but it is frozen at the last successful
+               collection and the user must know it is stale). Distinct from
+               the "partial collection" banner (steampipe). #}
             {% if aws_reachable() is sameas false and request.url.path != '/setup' %}
+            {% set last_data_at = aws_data_at() %}
+            {% if last_data_at %}
             <div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.25rem;">
-                <span>AWS account not connected — there is no data to collect or display yet.</span>
+                <span>AWS connection lost: the figures below date from the last collected data ({{ last_data_at|localtime }}) and new waste is not being detected.</span>
+                <a href="/setup" style="white-space:nowrap;font-weight:600;">Reconnect AWS &rarr;</a>
+            </div>
+            {% else %}
+            <div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.25rem;">
+                <span>AWS account not connected: there is no data to collect or display yet.</span>
                 <a href="/setup" style="white-space:nowrap;font-weight:600;">Connect AWS (~10 min) &rarr;</a>
             </div>
+            {% endif %}
             {% endif %}
             {% block content %}{% endblock %}
         </main>
