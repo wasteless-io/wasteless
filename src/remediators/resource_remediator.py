@@ -19,7 +19,7 @@ Every remediation follows the same guarded flow as EC2Remediator:
 import json
 import logging
 import os
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, Optional
 
 from dotenv import load_dotenv
@@ -515,10 +515,188 @@ class LoadBalancerRemediator(ResourceRemediator):
             )
 
 
+class EIPReleaseRemediator(ResourceRemediator):
+    """Release an unassociated Elastic IP.
+
+    Rollback is best-effort real: a released EIP can be recovered with
+    allocate-address --address <ip> as long as AWS has not reallocated
+    it, so the public IP is kept in the pre-action state snapshot.
+    """
+
+    resource_type = "elastic_ip"
+    action_type = "release_ip"
+    can_rollback = True  # recover the address while still unallocated
+
+    def get_resource_state(self, resource_id, region):
+        ec2 = get_client("ec2", region=region, write=True)
+        try:
+            addr = ec2.describe_addresses(AllocationIds=[resource_id])["Addresses"][0]
+        except ec2.exceptions.ClientError:
+            return None
+        return {
+            "allocation_id": addr["AllocationId"],
+            "public_ip": addr.get("PublicIp"),
+            "association_id": addr.get("AssociationId"),
+            "instance_id": addr.get("InstanceId"),
+            "network_interface_id": addr.get("NetworkInterfaceId"),
+            "tags": _tags_dict(addr.get("Tags")),
+        }
+
+    def verify_still_wasteful(self, state, resource_id, region):
+        target = (
+            state.get("instance_id")
+            or state.get("network_interface_id")
+            or state.get("association_id")
+        )
+        if target:
+            raise SafeguardException(
+                f"Elastic IP {resource_id} is now associated to {target}, not releasing"
+            )
+
+    def execute_action(self, resource_id, region, state):
+        get_client("ec2", region=region, write=True).release_address(AllocationId=resource_id)
+
+
+# Deleting snapshots and AMIs is irreversible: below this live-checked age
+# the remediator refuses, whatever the detector said. Mirrors the detector
+# thresholds (snapshot_orphan / ami_orphan both flag at > 90 days).
+DELETION_MIN_AGE_DAYS = 90
+
+
+class SnapshotDeleteRemediator(ResourceRemediator):
+    """Delete an old orphaned EBS snapshot (irreversible).
+
+    Live re-checks before deleting: the snapshot must still exist, be
+    older than DELETION_MIN_AGE_DAYS, and back no AMI (deleting a
+    snapshot referenced by an AMI breaks the image).
+    """
+
+    resource_type = "ebs_snapshot"
+    action_type = "delete_snapshot"
+    can_rollback = False
+
+    def get_resource_state(self, resource_id, region):
+        ec2 = get_client("ec2", region=region, write=True)
+        try:
+            snap = ec2.describe_snapshots(SnapshotIds=[resource_id])["Snapshots"][0]
+        except ec2.exceptions.ClientError:
+            return None
+        images = ec2.describe_images(
+            Owners=["self"],
+            Filters=[{"Name": "block-device-mapping.snapshot-id", "Values": [resource_id]}],
+        ).get("Images", [])
+        age_days = (datetime.now(timezone.utc) - snap["StartTime"]).days
+        return {
+            "snapshot_id": snap["SnapshotId"],
+            "volume_id": snap.get("VolumeId"),
+            "size_gb": snap.get("VolumeSize"),
+            "age_days": age_days,
+            "ami_ids": [i["ImageId"] for i in images],
+            "tags": _tags_dict(snap.get("Tags")),
+        }
+
+    def verify_still_wasteful(self, state, resource_id, region):
+        if state["ami_ids"]:
+            raise SafeguardException(
+                f"Snapshot {resource_id} backs AMI(s) "
+                f"{', '.join(state['ami_ids'])}, not deleting"
+            )
+        if state["age_days"] < DELETION_MIN_AGE_DAYS:
+            raise SafeguardException(
+                f"Snapshot {resource_id} is only {state['age_days']}d old "
+                f"(minimum {DELETION_MIN_AGE_DAYS}d), not deleting"
+            )
+
+    def execute_action(self, resource_id, region, state):
+        get_client("ec2", region=region, write=True).delete_snapshot(SnapshotId=resource_id)
+
+
+class AMIDeregisterRemediator(ResourceRemediator):
+    """Deregister an orphaned AMI, then delete its backing snapshots
+    (irreversible).
+
+    Live re-checks: the image must still exist, be older than
+    DELETION_MIN_AGE_DAYS, and back no instance (any state but
+    terminated counts: a stopped instance restarted later still
+    needs its AMI's snapshots).
+    """
+
+    resource_type = "ami"
+    action_type = "deregister_ami"
+    can_rollback = False
+
+    def get_resource_state(self, resource_id, region):
+        ec2 = get_client("ec2", region=region, write=True)
+        try:
+            images = ec2.describe_images(ImageIds=[resource_id])["Images"]
+        except ec2.exceptions.ClientError:
+            return None
+        if not images:
+            return None
+        image = images[0]
+        reservations = ec2.describe_instances(
+            Filters=[{"Name": "image-id", "Values": [resource_id]}]
+        ).get("Reservations", [])
+        instances = [
+            i["InstanceId"]
+            for res in reservations
+            for i in res.get("Instances", [])
+            if i.get("State", {}).get("Name") != "terminated"
+        ]
+        created = datetime.fromisoformat(image["CreationDate"].replace("Z", "+00:00"))
+        return {
+            "image_id": image["ImageId"],
+            "name": image.get("Name"),
+            "age_days": (datetime.now(timezone.utc) - created).days,
+            "instance_ids": instances,
+            "snapshot_ids": [
+                m["Ebs"]["SnapshotId"]
+                for m in image.get("BlockDeviceMappings", [])
+                if "Ebs" in m and m["Ebs"].get("SnapshotId")
+            ],
+            "tags": _tags_dict(image.get("Tags")),
+        }
+
+    def verify_still_wasteful(self, state, resource_id, region):
+        if state["instance_ids"]:
+            raise SafeguardException(
+                f"AMI {resource_id} now backs instance(s) "
+                f"{', '.join(state['instance_ids'])}, not deregistering"
+            )
+        if state["age_days"] < DELETION_MIN_AGE_DAYS:
+            raise SafeguardException(
+                f"AMI {resource_id} is only {state['age_days']}d old "
+                f"(minimum {DELETION_MIN_AGE_DAYS}d), not deregistering"
+            )
+
+    def execute_action(self, resource_id, region, state):
+        ec2 = get_client("ec2", region=region, write=True)
+        ec2.deregister_image(ImageId=resource_id)
+        # Deregistering alone keeps paying for the backing snapshots; that
+        # storage is the actual waste. Best-effort per snapshot, then a
+        # single failure summary so the action is marked failed and a
+        # human can finish the cleanup.
+        failed = []
+        for snapshot_id in state.get("snapshot_ids", []):
+            try:
+                ec2.delete_snapshot(SnapshotId=snapshot_id)
+            except ec2.exceptions.ClientError as e:
+                logger.error(f"Failed to delete backing snapshot {snapshot_id}: {e}")
+                failed.append(snapshot_id)
+        if failed:
+            raise RuntimeError(
+                f"AMI {resource_id} deregistered but backing snapshot(s) "
+                f"{', '.join(failed)} could not be deleted, delete them manually"
+            )
+
+
 # recommendation_type -> remediator class, used by the UI dispatch
 REMEDIATORS_BY_RECOMMENDATION = {
     "migrate_gp2_to_gp3": Gp2MigrationRemediator,
     "delete_volume": VolumeDeleteRemediator,
     "delete_nat_gateway": NATGatewayRemediator,
     "delete_load_balancer": LoadBalancerRemediator,
+    "release_ip": EIPReleaseRemediator,
+    "delete_snapshot": SnapshotDeleteRemediator,
+    "deregister_ami": AMIDeregisterRemediator,
 }

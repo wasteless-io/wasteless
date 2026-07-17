@@ -24,13 +24,13 @@ EXECUTION_MODES = {
     "delete_volume": "remediator",  # snapshot-first: rollback real
     "delete_nat_gateway": "remediator",
     "delete_load_balancer": "remediator",
+    "release_ip": "remediator",  # unassociated by definition; IP recoverable
+    "delete_snapshot": "remediator",  # live-checked: 90d+ old, backs no AMI
+    "deregister_ami": "remediator",  # live-checked: 90d+ old, backs no instance
     # Manual review — approval is a decision, execution is up to the human
     "downsize_instance": "manual",
-    "delete_snapshot": "manual",
-    "release_ip": "manual",
     "delete_vpc": "manual",
-    # RDS & AMI — destructive/irreversible, always manual review
-    "deregister_ami": "manual",
+    # RDS — a database is never deleted automatically
     "delete_rds_instance": "manual",
     "downsize_rds_instance": "manual",
     "delete_rds_snapshot": "manual",
