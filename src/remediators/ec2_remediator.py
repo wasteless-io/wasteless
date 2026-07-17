@@ -31,7 +31,7 @@ class DateTimeEncoder(json.JSONEncoder):
 
 
 from core.safeguards import Safeguards, SafeguardException
-from core.database import get_db_connection
+from core.database import get_db_connection, release_connection
 from core.aws_clients import get_client
 
 load_dotenv()
@@ -602,13 +602,16 @@ class EC2Remediator:
             self.release_lock()
 
     def __del__(self):
-        """Close database connection and release lock."""
+        """Return the connection to the pool and release the lock."""
         if hasattr(self, "conn"):
             # Try to release lock if held; ignore errors during cleanup
             with contextlib.suppress(Exception):
                 self.release_lock()
 
-            self.conn.close()
+            # The connection belongs to the shared core.database pool:
+            # close() burns the slot forever (the pool still counts it as
+            # checked out), exhausting the pool after maxconn remediators
+            release_connection(self.conn)
 
 
 def main():

@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 
 
 from core.safeguards import Safeguards, SafeguardException
-from core.database import get_db_connection
+from core.database import get_db_connection, release_connection
 from core.aws_clients import get_client
 
 load_dotenv()
@@ -275,8 +275,11 @@ class ResourceRemediator:
         return result
 
     def __del__(self):
+        # The connection belongs to the shared core.database pool: close()
+        # burns the slot forever (the pool still counts it as checked out),
+        # exhausting the pool after maxconn remediator instances
         if hasattr(self, "conn") and self.conn:
-            self.conn.close()
+            release_connection(self.conn)
 
 
 def _tags_dict(aws_tags) -> Dict[str, str]:
