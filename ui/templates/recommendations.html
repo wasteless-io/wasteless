@@ -748,14 +748,22 @@
         <div style="margin-bottom: 0.75rem;"></div>
         <p style="font-weight: 600; margin-bottom: 0.25rem;">Nothing pending review</p>
         <p class="text-muted" style="margin-bottom: 0; font-size: 0.9rem;">Every waste item detected so far has already been reviewed, dismissed, or resolved. Check <a href="/history">History</a> for what happened to it.</p>
+    {% elif aws_reachable() is sameas false %}
+        {# No data AND no AWS connection: collecting would produce nothing,
+           the only useful action is connecting the account. #}
+        <div style="margin-bottom: 0.75rem;"></div>
+        <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations yet</p>
+        <p class="text-muted" style="margin-bottom: 1.25rem; font-size: 0.9rem;">Connect your AWS account to start detecting waste.</p>
+        <a href="/setup" class="btn btn-primary" style="padding: 0.4rem 1rem;">Connect AWS &rarr;</a>
     {% else %}
         <div style="margin-bottom: 0.75rem;"></div>
         <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations yet</p>
-        <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">The collector hasn't run yet.</p>
-        <div style="display: inline-block; text-align: left; background: var(--gray-100); border-radius: 8px; padding: 1rem 1.5rem; font-size: 0.85rem;">
-            <p style="margin: 0 0 0.5rem; font-weight: 600; color: var(--gray-700);">Run the pipeline to collect data:</p>
-            <code style="display: block;">wasteless collect</code>
-        </div>
+        <p class="text-muted" style="margin-bottom: 1.25rem; font-size: 0.9rem;">
+            Collection runs automatically every 5 minutes: either the first run
+            is still on its way, or no waste was detected in your account.
+        </p>
+        <button class="btn btn-primary" id="collect-now-btn" onclick="collectNow()" style="padding: 0.4rem 1rem;">Collect now</button>
+        <p id="collect-now-status" class="text-muted" style="margin: 0.75rem 0 0; font-size: 0.85rem;"></p>
     {% endif %}
 </div>
 {% endif %}
@@ -1317,6 +1325,31 @@
             alert('Sync error: ' + error.message);
             btn.disabled = false;
             btn.innerHTML = '<span id="syncIcon">&#8635;</span> Sync AWS';
+        }
+    }
+
+    // Empty state's "Collect now": full detection run (wasteless collect),
+    // unlike Sync AWS above which only reconciles existing recommendations.
+    async function collectNow() {
+        const btn = document.getElementById('collect-now-btn');
+        const status = document.getElementById('collect-now-status');
+        btn.disabled = true;
+        status.textContent = 'Starting the collection…';
+        try {
+            const resp = await fetch('/api/collect-now', { method: 'POST' });
+            const data = await resp.json();
+            if (resp.ok && data.started) {
+                status.textContent = 'Collection running. It takes a couple of minutes; '
+                    + 'this page reloads automatically when it is likely done.';
+                setTimeout(() => window.location.reload(), 90000);
+            } else {
+                status.textContent = (data.detail || 'Could not start the collection.')
+                    + ' You can run "wasteless collect" from a terminal instead.';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            status.textContent = 'Request failed: ' + e;
+            btn.disabled = false;
         }
     }
 
