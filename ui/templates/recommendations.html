@@ -108,6 +108,22 @@
     .mode-pill--live { background: rgba(220,38,38,0.08); color: var(--danger); border-color: rgba(220,38,38,0.28); }
     .mode-pill--soft { background: rgba(0,0,0,0.04); color: var(--gray-600); }
     .policy-banner .dot { font-size: 0.7rem; line-height: 1; }
+    /* Tab header on narrow (laptop) viewports: tabs and buttons must never
+       shrink below their content width — flex used to squeeze them until
+       "MANUAL REVIEW" and "Mark as to-do" wrapped over 2-3 lines. Instead,
+       below 1700px the count + buttons cluster (.tab-actions) sits on its
+       own right-aligned row; the policy pills stay up on the tab line
+       (they're a separate flex item with margin-left: auto). The rule is
+       unconditional (not gated on a selection) so nothing jumps between
+       rows when the first checkbox is ticked. margin-left is zeroed
+       because flex-basis:100% + margin would overflow the card. */
+    .tab-nav > button { flex-shrink: 0; white-space: nowrap; }
+    .policy-banner, .tab-actions { flex-shrink: 0; }
+    .tab-actions { margin-left: 1rem; }
+    .tab-actions .btn { white-space: nowrap; }
+    @media (max-width: 1699px) {
+        .tab-actions { flex-basis: 100%; justify-content: flex-end; margin-left: 0; }
+    }
 </style>
 {# Hero banner, same chrome plane (#efede8) as the Overview header. Three
    zones (1fr auto 1fr keeps the title centered whatever the sides weigh):
@@ -304,7 +320,7 @@
 <!-- Tabs -->
 <div class="card" style="padding: 0.75rem;">
     <!-- Tab nav -->
-    <div style="display: flex; align-items: flex-end; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1rem;">
+    <div class="tab-nav" style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1rem;">
         <button id="tab-btn-ec2" onclick="switchTab('ec2')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--gray-800); margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-800);">EC2 Instances <span style="background: var(--gray-800); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ec2_recs|length }}</span></span>
             <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-800); opacity: 0.7; margin-top: 2px;">AUTOMATED</span>
@@ -335,10 +351,14 @@
         {% endif %}
 
         <!-- Right cluster: policy status pills sit next to the selected count
-             and action buttons (moved here from just after the tabs). -->
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 1rem; padding-bottom: 0.5rem;">
+             and action buttons (moved here from just after the tabs). The
+             pills are a sibling of .tab-actions, not a child: on narrow
+             viewports only the count + buttons drop to their own row while
+             the pills stay up on the tab line (single margin-left:auto here
+             keeps pills + actions packed together on the right when they
+             share the line). -->
         <!-- Active policy status — the mode pill links to /settings to change it -->
-        <div class="policy-banner" style="margin: 0;">
+        <div class="policy-banner" style="margin: 0 0 0 auto; padding-bottom: 0.5rem;">
             {% if get_dry_run() %}
             <a href="/settings" class="mode-pill mode-pill--dry kpi-hover" data-tip-card="Dry-run — approving only simulates, nothing is touched on AWS. Click to change the mode in Settings."><span class="dot">●</span> Dry-run</a>
             {% else %}
@@ -351,6 +371,7 @@
             <a href="/settings" class="mode-pill mode-pill--soft kpi-hover" data-tip-card="Auto-remediation is off — nothing runs without your approval. Click to change it in Settings.">Auto-remediation off</a>
             {% endif %}
         </div>
+        <div class="tab-actions" style="display: flex; align-items: center; gap: 1rem; padding-bottom: 0.5rem;">
         <!-- AUTOMATED (EC2 + EBS + Other) -->
         <div id="actions-automated" style="display: flex; align-items: center; gap: 0.75rem;">
             <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600); white-space: nowrap;">0 selected</span>
