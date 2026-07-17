@@ -609,11 +609,105 @@ def _describe_snapshot(ec2, resource_id, region):
     )
 
 
+def _describe_nat_gateway(ec2, resource_id, region):
+    nat = ec2.describe_nat_gateways(NatGatewayIds=[resource_id])["NatGateways"][0]
+    ips = ", ".join(a.get("PrivateIp", "?") for a in nat.get("NatGatewayAddresses", []))
+    return (
+        "NAT Gateway",
+        f"https://console.aws.amazon.com/vpcconsole/home?region={region}"
+        f"#NatGatewayDetails:natGatewayId={resource_id}",
+        nat.get("Tags", []),
+        [
+            {"label": "State", "value": nat.get("State")},
+            {"label": "Connectivity", "value": nat.get("ConnectivityType")},
+            {"label": "VPC", "value": nat.get("VpcId")},
+            {"label": "Subnet", "value": nat.get("SubnetId")},
+            {"label": "Private IPs", "value": ips},
+            _date_field("Created", nat.get("CreateTime")),
+        ],
+    )
+
+
+def _describe_vpc(ec2, resource_id, region):
+    vpc = ec2.describe_vpcs(VpcIds=[resource_id])["Vpcs"][0]
+    return (
+        "VPC",
+        f"https://console.aws.amazon.com/vpcconsole/home?region={region}"
+        f"#VpcDetails:VpcId={resource_id}",
+        vpc.get("Tags", []),
+        [
+            {"label": "State", "value": vpc.get("State")},
+            {"label": "CIDR", "value": vpc.get("CidrBlock")},
+            {"label": "Default VPC", "value": "yes" if vpc.get("IsDefault") else "no"},
+            {"label": "Tenancy", "value": vpc.get("InstanceTenancy")},
+        ],
+    )
+
+
+def _describe_image(ec2, resource_id, region):
+    image = ec2.describe_images(ImageIds=[resource_id])["Images"][0]
+    snapshot_ids = [
+        m["Ebs"]["SnapshotId"]
+        for m in image.get("BlockDeviceMappings", [])
+        if "Ebs" in m and m["Ebs"].get("SnapshotId")
+    ]
+    return (
+        "AMI",
+        f"#ImageDetails:imageId={resource_id}",
+        image.get("Tags", []),
+        [
+            {"label": "Name", "value": image.get("Name")},
+            {"label": "State", "value": image.get("State")},
+            # CreationDate is an ISO string, not a datetime: pass it through,
+            # the modal's date formatter accepts both
+            {"label": "Created", "value": image.get("CreationDate"), "date": True},
+            {"label": "Visibility", "value": "public" if image.get("Public") else "private"},
+            {"label": "Platform", "value": image.get("PlatformDetails")},
+            {"label": "Architecture", "value": image.get("Architecture")},
+            {"label": "Backing snapshots", "value": ", ".join(snapshot_ids) or None},
+            {"label": "Description", "value": image.get("Description")},
+        ],
+    )
+
+
+def _describe_load_balancer(ec2, resource_id, region):
+    # ALB/NLB/GWLB only (id is the ARN); classic LBs are name-keyed and
+    # cannot be prefix-dispatched, they keep the 400 fallback
+    from utils.aws_clients import get_client
+
+    elbv2 = get_client("elbv2", region=region)
+    lb = elbv2.describe_load_balancers(LoadBalancerArns=[resource_id])["LoadBalancers"][0]
+    try:
+        tags = elbv2.describe_tags(ResourceArns=[resource_id])["TagDescriptions"][0]["Tags"]
+    except Exception:
+        tags = []
+    azs = ", ".join(z.get("ZoneName", "?") for z in lb.get("AvailabilityZones", []))
+    return (
+        "Load balancer",
+        f"#LoadBalancer:loadBalancerArn={resource_id}",
+        tags,
+        [
+            {"label": "Name", "value": lb.get("LoadBalancerName")},
+            {"label": "Type", "value": lb.get("Type")},
+            {"label": "Scheme", "value": lb.get("Scheme")},
+            {"label": "State", "value": (lb.get("State") or {}).get("Code")},
+            {"label": "VPC", "value": lb.get("VpcId")},
+            {"label": "Availability zones", "value": azs},
+            {"label": "DNS name", "value": lb.get("DNSName")},
+            _date_field("Created", lb.get("CreatedTime")),
+        ],
+    )
+
+
 _RESOURCE_DESCRIBERS = {
     "i-": _describe_instance,
     "vol-": _describe_volume,
     "eipalloc-": _describe_address,
     "snap-": _describe_snapshot,
+    "nat-": _describe_nat_gateway,
+    "vpc-": _describe_vpc,
+    "ami-": _describe_image,
+    "arn:aws:elasticloadbalancing": _describe_load_balancer,
 }
 
 
@@ -663,13 +757,18 @@ def resource_details(rec_id: int, conn=Depends(get_db)):
     try:
         ec2 = get_client("ec2", region=region)
         kind, console_fragment, tags, fields = describe(ec2, resource_id, region)
+        # Describers for non-EC2 consoles (VPC, NAT) return a full URL;
+        # the rest return an EC2-console fragment
+        console_url = (
+            console_fragment
+            if console_fragment.startswith("https://")
+            else f"https://console.aws.amazon.com/ec2/v2/home?region={region}{console_fragment}"
+        )
         payload = {
             "available": True,
             "region": region,
             "kind": kind,
-            "console_url": (
-                f"https://console.aws.amazon.com/ec2/v2/home?region={region}{console_fragment}"
-            ),
+            "console_url": console_url,
             "name": next((t["Value"] for t in tags if t["Key"] == "Name"), None),
             "fields": [f for f in fields if f and f.get("value") not in (None, "")],
             "tags": [{"key": t["Key"], "value": t["Value"]} for t in tags],
@@ -722,6 +821,18 @@ def _deletion_status(ec2, resource_id):
         if resource_id.startswith("snap-"):
             snaps = ec2.describe_snapshots(SnapshotIds=[resource_id])["Snapshots"]
             return (not snaps), (snaps[0]["State"] if snaps else None)
+        if resource_id.startswith("vpc-"):
+            vpcs = ec2.describe_vpcs(VpcIds=[resource_id])["Vpcs"]
+            return (not vpcs), (vpcs[0]["State"] if vpcs else None)
+        if resource_id.startswith("nat-"):
+            nats = ec2.describe_nat_gateways(NatGatewayIds=[resource_id])["NatGateways"]
+            if not nats:
+                return True, None
+            # 'deleted' lingers in describe results after deletion
+            return (nats[0]["State"] == "deleted"), nats[0]["State"]
+        if resource_id.startswith("ami-"):
+            images = ec2.describe_images(ImageIds=[resource_id])["Images"]
+            return (not images), (images[0]["State"] if images else None)
     except Exception as e:
         # The *.NotFound error IS the confirmation the resource was deleted.
         if "NotFound" in str(e):
