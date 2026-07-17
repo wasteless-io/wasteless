@@ -1770,6 +1770,10 @@
             }
             _removeTodoRow(recId);
             showToast('Skipped — off the to-do list, still counted as waste.', 'success');
+            // The "Skipped recommendations" panel at the bottom is
+            // server-rendered — reload so the row shows up there (same
+            // 1s delay as the tab-bar Skip, long enough to read the toast).
+            setTimeout(() => window.location.reload(), 1000);
         } catch (error) {
             btn.disabled = false;
             btn.textContent = 'Skip';
