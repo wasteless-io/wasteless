@@ -690,7 +690,7 @@
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-rds" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             {% set reason = rec.action_required %}{% if rec.ai_insight %}{% set reason = reason ~ ' — ' ~ rec.ai_insight %}{% endif %}
-                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}">{{ rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; word-break: break-all; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Recommended action" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.resource_type | replace('_', ' ') }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
@@ -1579,12 +1579,11 @@
 
             content.innerHTML = creationBox + recap + tagsBlock + consoleLink;
 
-            // Reveal the action footer. VPC is the one modal-served kind
-            // whose type stays manual-review (approving only queues a
-            // to-do), so its primary label switches to "Mark as to-do";
-            // every other kind has an automated remediator and keeps
-            // "Apply".
-            _modalIsManual = ['VPC'].includes(details.kind);
+            // Reveal the action footer. VPC and the RDS kinds stay
+            // manual-review (approving only queues a to-do), so their
+            // primary label switches to "Mark as to-do"; every other kind
+            // has an automated remediator and keeps "Apply".
+            _modalIsManual = ['VPC', 'RDS instance', 'RDS snapshot'].includes(details.kind);
             document.getElementById('resModalApply').textContent =
                 _modalIsManual ? 'Mark as to-do' : 'Apply';
             document.getElementById('resourceModalActions').style.display = 'flex';
