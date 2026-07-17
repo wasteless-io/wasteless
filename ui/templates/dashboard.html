@@ -323,7 +323,7 @@
              so waste and savings read against their real denominator -->
         <div class="kpi">
             {% if aws_spend_eur is not none %}
-            <div class="kpi-value"><a class="kpi-hover" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Total AWS bill for {{ aws_spend_month }} (last full month), from Cost Explorer — collected daily, converted at the fixed {{ usd_to_eur }} USD&rarr;EUR rate · click to open Cost Explorer"><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></a></div>
+            <div class="kpi-value"><a class="kpi-hover" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Total AWS bill for {{ aws_spend_month }} (last full calendar month), from Cost Explorer — collected daily, converted at the fixed {{ usd_to_eur }} USD&rarr;EUR rate. The Overview's AWS Spend covers the last 30 days (rolling) instead · click to open Cost Explorer"><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></a></div>
             <div class="kpi-label">AWS Spend</div>
             <div class="kpi-sub">{{ aws_spend_month }} · whole bill, not just waste</div>
             {% else %}

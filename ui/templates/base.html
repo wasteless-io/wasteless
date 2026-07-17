@@ -333,9 +333,42 @@
             .grid-5 { grid-template-columns: repeat(3, 1fr); }
         }
 
+        /* Mobile nav: the sidebar is hidden under 768px, the burger button
+           reopens it as a fixed overlay above a backdrop. 44px button meets
+           the minimum touch-target size. */
+        .mobile-nav-toggle {
+            display: none;
+            position: fixed;
+            top: 0.75rem;
+            left: 0.75rem;
+            z-index: 1080;
+            width: 44px;
+            height: 44px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 10px;
+            background: #faf9f7;
+            color: #1d1d1f;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .mobile-nav-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            z-index: 1090;
+        }
+
         @media (max-width: 768px) {
             .sidebar { display: none; }
-            .main { margin-left: 0; }
+            .sidebar.mobile-open { display: flex; z-index: 1100; }
+            .mobile-nav-toggle { display: flex; }
+            .mobile-nav-backdrop.open { display: block; }
+            /* Clear the fixed burger button */
+            .main { margin-left: 0; padding: 4rem 1rem 1.5rem; }
             .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
         }
 
@@ -772,8 +805,12 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <button type="button" id="mobileNavToggle" class="mobile-nav-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="appSidebar" onclick="toggleMobileNav()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div id="mobileNavBackdrop" class="mobile-nav-backdrop" onclick="closeMobileNav()"></div>
     <div class="layout">
-        <aside class="sidebar">
+        <aside class="sidebar" id="appSidebar">
             <div class="sidebar-header">
                 <div class="logo" style="justify-content: space-between;">
                     <a href="/" class="logo-mark" aria-label="Wasteless — back to overview"><span>W</span><span>a</span><span>s</span><span>t</span><span>e</span><span>l</span><span>e</span><span>s</span><span>s</span></a>
@@ -898,6 +935,32 @@
     </div>
 
     <script>
+        // Mobile nav: burger toggles the sidebar as an overlay (<= 768px)
+        function toggleMobileNav() {
+            const sidebar = document.getElementById('appSidebar');
+            if (sidebar.classList.contains('mobile-open')) {
+                closeMobileNav();
+            } else {
+                sidebar.classList.add('mobile-open');
+                document.getElementById('mobileNavBackdrop').classList.add('open');
+                const btn = document.getElementById('mobileNavToggle');
+                btn.setAttribute('aria-expanded', 'true');
+                btn.setAttribute('aria-label', 'Close navigation');
+            }
+        }
+
+        function closeMobileNav() {
+            document.getElementById('appSidebar').classList.remove('mobile-open');
+            document.getElementById('mobileNavBackdrop').classList.remove('open');
+            const btn = document.getElementById('mobileNavToggle');
+            btn.setAttribute('aria-expanded', 'false');
+            btn.setAttribute('aria-label', 'Open navigation');
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeMobileNav();
+        });
+
         // Utility functions
         function formatCurrency(value) {
             return new Intl.NumberFormat('en-EU', {
