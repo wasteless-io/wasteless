@@ -699,6 +699,68 @@ def _describe_load_balancer(ec2, resource_id, region):
     )
 
 
+def _describe_rds_instance(ec2, resource_id, region):
+    from utils.aws_clients import get_client
+
+    rds = get_client("rds", region=region)
+    db = rds.describe_db_instances(DBInstanceIdentifier=resource_id)["DBInstances"][0]
+    endpoint = (db.get("Endpoint") or {}).get("Address")
+    return (
+        "RDS instance",
+        f"https://console.aws.amazon.com/rds/home?region={region}"
+        f"#database:id={resource_id};is-cluster=false",
+        db.get("TagList", []),
+        [
+            {"label": "Status", "value": db.get("DBInstanceStatus")},
+            {
+                "label": "Engine",
+                "value": f"{db.get('Engine', '?')} {db.get('EngineVersion', '')}".strip(),
+            },
+            {"label": "Class", "value": db.get("DBInstanceClass")},
+            {
+                "label": "Storage",
+                "value": (
+                    f"{db['AllocatedStorage']} GiB {db.get('StorageType', '')}".strip()
+                    if db.get("AllocatedStorage")
+                    else None
+                ),
+            },
+            {"label": "Multi-AZ", "value": "yes" if db.get("MultiAZ") else "no"},
+            {"label": "Endpoint", "value": endpoint},
+            _date_field("Created", db.get("InstanceCreateTime")),
+        ],
+    )
+
+
+def _describe_rds_snapshot(ec2, resource_id, region):
+    from utils.aws_clients import get_client
+
+    rds = get_client("rds", region=region)
+    snap = rds.describe_db_snapshots(DBSnapshotIdentifier=resource_id)["DBSnapshots"][0]
+    return (
+        "RDS snapshot",
+        f"https://console.aws.amazon.com/rds/home?region={region}#db-snapshot:id={resource_id}",
+        snap.get("TagList", []),
+        [
+            {"label": "Status", "value": snap.get("Status")},
+            {"label": "Source database", "value": snap.get("DBInstanceIdentifier")},
+            {
+                "label": "Engine",
+                "value": f"{snap.get('Engine', '?')} {snap.get('EngineVersion', '')}".strip(),
+            },
+            {
+                "label": "Storage",
+                "value": (
+                    f"{snap['AllocatedStorage']} GiB" if snap.get("AllocatedStorage") else None
+                ),
+            },
+            {"label": "Type", "value": snap.get("SnapshotType")},
+            {"label": "Encrypted", "value": "yes" if snap.get("Encrypted") else "no"},
+            _date_field("Created", snap.get("SnapshotCreateTime")),
+        ],
+    )
+
+
 _RESOURCE_DESCRIBERS = {
     "i-": _describe_instance,
     "vol-": _describe_volume,
@@ -708,6 +770,13 @@ _RESOURCE_DESCRIBERS = {
     "vpc-": _describe_vpc,
     "ami-": _describe_image,
     "arn:aws:elasticloadbalancing": _describe_load_balancer,
+}
+
+# RDS identifiers are user-chosen names with no reliable prefix: they are
+# dispatched on the recommendation's resource_type instead of the id.
+_RESOURCE_DESCRIBERS_BY_TYPE = {
+    "rds_instance": _describe_rds_instance,
+    "rds_snapshot": _describe_rds_snapshot,
 }
 
 
@@ -741,7 +810,7 @@ def resource_details(rec_id: int, conn=Depends(get_db)):
     describe = next(
         (fn for prefix, fn in _RESOURCE_DESCRIBERS.items() if resource_id.startswith(prefix)),
         None,
-    )
+    ) or _RESOURCE_DESCRIBERS_BY_TYPE.get(row["resource_type"])
     if describe is None:
         raise HTTPException(status_code=400, detail="no details view for this resource type")
 
@@ -841,6 +910,22 @@ def _deletion_status(ec2, resource_id):
     return None, None
 
 
+def _rds_deletion_status(rds, resource_id, resource_type):
+    """RDS variant of _deletion_status, same contract: never confirms a
+    deletion on an ambiguous error, DBInstanceNotFound/DBSnapshotNotFound
+    is the positive confirmation."""
+    try:
+        if resource_type == "rds_instance":
+            dbs = rds.describe_db_instances(DBInstanceIdentifier=resource_id)["DBInstances"]
+            return (not dbs), (dbs[0]["DBInstanceStatus"] if dbs else None)
+        snaps = rds.describe_db_snapshots(DBSnapshotIdentifier=resource_id)["DBSnapshots"]
+        return (not snaps), (snaps[0]["Status"] if snaps else None)
+    except Exception as e:
+        if "NotFound" in str(e):
+            return True, None
+        raise
+
+
 @router.get("/api/recommendations/manual-todos")
 def manual_todos(conn=Depends(get_db)):
     """Manual-review recommendations the user marked as to-do (status
@@ -884,7 +969,7 @@ def deletion_status(rec_id: int, conn=Depends(get_db)):
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT w.resource_id,
+        SELECT w.resource_id, w.resource_type,
                COALESCE(w.metadata->>'region', w.metadata->>'az') AS region
         FROM recommendations r
         JOIN waste_detected w ON w.id = r.waste_id
@@ -904,8 +989,13 @@ def deletion_status(rec_id: int, conn=Depends(get_db)):
     from utils.aws_clients import get_client
 
     try:
-        ec2 = get_client("ec2", region=region)
-        deleted, state = _deletion_status(ec2, resource_id)
+        # RDS identifiers have no prefix: dispatch on resource_type
+        if row["resource_type"] in ("rds_instance", "rds_snapshot"):
+            rds = get_client("rds", region=region)
+            deleted, state = _rds_deletion_status(rds, resource_id, row["resource_type"])
+        else:
+            ec2 = get_client("ec2", region=region)
+            deleted, state = _deletion_status(ec2, resource_id)
         return {"deleted": deleted, "state": state}
     except Exception as e:
         if "AccessDenied" in str(e) or "UnauthorizedOperation" in str(e):
