@@ -319,6 +319,12 @@
 
 <!-- Tabs -->
 <div class="card" style="padding: 0.75rem;">
+    {% if pending_truncated %}
+    <div style="margin: 0.25rem 0.5rem 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--warning); border-radius: 8px; background: rgba(237, 137, 54, 0.06); font-size: 0.8rem; color: var(--gray-700);">
+        Showing the <strong>{{ recommendations|length }}</strong> highest-saving recommendations out of <strong>{{ total_count }}</strong>.
+        Tab counts only cover what is shown; the KPIs above cover everything. Use the filters to narrow down the rest.
+    </div>
+    {% endif %}
     <!-- Tab nav -->
     <div class="tab-nav" style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1rem;">
         <button id="tab-btn-ec2" onclick="switchTab('ec2')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--gray-800); margin-bottom: -2px;">
@@ -808,11 +814,11 @@
 <!-- Resource-details modal: live ec2:Describe* recap + CloudTrail creation
      info, opened by clicking a resource id (EC2 / EBS / EIP / Snapshots
      tabs) — see /api/recommendations/{id}/resource-details -->
-<div id="resourceModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
+<div id="resourceModal" role="dialog" aria-modal="true" aria-labelledby="resourceModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeResourceModal()">
     <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
             <h3 id="resourceModalTitle" style="margin: 0; font-size: 1rem;">Resource details</h3>
-            <button type="button" onclick="closeResourceModal()" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
+            <button type="button" id="resourceModalClose" aria-label="Close" onclick="closeResourceModal()" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
         </div>
         <p id="resourceModalLabel" style="font-size: 0.8rem; color: var(--gray-600); margin: 0 0 0.75rem; font-family: monospace;"></p>
         <div id="resourceContent" style="font-size: 0.85rem; color: var(--gray-700);"></div>
@@ -830,7 +836,7 @@
 <!-- Styled confirmation dialog, replaces the native confirm() (which leaked
      "localhost:8888 indique" and browser-locale buttons). Driven by the
      confirmDialog() promise below. -->
-<div id="confirmModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1100; align-items: center; justify-content: center;">
+<div id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle" aria-describedby="confirmModalMessage" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1100; align-items: center; justify-content: center;">
     <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 420px; box-shadow: 0 12px 32px rgba(0,0,0,0.2);">
         <h3 id="confirmModalTitle" style="margin: 0 0 0.5rem; font-size: 1rem; color: var(--gray-800);">Please confirm</h3>
         <p id="confirmModalMessage" style="margin: 0 0 1.25rem; font-size: 0.9rem; color: var(--gray-600); line-height: 1.5; white-space: pre-line;"></p>
@@ -840,6 +846,10 @@
         </div>
     </div>
 </div>
+
+<!-- Persistent live region: toasts are appended here so screen readers
+     announce them (a region created on the fly is not announced) -->
+<div id="toastRegion" role="status" aria-live="polite" style="position: fixed; bottom: 20px; right: 20px; z-index: 1200; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;"></div>
 
 {# Shared hover card for the "Why act?" reason, positioned with JS (see the
    #reasonTip note in the style block). One element, reused by every row. #}
@@ -970,6 +980,7 @@
     function confirmDialog(message, opts = {}) {
         return new Promise((resolve) => {
             const modal = document.getElementById('confirmModal');
+            const opener = document.activeElement;
             document.getElementById('confirmModalTitle').textContent = opts.title || 'Please confirm';
             const msgEl = document.getElementById('confirmModalMessage');
             // opts.html is trusted markup the caller built (with its own escaping
@@ -989,6 +1000,8 @@
                 cancelBtn.removeEventListener('click', onCancel);
                 modal.removeEventListener('click', onBackdrop);
                 document.removeEventListener('keydown', onKey);
+                // Hand focus back to the control that asked for confirmation
+                if (opener && document.contains(opener)) opener.focus();
                 resolve(result);
             }
             const onOk = () => cleanup(true);
@@ -997,6 +1010,11 @@
             const onKey = (e) => {
                 if (e.key === 'Escape') cleanup(false);
                 else if (e.key === 'Enter') cleanup(true);
+                else if (e.key === 'Tab') {
+                    // Two focusables only: keep Tab cycling inside the dialog
+                    e.preventDefault();
+                    (document.activeElement === okBtn ? cancelBtn : okBtn).focus();
+                }
             };
             okBtn.addEventListener('click', onOk);
             cancelBtn.addEventListener('click', onCancel);
@@ -1270,19 +1288,15 @@
     function showToast(message, type = 'success') {
         const toast = document.createElement('div');
         toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
             padding: 1rem 1.5rem;
             background: ${type === 'success' ? 'var(--success)' : 'var(--danger)'};
             color: white;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 1000;
             animation: slideIn 0.3s ease;
         `;
         toast.textContent = message;
-        document.body.appendChild(toast);
+        document.getElementById('toastRegion').appendChild(toast);
         setTimeout(() => {
             toast.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => toast.remove(), 300);
@@ -1358,10 +1372,12 @@
     // event, fetched in parallel. Both endpoints cache per resource
     // server-side, so reopening is free.
     let _modalRecId = null;
+    let _modalOpener = null;
     let _modalIsManual = false;
 
     function openResourceModal(recId, label) {
         _modalRecId = recId;
+        _modalOpener = document.activeElement;
         document.getElementById('resourceModalTitle').textContent = 'Resource details';
         document.getElementById('resourceModalLabel').textContent = label;
         const content = document.getElementById('resourceContent');
@@ -1369,6 +1385,7 @@
         // Hide the action footer until the details (and resource kind) load.
         document.getElementById('resourceModalActions').style.display = 'none';
         document.getElementById('resourceModal').style.display = 'flex';
+        document.getElementById('resourceModalClose').focus();
 
         const esc = s => String(s).replace(/[&<>"']/g,
             c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1517,7 +1534,17 @@
     function closeResourceModal() {
         _modalRecId = null;
         document.getElementById('resourceModal').style.display = 'none';
+        // Hand focus back to the id that opened the modal
+        if (_modalOpener && document.contains(_modalOpener)) _modalOpener.focus();
+        _modalOpener = null;
     }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape'
+            && document.getElementById('resourceModal').style.display === 'flex') {
+            closeResourceModal();
+        }
+    });
 
     // Copy a resource id to the clipboard from the little glyph next to it.
     // Feedback stays local (icon flips to a green check for a beat) — no

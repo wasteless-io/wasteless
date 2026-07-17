@@ -340,6 +340,10 @@ def recommendations(
             "other_recs": other_recs,
             "scheduled_recs": scheduled_recs,
             "total_count": total_count,
+            # The table query is capped at 500 rows; when the true total is
+            # larger the template discloses the truncation instead of letting
+            # tab counts pass for totals
+            "pending_truncated": total_count > len(recommendations),
             "total_savings": total_savings,
             "savings_capped": savings_capped,
             "savings_over_spend": savings_over_spend,

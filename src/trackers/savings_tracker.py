@@ -52,7 +52,7 @@ class SavingsTracker:
 
     def get_instance_cost_for_period(
         self, instance_id: str, start_date: datetime, end_date: datetime
-    ) -> float:
+    ) -> Optional[float]:
         """
         Get total cost for a specific instance during a period.
 
@@ -62,7 +62,10 @@ class SavingsTracker:
             end_date: Period end
 
         Returns:
-            Total cost in USD (convert to EUR later)
+            Total cost in USD (convert to EUR later), or None when Cost
+            Explorer is unreachable. Never 0.0 on error: a zero cost reads
+            as "the instance costs nothing", which verify_savings_for_action
+            would record as a 100% saving.
         """
         try:
             logger.debug(
@@ -91,9 +94,11 @@ class SavingsTracker:
 
         except Exception as e:
             logger.error(f"Failed to get cost for {instance_id}: {e}")
-            return 0.0
+            return None
 
-    def calculate_average_daily_cost(self, instance_id: str, days_back: int = 30) -> float:
+    def calculate_average_daily_cost(
+        self, instance_id: str, days_back: int = 30
+    ) -> Optional[float]:
         """
         Calculate average daily cost for an instance.
 
@@ -102,12 +107,14 @@ class SavingsTracker:
             days_back: Number of days to average
 
         Returns:
-            Average daily cost
+            Average daily cost, or None when cost data is unavailable
         """
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days_back)
 
         total_cost = self.get_instance_cost_for_period(instance_id, start_date, end_date)
+        if total_cost is None:
+            return None
 
         avg_daily_cost = total_cost / days_back
 
@@ -189,15 +196,26 @@ class SavingsTracker:
             instance_id, before_start, before_end
         )
 
-        avg_daily_cost_before = cost_before_period / 30
-        monthly_cost_before = avg_daily_cost_before * 30
-
         # Calculate cost AFTER action (last 7-30 days depending on time elapsed)
         measurement_days = min(days_since_action, 30)
         after_start = datetime.now() - timedelta(days=measurement_days)
         after_end = datetime.now()
 
         cost_after_period = self.get_instance_cost_for_period(instance_id, after_start, after_end)
+
+        # Data unavailable is not a measurement: skip the verification
+        # entirely rather than record a fabricated saving. The action stays
+        # unverified and will be retried on the next run.
+        if cost_before_period is None or cost_after_period is None:
+            logger.warning(
+                f"Cost Explorer data unavailable for {instance_id}, "
+                f"skipping verification of action {action_log_id}"
+            )
+            cursor.close()
+            return None
+
+        avg_daily_cost_before = cost_before_period / 30
+        monthly_cost_before = avg_daily_cost_before * 30
 
         avg_daily_cost_after = cost_after_period / measurement_days
         monthly_cost_after = avg_daily_cost_after * 30
