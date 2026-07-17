@@ -1415,18 +1415,28 @@ else
     print_warning "Test de connexion echoue (normal si premiere installation)"
 fi
 
-# Test des modules
+# Test des modules. Deux verifications distinctes, volontairement separees :
+# un assert "enabled == False" melange a l'import a deja fait passer un
+# reglage legitime (auto-remediation activee via Settings, install.sh
+# relance en mise a jour) pour une erreur de chargement des modules, avec
+# traceback brut chez un client. L'etat de l'auto-remediation est un choix
+# de l'utilisateur : l'installation l'annonce, elle ne l'exige pas.
 print_info "Verification des modules..."
-if silence python3 -c "
+if MODULES_CHECK_OUTPUT=$(python3 -c "
 from src.core.config import RemediationConfig
 config = RemediationConfig.from_yaml('config/remediation.yaml')
-assert config.enabled == False, 'Auto-remediation should be disabled'
-print('OK')
-"; then
+print('enabled' if config.enabled else 'disabled')
+" 2>&1); then
     print_step "Modules Python OK"
-    print_step "Auto-remediation desactivee (securite)"
+    if [ "$MODULES_CHECK_OUTPUT" = "disabled" ]; then
+        print_step "Auto-remediation desactivee (securite)"
+    else
+        print_warning "Auto-remediation ACTIVE (heritee de votre configuration existante)"
+        print_info "Desactivable dans Settings ou config/remediation.yaml (auto_remediation.enabled)"
+    fi
 else
-    print_error "Erreur lors du chargement des modules"
+    print_error "Erreur lors du chargement des modules :"
+    echo "$MODULES_CHECK_OUTPUT" | tail -n 3 | sed 's/^/    /'
 fi
 
 # Test credentials AWS. load_dotenv est indispensable : boto3 ne lit pas
