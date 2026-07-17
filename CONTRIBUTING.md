@@ -23,14 +23,8 @@ cd wasteless
 # Add upstream
 git remote add upstream https://github.com/wasteless-io/wasteless.git
 
-# Backend
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-docker-compose up -d
-cp .env.template .env
-
-# UI
-cd ui && ./install.sh
+# Install both Python environments, PostgreSQL and development tools
+./install.sh --no-schedule
 ```
 
 ---
@@ -75,9 +69,9 @@ Format: `type: description`
 
 ## Code standards
 
-- Format with **Black**: `black src/ ui/ tests/`
-- Lint with **Ruff**: `ruff check src/ ui/ tests/` (includes the bandit
-  security rules; CI also runs `pip-audit` on both `.lock` files)
+- Format with **Black**: `./venv/bin/black src/ ui/ tests/`
+- Run the complete local quality gate with `make lint` (Black, Ruff, mypy and
+  shellcheck; CI also runs `pip-audit` on both runtime lock files)
 - No hardcoded credentials or secrets
 - Error handling on all AWS/DB calls
 
@@ -87,10 +81,13 @@ Format: `type: description`
 
 ```bash
 # Backend
-pytest tests/
+make test
 
 # UI
-cd ui && python run_tests.py
+make test-ui
+
+# Formatting, lint, types and shell scripts
+make lint
 ```
 
 ---
@@ -117,44 +114,17 @@ second gate, the checklist is the second pair of eyes.
 
 ## Adding a new detector
 
-1. Create `src/detectors/your_detector.py`
-2. Add SQL migration in `sql/migrations/` if needed
-3. Add a test in `tests/`
-4. Update the Features table in `README.md`
+1. Choose the existing boto3 or Steampipe pattern; do not create a second
+   implementation of an existing rule.
+2. Declare the recommendation type and its execution mode in
+   `ui/utils/action_registry.py`.
+3. Add migrations and unit tests where required.
+4. Wire the detector into `wasteless.sh collect`.
+5. Update `src/detectors/README.md`, `docs/ARCHITECTURE.md` and the product
+   capability summary when its scope changes.
 
-Structure to follow:
-
-```python
-# src/detectors/rds_idle.py
-from src.core.database import get_db_connection
-
-class RDSIdleDetector:
-    def __init__(self):
-        self.conn = get_db_connection()
-
-    def detect(self):
-        """Detect idle RDS instances. Returns list of waste dicts."""
-        pass
-```
-
----
-
-## Repository structure
-
-```
-wasteless/
-├── src/
-│   ├── collectors/     # CloudWatch metrics collection
-│   ├── detectors/      # Waste detection rules
-│   ├── remediators/    # Stop / terminate execution
-│   ├── trackers/       # Savings verification
-│   └── core/           # Database, safeguards
-├── ui/                 # FastAPI web dashboard
-├── sql/                # Schema + migrations
-├── config/             # remediation.yaml
-├── tests/              # Integration tests
-└── docs/               # Documentation
-```
+The complete workflow and examples are in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#adding-a-new-detector).
 
 ---
 

@@ -14,12 +14,6 @@
 | AWS CLI | 2.x | Optional, useful for debugging credentials |
 | Steampipe | latest | Optional — required for the Steampipe-based detectors |
 
-Dev tools (not in `requirements.txt`, install manually):
-
-```bash
-pip install black ruff
-```
-
 ---
 
 ## Two Python environments
@@ -29,7 +23,10 @@ The project uses **two separate virtualenvs**:
 - **`venv/`** (root) — backend pipeline (`src/`): collectors, detectors, remediators, tests
 - **`ui/venv/`** — FastAPI web UI (`ui/`)
 
-Each has its own `requirements.txt`. The UI imports the backend remediator by injecting the root path into `sys.path` at runtime (see `ui/utils/remediator.py`).
+Runtime dependencies are pinned in `requirements.lock` and
+`ui/requirements.lock`; development tools are pinned in
+`requirements-dev.lock`. The backend package is installed in editable mode in
+both environments so the UI can import backend modules without a path hack.
 
 ---
 
@@ -38,32 +35,18 @@ Each has its own `requirements.txt`. The UI imports the backend remediator by in
 ```bash
 git clone https://github.com/wasteless-io/wasteless.git
 cd wasteless
-
-# Backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Database (PostgreSQL, + Metabase optional)
-docker-compose up -d postgres
-
-# Configuration
-cp .env.template .env   # fill in AWS + DB credentials
-
-# UI
-cd ui && ./install.sh
+./install.sh --no-schedule
 ```
 
-Verify:
+The root installer creates both virtual environments from the lock files,
+installs the backend in editable mode, starts PostgreSQL and seeds local
+configuration. AWS can remain disconnected for unit development.
+
+Verify the environment:
 
 ```bash
-source venv/bin/activate
-python -c "import boto3, psycopg2; print('imports OK')"
-python -c "
-from dotenv import load_dotenv; import boto3
-load_dotenv()
-print(boto3.client('sts').get_caller_identity()['Arn'])
-"
+./install.sh --doctor
+make test
 ```
 
 ---
@@ -80,7 +63,8 @@ wasteless/
 │   ├── detectors/             # Waste detection rules
 │   │   ├── ec2_idle.py        # avg CPU < 5% over 7 days
 │   │   ├── ebs_orphan.py, eip_orphan.py, elb_unused.py,
-│   │   ├── nat_gateway_unused.py, snapshot_orphan.py, ...
+│   │   ├── nat_gateway_unused.py, snapshot_orphan.py, ami_orphan.py,
+│   │   ├── rds_idle.py, rds_stopped.py, rds_snapshot_orphan.py, ...
 │   │   └── steampipe_base.py  # Base class for Steampipe detectors
 │   ├── remediators/           # Stop / terminate / delete execution
 │   ├── trackers/              # savings_tracker.py (Cost Explorer verification)
@@ -113,9 +97,9 @@ Commit messages follow `type: description` (`feat:`, `fix:`, `docs:`, `refactor:
 Before pushing:
 
 ```bash
-black src/ ui/ tests/
-ruff check src/ ui/ tests/   # includes the bandit security rules (S)
-pytest
+make lint
+make test
+make test-ui
 ```
 
 ---
@@ -124,13 +108,12 @@ pytest
 
 ```bash
 # Backend (root venv)
-source venv/bin/activate
-pytest                                      # All tests
-pytest tests/unit/test_safeguards.py        # Single file
-pytest -k "test_confidence"                 # Single test by name
+make test
+./venv/bin/pytest tests/unit/test_safeguards.py
+./venv/bin/pytest -k "test_confidence"
 
-# UI (from ui/, ui venv)
-cd ui && python run_tests.py
+# UI
+make test-ui
 ```
 
 Detectors can also be validated against **real AWS resources** using the Terraform
@@ -178,8 +161,10 @@ In both cases:
    `ui/tests/test_action_registry.py` fails on undeclared types
 2. Add a migration in `sql/migrations/` if new tables are needed
 3. Add unit tests in `tests/unit/`
-4. Add a Terraform test fixture if the resource can be fabricated cheaply
-5. Update the Features table in `README.md`
+4. Add the detector to `wasteless.sh collect` and update
+   `src/detectors/README.md` plus `docs/ARCHITECTURE.md`
+5. Add a Terraform test fixture if the resource can be fabricated cheaply
+6. Update the README capability summary if the supported service scope changes
 
 ---
 
@@ -197,7 +182,7 @@ docker exec wasteless-postgres pg_dump -U wasteless wasteless > backup_$(date +%
 docker exec -i wasteless-postgres psql -U wasteless -d wasteless < backup_20260101.sql
 
 # Full reset (WARNING: deletes all data; init.sql re-runs on startup)
-docker-compose down -v && docker-compose up -d postgres
+docker compose down -v && docker compose up -d postgres
 ```
 
 Useful queries:
@@ -227,7 +212,7 @@ Common issues:
 | Symptom | Fix |
 |---------|-----|
 | `ModuleNotFoundError` | Wrong venv — check `which python` points into the right `venv/` |
-| DB connection refused | `docker-compose ps`, then `docker-compose logs postgres` |
+| DB connection refused | `docker compose ps`, then `docker compose logs postgres` |
 | Port 5432/8888 in use | `lsof -i :5432`, kill the process or change the port |
 | AWS `InvalidClientTokenId` | Check `.env` credentials, test with `aws sts get-caller-identity` |
 

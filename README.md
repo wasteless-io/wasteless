@@ -1,390 +1,191 @@
 # Wasteless
 
-Open-source cloud cost optimization. Detect idle and orphaned AWS resources. Remediate with one click.
+**Open-source FinOps control for AWS. Detect waste, turn evidence into controlled
+actions, and verify what changed.**
 
 [![Tests](https://github.com/wasteless-io/wasteless/actions/workflows/tests.yml/badge.svg)](https://github.com/wasteless-io/wasteless/actions/workflows/tests.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-orange.svg)](https://fastapi.tiangolo.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
-<!-- TODO avant lancement : screenshot du dashboard avec de vraies donnees
-![Wasteless dashboard](docs/img/dashboard.png)
--->
+Wasteless is self-hosted. It collects AWS telemetry through a read-only role,
+scores waste, proposes an action path, and keeps the decision and outcome in an
+auditable control loop.
 
----
+> [!IMPORTANT]
+> Wasteless is under active `0.x` development. Detection is read-only by
+> default and real AWS actions are opt-in. Validate your policy and permissions
+> in a non-production account before enabling writes.
 
-## Quick Start
+## What Wasteless does
 
-**Requirements:** Docker, Python 3.11+, AWS credentials (`aws configure`)
+| Stage | Product capability |
+|---|---|
+| **Observe** | Collects CloudWatch metrics, Cost Explorer spend and AWS inventory through boto3 and Steampipe. |
+| **Detect** | Finds idle or stopped EC2 and RDS instances, orphaned EBS volumes, Elastic IPs and AMIs, old snapshots, unused load balancers, NAT gateways and VPCs, plus gp2 to gp3 candidates. |
+| **Prioritize** | Attaches evidence, confidence and estimated monthly cost to each recommendation. |
+| **Explain** | Adds optional provider-agnostic LLM insights and a daily briefing when an AI provider is configured. |
+| **Act** | Routes an approval to a direct AWS action, a guarded backend remediator, an optional Terraform PR, or a manual task according to the recommendation type and policy. |
+| **Verify** | Reconciles live resource state and records the action trail. A standalone Cost Explorer tracker verifies eligible EC2 stop savings after at least seven days of billing data. |
 
-> **Non-technical?** Follow [docs/CTO_QUICKSTART.md](docs/CTO_QUICKSTART.md) —
-> install, then connect AWS from the web UI (`/setup`) in ~10 minutes,
-> no terminal AWS knowledge needed.
+Potential savings remain estimates until an action is completed and its outcome
+can be measured.
 
-On macOS, install all prerequisites in one command:
+## Safety model
 
-```bash
-brew bundle           # Installs Python, Docker Desktop, uv, AWS CLI (see Brewfile)
-```
+- In the recommended role-based setup, boto3 collection and detection use a
+  dedicated **read-only IAM role**. Steampipe must be configured separately to
+  assume that role.
+- In that setup, AWS writes require a separate, optional **remediation role**
+  and fail closed when it is absent. Legacy default-chain credentials remain
+  supported and retain whatever permissions the source identity already has.
+- **Dry-run is enabled by default** and real automation is opt-in.
+- Automated actions can use per-action switches and a cancellable grace period.
+- Backend remediators re-check live state and policy before supported writes.
+- Manual recommendations never cause an AWS write from Wasteless.
+- Decisions and execution attempts are written to the action history. A
+  pre-action state is stored when applicable, but not every AWS action is
+  reversible.
 
-On Windows, use WSL2 — the native path is not supported (see [Windows setup](#windows-wsl2) below).
+Read [Remediation and controls](docs/REMEDIATION.md) for the exact execution
+matrix and [AWS setup](docs/AWS_SETUP.md) for the IAM model.
 
-**Option 1 — Download a release** (no git needed, latest version on the
-[Releases page](https://github.com/wasteless-io/wasteless/releases)):
+## Quick start
 
-```bash
-curl -fsSLO https://github.com/wasteless-io/wasteless/releases/download/v0.1.0/wasteless-0.1.0.tar.gz
-curl -fsSLO https://github.com/wasteless-io/wasteless/releases/download/v0.1.0/SHA256SUMS
-shasum -a 256 -c SHA256SUMS          # Linux: sha256sum -c SHA256SUMS
-tar xzf wasteless-0.1.0.tar.gz
-cd wasteless-0.1.0
-```
+### Requirements
 
-**Option 2 — Clone from git:**
+- macOS, Linux, or Windows through WSL2
+- Python 3.11 or newer
+- Docker with Docker Compose
+- Git
+
+AWS CLI is optional. Steampipe is also optional, but the ELB, NAT, VPC, gp2,
+AMI and RDS detectors are skipped until Steampipe and its AWS plugin are
+installed.
+
+### 1. Install
 
 ```bash
 git clone https://github.com/wasteless-io/wasteless.git
 cd wasteless
+./install.sh
 ```
 
-Then install and start:
+The installer creates both Python environments, starts PostgreSQL, configures
+the local CLI, offers to install scheduled collection, and starts the web UI.
+It does not require AWS to be connected yet.
+
+Prefer an archive instead of Git? Use the
+[latest published release](https://github.com/wasteless-io/wasteless/releases/latest).
+
+### 2. Connect AWS
+
+Open <http://localhost:8888/setup> and follow the guided CloudFormation setup.
+Detection needs only the read-only role. The write role can be omitted for a
+detection-only deployment.
+
+See the [guided quick start](docs/CTO_QUICKSTART.md) or the complete
+[AWS setup guide](docs/AWS_SETUP.md) when you need Terraform, ExternalId, or
+manual IAM configuration.
+
+### 3. Verify
 
 ```bash
-./install.sh          # Installs everything (backend + UI + DB)
-
-source ~/.zshrc
-wasteless             # Start the web UI
+wasteless status
 ```
 
-**Install options:**
+The first collection starts after AWS setup is saved. To run a complete cycle
+immediately:
 
-| Flag | Effet |
+```bash
+wasteless collect
+```
+
+Then open <http://localhost:8888/recommendations>.
+
+## CLI
+
+| Command | Purpose |
 |---|---|
-| `--doctor` | Diagnostic seul (OS, Docker, Python…), aucune modification système |
-| `--install-system-deps` | Installe Docker Engine depuis les dépôts officiels s'il manque (Linux : Debian/Ubuntu, Fedora/RHEL, Arch) |
-| `-y`, `--yes` | Non-interactif : valide les modifications système sans demander |
-| `-q`, `--quiet` | Masque la sortie détaillée des commandes |
+| `wasteless` | Start the web UI in the background |
+| `wasteless status` | Check the UI and scheduled collection |
+| `wasteless collect` | Run collection and detection once |
+| `wasteless logs` | Follow the application log |
+| `wasteless stop` | Stop the web UI |
+| `wasteless schedule` | Install five-minute OS-level collection |
+| `wasteless unschedule` | Remove OS-level collection |
 
-Sur **Linux natif**, `./install.sh --install-system-deps` installe et démarre
-Docker automatiquement (via `sudo`). Sur **macOS** et **WSL**, Docker Desktop
-reste à installer manuellement — le script détecte l'environnement et l'indique.
+If the alias is not available in the current terminal yet, use
+`./wasteless.sh <command>` or open a new terminal.
 
-Open http://localhost:8888
+## How it works
 
-Then collect data and detect waste:
-
-```bash
-source venv/bin/activate
-python3 src/collectors/aws_cloudwatch.py   # Collect metrics
-python3 src/detectors/ec2_idle.py          # Detect waste
+```text
+CloudWatch · Cost Explorer · AWS inventory
+                    │ read-only collection
+                    ▼
+               PostgreSQL
+                    │
+                    ▼
+                Detectors
+                    │ evidence + recommendation
+                    ▼
+     Manual task · Terraform PR · Controlled AWS action
+                    │
+                    ▼
+          Live sync · Audit · Savings verification
 ```
 
-### Automated collection
+The FastAPI UI presents the same data and control loop on port `8888`. See the
+[architecture guide](docs/ARCHITECTURE.md) for components, data flow and
+technical decisions.
 
-`install.sh` sets up **OS-level scheduled collection** (every 5 minutes,
-survives reboot) so no one has to run `wasteless collect` by hand. The backend
-picks the right mechanism per platform:
+## Compatibility and current scope
 
-| Plateforme | Mécanisme |
+| Platform | Status |
 |---|---|
-| macOS | launchd LaunchAgent (`~/Library/LaunchAgents/io.wasteless.collect.plist`) |
-| Linux (natif / VPS / WSL2 avec systemd) | systemd **user** timer + `enable-linger` (headless, sans login) |
-| Linux/WSL sans systemd | crontab (`*/5`) — WSL sans systemd : voir la note affichée (Task Scheduler / `wsl.conf`) |
-
-```bash
-wasteless schedule      # (re)installe la collecte automatique
-wasteless unschedule    # la retire
-wasteless status        # état du serveur + de l'auto-collecte
-```
-
-Pass `./install.sh --no-schedule` to skip this. Without a scheduler, collection
-only runs while the UI is up (`wasteless start` spawns an in-process loop that
-does **not** survive reboot).
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    AWS Account                          │
-│         CloudWatch API  ·  Cost Explorer  ·  EC2        │
-└──────────────────────┬──────────────────────────────────┘
-                       │ boto3
-┌──────────────────────▼──────────────────────────────────┐
-│                     wasteless                           │
-│                                                         │
-│  collectors/    →   CloudWatch metrics + Steampipe      │
-│  detectors/     →   Identify idle / orphaned resources  │
-│  remediators/   →   Stop / release / delete (guarded)   │
-│  trackers/      →   Verify actual savings               │
-└──────────────────────┬──────────────────────────────────┘
-                       │ psycopg2
-┌──────────────────────▼──────────────────────────────────┐
-│                     PostgreSQL                          │
-│    ec2_metrics · waste_detected · recommendations       │
-│    actions_log · rollback_snapshots · savings_realized  │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│                      ui/  (FastAPI)                     │
-│         Dashboard · Recommendations · History           │
-│                    :8888                                │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## Repository Structure
-
-```
-wasteless/
-├── src/
-│   ├── collectors/         # CloudWatch + Steampipe collection
-│   ├── detectors/          # Waste detection (EC2, EBS, EIP, ELB, NAT, snapshots)
-│   ├── remediators/        # Stop / release / delete execution
-│   ├── trackers/           # Savings verification
-│   └── core/               # Database, safeguards, AI insights (llm)
-├── ui/                     # FastAPI web dashboard
-│   ├── main.py
-│   ├── templates/
-│   ├── utils/
-│   ├── install.sh
-│   └── start.sh
-├── sql/                    # Database schema + migrations
-├── config/
-│   └── remediation.yaml.template   # Safeguards and policies (copied to remediation.yaml locally)
-├── docker-compose.yml      # PostgreSQL (+ Metabase optionnel)
-└── requirements.txt
-```
-
----
-
-## Configuration
-
-### Environment variables
-
-Copy `.env.template` to `.env`:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AWS_REGION` | `eu-west-1` | AWS region |
-| `AWS_ROLE_ARN` | *(recommended)* | Read-only role assumed for all detection ([AWS setup](docs/AWS_SETUP.md)) |
-| `AWS_WRITE_ROLE_ARN` | *(optional)* | Remediation role, only assumed for approved write actions |
-| `AWS_EXTERNAL_ID` | *(optional)* | ExternalId if the roles were created with one |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | *(legacy)* | Static keys, used only when `AWS_ROLE_ARN` is unset |
-| `DB_HOST` | `localhost` | PostgreSQL host |
-| `DB_PORT` | `5432` | PostgreSQL port |
-| `DB_NAME` | `wasteless` | Database name |
-| `DB_USER` | `wasteless` | Database user |
-| `DB_PASSWORD` | *(required)* | Database password |
-
-### Remediation policy
-
-Edit `config/remediation.yaml` (created from [`config/remediation.yaml.template`](config/remediation.yaml.template) by `install.sh`; it is local and never committed):
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `auto_remediation.enabled` | `false` | Enable autonomous execution |
-| `auto_remediation.dry_run_days` | `0` | Mandatory dry-run period |
-| `approval.grace_period_days` | `3` | Delay between approval and execution (0 = immediate, cancellable meanwhile) |
-| `protection.min_instance_age_days` | `30` | Ignore instances younger than N days |
-| `protection.min_idle_days` | `14` | Must be idle for N+ days |
-| `protection.min_confidence_score` | `0.80` | Minimum detection confidence |
-| `protection.max_instances_per_run` | `3` | Max instances stopped per run |
-
-Whitelist instances by ID or tag:
-
-```yaml
-whitelist:
-  instance_ids:
-    - i-0123456789abcdef0
-  tags:
-    Environment: production
-```
-
-### AWS IAM permissions
-
-Wasteless assumes two separate least-privilege roles in your account:
-`wasteless-readonly` (detection, Describe/Get/List only) and the optional
-`wasteless-remediation` (write actions you approved). Create them in one
-step with the [CloudFormation template](onboarding/cloudformation/wasteless-onboarding.yaml)
-or the [Terraform module](onboarding/terraform/); the exact policies live
-in [`onboarding/policies/`](onboarding/policies/) and are explained
-action-by-action in [docs/AWS_SETUP.md](docs/AWS_SETUP.md).
-
----
-
-## Safeguards
-
-Before executing any action, Wasteless validates 7 conditions:
-
-1. Auto-remediation enabled in config
-2. Instance not in whitelist
-3. Instance age >= 30 days
-4. Detection confidence >= 80%
-5. Idle duration >= 14 consecutive days
-6. Current time in allowed schedule window
-7. Instances stopped this run < max limit
-
-**If any check fails → action aborted and logged.**
-
-On top of the 7 checks, approvals can go through a **grace period**
-(`approval.grace_period_days`): the action is scheduled instead of executed,
-stays cancellable from the Recommendations page, and runs automatically once
-the delay elapses. The whole policy is exportable/importable as YAML
-(Settings → Policy as Code) so it can be versioned and reviewed in git.
-
----
-
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| **Detection** | Idle/stopped EC2, orphaned EBS volumes, unassociated Elastic IPs, old snapshots (boto3), plus unused ELBs, unused NAT gateways, unused VPCs and gp2→gp3 migration (Steampipe) — all wired into the scheduled pipeline. Steampipe steps require the `steampipe` CLI (`brew install turbot/tap/steampipe && steampipe plugin install aws`); `wasteless collect` skips them gracefully if it's missing |
-| **Recommendations** | Stop / terminate / release / delete / downsize actions, with an optional cancellable grace period before execution |
-| **AI Insights** | LLM-generated context per recommendation + daily AI briefing (provider-agnostic via litellm) |
-| **Terraform PR automation** | Opens a Terraform PR for approved infra changes, routed by criticality (background job, every 5 min) |
-| **Dry-Run Mode** | Test safely before any AWS action |
-| **Auto-Sync** | Background sync every 5 min with AWS |
-| **Action History** | Full audit trail with rollback snapshots |
-| **Cloud Inventory** | Live EC2 inventory across regions |
-| **Whitelist** | Exclude instances from recommendations |
-| **Savings Tracking** | Verified actual savings via Cost Explorer |
-
----
-
-## API (UI)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Home overview |
-| `/landing` | GET | Public landing page |
-| `/dashboard` | GET | KPIs, waste trend and waste-by-resource charts |
-| `/api/dashboard/trend` | GET | JSON waste trend series (`range=7d\|30d\|90d\|1y`) |
-| `/api/dashboard/waste-by-resource` | GET | JSON waste breakdown by resource type |
-| `/recommendations` | GET | Pending recommendations |
-| `/api/recommendations` | GET | JSON list of recommendations |
-| `/api/recommendations/{id}/ask` | POST | Ask the AI a question about a recommendation |
-| `/history` | GET | Action history |
-| `/reports` | GET | Activity report over a date range |
-| `/logs` | GET | Live log viewer with search (debug) |
-| `/cloud-resources` | GET | EC2 inventory |
-| `/settings` | GET | Configuration |
-| `/api/metrics` | GET | JSON metrics |
-| `/api/briefing/today` | GET | Daily AI briefing (cached, `?refresh=true` to regenerate) |
-| `/api/actions` | POST | Approve / reject / dismiss / cancel |
-| `/api/config` | POST | Update config |
-| `/api/whitelist` | POST | Add to whitelist |
-| `/api/sync-aws` | POST | Trigger manual sync |
-| `/api/reports/download` | GET | Download a report as Markdown |
-| `/api/reports/narrative` | POST | AI summary of a report (on demand) |
-| `/api/logs` | GET | Incremental poll of in-memory logs |
-| `/api/policies/export` | GET | Download the remediation policy as YAML |
-| `/api/policies/import` | POST | Validate and apply a policy YAML |
-
----
-
-## Compatibility
-
-| OS | Status |
-|----|--------|
 | macOS | Supported |
 | Linux | Supported |
-| Windows (WSL2) | Supported |
-| Windows (native) | Not supported |
+| Windows through WSL2 | Supported; keep the repository in the Linux filesystem |
+| Native Windows | Not supported |
 
-### Windows (WSL2)
+One installation currently manages one AWS account. Native multi-account
+operation, S3, EKS, Azure and GCP are not currently supported. Follow
+[GitHub issues](https://github.com/wasteless-io/wasteless/issues) for planned
+work rather than relying on a static roadmap.
 
-Wasteless runs on Windows through WSL2. One-time setup:
+## Documentation
 
-1. Install WSL2 with Ubuntu (PowerShell as administrator, then reboot):
-
-   ```powershell
-   wsl --install -d Ubuntu
-   ```
-
-2. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
-   with the **WSL2 backend**, then enable the Ubuntu integration in
-   *Settings → Resources → WSL integration*.
-
-3. Inside the Ubuntu terminal, install the prerequisites:
-
-   ```bash
-   sudo apt update && sudo apt install -y python3 python3-venv python3-pip git unzip
-   ```
-
-4. Clone the repository **in the Linux filesystem** (e.g. `~/`), **not** under
-   `/mnt/c/...` — the Windows filesystem breaks permissions and is 10-50x
-   slower from WSL:
-
-   ```bash
-   cd ~
-   git clone https://github.com/wasteless-io/wasteless.git
-   cd wasteless
-   ./install.sh
-   ```
-
-Everything else (Quick Start, tests, UI) works exactly as on Linux.
-
----
+| Guide | Use it for |
+|---|---|
+| [Guided quick start](docs/CTO_QUICKSTART.md) | Install and connect an AWS account from the UI |
+| [AWS setup](docs/AWS_SETUP.md) | IAM roles, CloudFormation, Terraform and ExternalId |
+| [Remediation and controls](docs/REMEDIATION.md) | Execution modes, dry-run, approvals, rollback and policy |
+| [Automation](docs/AUTOMATION_GUIDE.md) | Collection schedule, monitoring and troubleshooting |
+| [Architecture](docs/ARCHITECTURE.md) | Components, data flow, storage and design decisions |
+| [Deployment](docs/DEPLOYMENT.md) | VPS, TLS, authentication, backups and monitoring |
+| [Development](docs/DEVELOPMENT.md) | Local workflow, tests and detector development |
+| [Production validation](docs/PRODUCTION_VALIDATION.md) | Validate a real remediation against sandbox resources |
 
 ## Development
 
+The installer can prepare a contributor environment without installing the
+OS-level scheduler:
+
 ```bash
-# Backend tests (root venv)
-source venv/bin/activate
-pytest
-
-# UI hot reload
-cd ui && uvicorn main:app --reload --port 8888
-
-# UI tests
-cd ui && python run_tests.py
+./install.sh --no-schedule
+make test
+make test-ui
+make lint
 ```
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full development guide
-and [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-### Adding a new detector
+## Security
 
-1. Write the Steampipe query in `sql/steampipe/<name>.sql`.
-2. Subclass `SteampipeWasteDetector` in `src/detectors/<name>.py` — only
-   `map_rows()` is needed (see `vpc_unused.py` for a minimal example).
-3. **Declare the `recommendation_type` in
-   `ui/utils/action_registry.py`** with a conscious execution mode:
-   `boto3` (direct EC2 automation), `remediator` (backend safeguards
-   pipeline) or `manual` (approval records the decision, execution stays
-   human). The guard test in `ui/tests/test_action_registry.py` fails on
-   undeclared types.
-4. Add `map_rows()` unit tests in `tests/unit/test_steampipe_detectors.py`.
-
----
-
-## Roadmap
-
-- [x] EC2 idle/stopped, EBS orphan, EIP orphan, snapshot detection — wired into the scheduled pipeline
-- [x] ELB / NAT gateway / VPC / gp2 migration detection (Steampipe) — wired into the scheduled pipeline
-- [x] Web dashboard (FastAPI)
-- [x] Dry-run mode and safeguards
-- [x] Savings verification
-- [x] AI insights per recommendation + daily AI briefing
-- [x] Terraform PR automation for approved changes
-- [ ] RDS / S3 detection
-- [ ] Multi-account AWS support
-- [ ] Slack / Teams notifications
-- [ ] Azure and GCP support
-
----
+Do not report vulnerabilities in a public issue. Follow
+[SECURITY.md](SECURITY.md) for private reporting and deployment
+responsibilities.
 
 ## License
 
-Apache 2.0
-
----
-
-## Links
-
-- **Issues**: [GitHub Issues](https://github.com/wasteless-io/wasteless/issues)
-- **Contact**: wasteless.io.entreprise@gmail.com
+Wasteless is available under the [Apache License 2.0](LICENSE).

@@ -27,6 +27,10 @@ duplicate:
 | `nat_gateway_unused.py` | `NATGatewayUnusedDetector` — NAT gateways with no outbound traffic in 30 days. |
 | `vpc_unused.py` | `VPCUnusedDetector` — VPCs with zero ENIs. |
 | `ebs_gp2_migration.py` | `EBSGp2MigrationDetector` — attached gp2 volumes that should migrate to gp3. |
+| `ami_orphan.py` | `AMIOrphanDetector` — private AMIs no longer referenced by an instance or launch template. |
+| `rds_stopped.py` | `RDSStoppedDetector` — stopped RDS instances that still retain billable storage. |
+| `rds_idle.py` | `RDSIdleDetector` — running RDS instances with no observed connections during the analysis window. |
+| `rds_snapshot_orphan.py` | `RDSSnapshotOrphanDetector` — old manual RDS snapshots. |
 
 Since these steps require `steampipe`, `wasteless.sh collect` runs them only
 if the binary is on `PATH` — see `src/collectors/README.md` for the
