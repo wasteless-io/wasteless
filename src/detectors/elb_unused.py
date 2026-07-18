@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 
 
 from collectors.steampipe import SteampipeError
-from detectors.steampipe_base import SteampipeWasteDetector
+from detectors.steampipe_base import SteampipeWasteDetector, age_days_from
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -76,6 +76,7 @@ class ELBUnusedDetector(SteampipeWasteDetector):
                         "region": row.get("region") or "",
                         "reason": reason,
                         "registered_targets": registered,
+                        "age_days": age_days_from(row.get("created_time")),
                         "monthly_cost_eur": cost,
                     },
                 }
