@@ -17,7 +17,6 @@ from typing import Dict, List, Optional
 from dotenv import load_dotenv
 import json
 
-from constants import USD_TO_EUR
 from core.database import get_db_connection
 from core.aws_clients import get_client
 
@@ -62,7 +61,7 @@ class SavingsTracker:
             end_date: Period end
 
         Returns:
-            Total cost in USD (convert to EUR later), or None when Cost
+            Total cost in USD (no conversion), or None when Cost
             Explorer is unreachable. Never 0.0 on error: a zero cost reads
             as "the instance costs nothing", which verify_savings_for_action
             would record as a 100% saving.
@@ -223,12 +222,11 @@ class SavingsTracker:
         # Calculate actual savings
         actual_monthly_savings = monthly_cost_before - monthly_cost_after
 
-        # Same env-driven rate as the detectors and the UI (src/constants.py)
-        usd_to_eur = USD_TO_EUR
-
-        cost_before_eur = monthly_cost_before * usd_to_eur
-        cost_after_eur = monthly_cost_after * usd_to_eur
-        actual_savings_eur = actual_monthly_savings * usd_to_eur
+        # No currency conversion since 2026-07-18: Cost Explorer amounts
+        # stay in AWS's billing currency (USD); legacy _eur names kept.
+        cost_before_eur = monthly_cost_before
+        cost_after_eur = monthly_cost_after
+        actual_savings_eur = actual_monthly_savings
 
         # Calculate accuracy vs estimate
         savings_accuracy = 0.0
@@ -236,10 +234,10 @@ class SavingsTracker:
             savings_accuracy = (actual_savings_eur / float(estimated_savings)) * 100
 
         logger.info("\n📊 SAVINGS ANALYSIS:")
-        logger.info(f"   Cost before: €{cost_before_eur:.2f}/month")
-        logger.info(f"   Cost after:  €{cost_after_eur:.2f}/month")
-        logger.info(f"   Actual savings: €{actual_savings_eur:.2f}/month")
-        logger.info(f"   Estimated savings: €{estimated_savings:.2f}/month")
+        logger.info(f"   Cost before: ${cost_before_eur:.2f}/month")
+        logger.info(f"   Cost after:  ${cost_after_eur:.2f}/month")
+        logger.info(f"   Actual savings: ${actual_savings_eur:.2f}/month")
+        logger.info(f"   Estimated savings: ${estimated_savings:.2f}/month")
         logger.info(f"   Accuracy: {savings_accuracy:.1f}%")
 
         # Save to database
@@ -285,7 +283,7 @@ class SavingsTracker:
                         "instance_type": instance_type,
                         "days_since_action": days_since_action,
                         "measurement_days_after": measurement_days,
-                        "usd_to_eur_rate": usd_to_eur,
+                        "currency": "USD",
                     }
                 ),
             ),
@@ -421,14 +419,14 @@ def main():
     print("📊 TOTAL VERIFIED SAVINGS")
     print("=" * 70)
     print(f"Actions verified: {totals['total_actions']}")
-    print(f"Total cost before: €{totals['total_cost_before']:,.2f}/month")
-    print(f"Total cost after: €{totals['total_cost_after']:,.2f}/month")
-    print(f"Total savings: €{totals['total_savings_eur']:,.2f}/month")
+    print(f"Total cost before: ${totals['total_cost_before']:,.2f}/month")
+    print(f"Total cost after: ${totals['total_cost_after']:,.2f}/month")
+    print(f"Total savings: ${totals['total_savings_eur']:,.2f}/month")
     print(f"Average accuracy: {totals['avg_accuracy_percent']:.1f}%")
 
     if totals["total_actions"] > 0:
         annual_savings = totals["total_savings_eur"] * 12
-        print(f"\nProjected annual savings: €{annual_savings:,.2f}/year")
+        print(f"\nProjected annual savings: ${annual_savings:,.2f}/year")
 
     print("=" * 70 + "\n")
 

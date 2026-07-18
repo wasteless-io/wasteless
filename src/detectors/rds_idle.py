@@ -16,7 +16,7 @@ import sys
 from typing import Any, Dict, List
 
 from collectors.steampipe import SteampipeError
-from detectors.rds_pricing import instance_eur
+from detectors.rds_pricing import instance_usd
 from detectors.steampipe_base import SteampipeWasteDetector
 
 logging.basicConfig(
@@ -39,7 +39,7 @@ class RDSIdleDetector(SteampipeWasteDetector):
             storage_type = row.get("storage_type") or "gp2"
             db_class = row.get("class") or ""
             multi_az = bool(row.get("multi_az"))
-            cost = instance_eur(db_class, multi_az, storage_gb, storage_type)
+            cost = instance_usd(db_class, multi_az, storage_gb, storage_type)
             db_id = row["db_instance_identifier"]
             items.append(
                 {

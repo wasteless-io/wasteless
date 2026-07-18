@@ -105,8 +105,8 @@ def test_confirmed_savings_only_claimed_when_verified(golden_dataset, golden_rep
 
     if golden_dataset["confirmed_savings_monthly"] == 0:
         assert (
-            "confirmed savings (verified via cost explorer): €0.00" in normalized
-            or "confirmed savings (verified via cost explorer) | €0.00" in normalized
+            "confirmed savings (verified via cost explorer): $0.00" in normalized
+            or "confirmed savings (verified via cost explorer) | $0.00" in normalized
         )
 
 
@@ -114,8 +114,8 @@ def test_potential_savings_not_presented_as_realized(golden_dataset, golden_repo
     normalized = golden_report.lower()
 
     if golden_dataset["realized_savings_monthly"] == 0:
-        assert "realized savings: €0.00" in normalized or "realized savings | €0.00" in normalized
-        assert "saved €" not in normalized
+        assert "realized savings: $0.00" in normalized or "realized savings | $0.00" in normalized
+        assert "saved $" not in normalized
         assert "you saved" not in normalized
         assert "we saved" not in normalized
 
@@ -132,9 +132,9 @@ def test_amounts_are_internally_consistent(golden_dataset, golden_report):
     assert abs(yearly - potential * 12) < 0.01
     assert potential <= waste
     assert waste <= spend
-    assert f"€{waste:.2f}" in golden_report
-    assert f"€{potential:.2f}" in golden_report
-    assert f"€{yearly:.2f}" in golden_report
+    assert f"${waste:.2f}" in golden_report
+    assert f"${potential:.2f}" in golden_report
+    assert f"${yearly:.2f}" in golden_report
 
 
 def test_high_and_critical_risk_recommendations_are_flagged(golden_dataset, golden_report):

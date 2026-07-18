@@ -6,7 +6,7 @@ Flags VPCs containing no network interface: every running resource
 (EC2, load balancer, NAT gateway, RDS, VPC endpoint...) creates an ENI,
 so an ENI-less VPC hosts nothing.
 
-A VPC itself costs 0 EUR — this is a hygiene check, not a savings one.
+A VPC itself costs 0 USD — this is a hygiene check, not a savings one.
 Empty VPCs clutter the console, consume the 5-VPCs-per-region quota and
 hide real waste. Default VPCs are flagged with lower confidence: AWS only
 recreates a deleted default VPC on support request.
@@ -31,7 +31,7 @@ class VPCUnusedDetector(SteampipeWasteDetector):
     resource_type = "vpc"
     waste_type = "unused_vpc"
     recommendation_type = "delete_vpc"
-    banner = "UNUSED VPC DETECTION (hygiene — 0 EUR)"
+    banner = "UNUSED VPC DETECTION (hygiene - 0 USD)"
 
     def map_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         items = []

@@ -31,11 +31,11 @@ def _detector_with_mock_conn():
 
 class TestVolumeMonthlyCost:
     def test_known_volume_types(self):
-        assert _volume_monthly_cost(100, "gp3") == 7.36
-        assert _volume_monthly_cost(100, "io1") == 11.50
+        assert _volume_monthly_cost(100, "gp3") == 8.00
+        assert _volume_monthly_cost(100, "io1") == 12.50
 
     def test_unknown_type_falls_back_to_gp2_price(self):
-        assert _volume_monthly_cost(100, "weird-new-type") == 9.20
+        assert _volume_monthly_cost(100, "weird-new-type") == 10.00
 
 
 class TestFetchOrphanedVolumes:
@@ -68,7 +68,7 @@ class TestFetchOrphanedVolumes:
         vol = result[0]
         assert vol["volume_id"] == "vol-orphan1"
         assert vol["name"] == "old-data"
-        assert vol["monthly_cost"] == 7.36
+        assert vol["monthly_cost"] == 8.00
         assert vol["age_days"] == 30
         assert vol["encrypted"] is True
 
@@ -77,7 +77,7 @@ class TestFetchOrphanedVolumes:
 
         assert result[0]["name"] == ""
         assert result[0]["age_days"] is None
-        assert result[0]["monthly_cost"] == 0.92
+        assert result[0]["monthly_cost"] == 1.00
 
     def test_naive_create_time_is_treated_as_utc(self):
         # Build the naive datetime from UTC so the expected age doesn't
@@ -110,7 +110,7 @@ class TestSave:
             "az": "eu-west-1a",
             "region": "eu-west-1",
             "encrypted": False,
-            "monthly_cost": 7.36,
+            "monthly_cost": 8.00,
             "age_days": 30,
         }
 
@@ -125,7 +125,7 @@ class TestSave:
         assert params[3] == "vol-orphan1"  # resource_id
         assert params[4] == "ebs_volume"  # resource_type
         assert params[5] == "orphaned_volume"  # waste_type
-        assert params[6] == 7.36  # monthly_waste_eur
+        assert params[6] == 8.00  # monthly_waste_eur
         assert params[7] == 0.95  # confidence — state=available is unambiguous
 
         metadata = json.loads(params[8])
@@ -153,7 +153,7 @@ class TestRecommend:
         detector = _detector_with_mock_conn()
         cursor = detector.conn.cursor.return_value
         meta = {"size_gb": 100, "vol_type": "gp3", "region": "eu-west-1", "name": "old-data"}
-        cursor.fetchall.return_value = [(42, "vol-orphan1", 7.36, meta)]
+        cursor.fetchall.return_value = [(42, "vol-orphan1", 8.00, meta)]
 
         count = detector.recommend([42])
 
@@ -162,14 +162,14 @@ class TestRecommend:
         assert params[0] == 42
         assert params[1] == "delete_volume"
         assert "old-data" in params[2]
-        assert params[3] == 7.36
+        assert params[3] == 8.00
         assert params[4] == "pending"
 
     def test_metadata_as_json_string_is_parsed(self):
         detector = _detector_with_mock_conn()
         cursor = detector.conn.cursor.return_value
         meta = json.dumps({"size_gb": 100, "vol_type": "gp3", "region": "eu-west-1"})
-        cursor.fetchall.return_value = [(42, "vol-orphan1", 7.36, meta)]
+        cursor.fetchall.return_value = [(42, "vol-orphan1", 8.00, meta)]
 
         assert detector.recommend([42]) == 1
 

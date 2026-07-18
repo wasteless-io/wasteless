@@ -15,7 +15,7 @@ import sys
 from typing import Any, Dict, List
 
 from collectors.steampipe import SteampipeError
-from detectors.rds_pricing import snapshot_eur
+from detectors.rds_pricing import snapshot_usd
 from detectors.steampipe_base import SteampipeWasteDetector
 
 logging.basicConfig(
@@ -35,7 +35,7 @@ class RDSSnapshotOrphanDetector(SteampipeWasteDetector):
         items = []
         for row in rows:
             storage_gb = float(row.get("allocated_storage") or 0)
-            cost = snapshot_eur(storage_gb)
+            cost = snapshot_usd(storage_gb)
             age_days = row.get("age_days")
             snap_id = row["db_snapshot_identifier"]
             src = row.get("db_instance_identifier") or "?"

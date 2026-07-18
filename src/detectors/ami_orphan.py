@@ -17,7 +17,6 @@ import logging
 import sys
 from typing import Any, Dict, List
 
-from constants import USD_TO_EUR
 
 from collectors.steampipe import SteampipeError
 from detectors.steampipe_base import SteampipeWasteDetector
@@ -28,7 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # EBS snapshot standard-tier storage, eu-west-1 (USD 0.05 / GiB-month).
-SNAPSHOT_EUR_PER_GIB = round(0.05 * USD_TO_EUR, 4)
+SNAPSHOT_USD_PER_GIB = 0.05
 
 
 class AMIOrphanDetector(SteampipeWasteDetector):
@@ -43,7 +42,7 @@ class AMIOrphanDetector(SteampipeWasteDetector):
         for row in rows:
             backing_gb = float(row.get("backing_gb") or 0)
             snapshot_count = int(row.get("snapshot_count") or 0)
-            cost = round(backing_gb * SNAPSHOT_EUR_PER_GIB, 2)
+            cost = round(backing_gb * SNAPSHOT_USD_PER_GIB, 2)
             age_days = row.get("age_days")
             name = row.get("name") or ""
             label = f"{name} ({row['image_id']})" if name else row["image_id"]
@@ -65,7 +64,7 @@ class AMIOrphanDetector(SteampipeWasteDetector):
                         "age_days": age_days,
                         "region": row.get("region") or "",
                         "platform_details": row.get("platform_details") or "",
-                        "snapshot_eur_per_gib": SNAPSHOT_EUR_PER_GIB,
+                        "snapshot_eur_per_gib": SNAPSHOT_USD_PER_GIB,
                         "monthly_cost_eur": cost,
                     },
                 }

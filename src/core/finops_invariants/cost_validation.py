@@ -58,7 +58,7 @@ def validate_elastic_ip_cost(
     monthly_cost: float, known_eip_cost: float, tolerance_pct: float = 0.10
 ) -> float:
     """Une Elastic IP inutilisée coûte quelques euros/mois — un montant à
-    deux chiffres (ex. 40 €/mois) est suspect et doit être rejeté."""
+    deux chiffres (ex. 40 $/mois) est suspect et doit être rejeté."""
     return validate_cost_within_tolerance(
         monthly_cost, known_eip_cost, tolerance_pct, label="Elastic IP"
     )

@@ -5,9 +5,9 @@ Unused Load Balancer Detector for Wasteless (Steampipe collection)
 Flags ALB/NLB/GWLB with no registered targets (no target group, or target
 groups with zero registered targets) and Classic LBs with no instances.
 
-Pricing (hourly base * 730h * 0.92 EUR/USD, eu-west-1, LCU/data excluded):
-  ALB/NLB $0.0252/h ≈ 16.92 EUR/mo, GWLB $0.0125/h ≈ 8.40 EUR/mo,
-  Classic $0.028/h ≈ 18.81 EUR/mo
+Pricing (hourly base * 730h, USD, eu-west-1, LCU/data excluded):
+  ALB/NLB $0.0252/h = 18.40 USD/mo, GWLB $0.0125/h = 9.13 USD/mo,
+  Classic $0.028/h = 20.44 USD/mo
 """
 
 import logging
@@ -23,14 +23,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# EUR/month by load balancer type (approximate, hourly base only)
-ELB_MONTHLY_COST_EUR: Dict[str, float] = {
-    "application": 16.92,
-    "network": 16.92,
-    "gateway": 8.40,
-    "classic": 18.81,
+# USD/month by load balancer type (approximate, hourly base only)
+ELB_MONTHLY_COST_USD: Dict[str, float] = {
+    "application": 18.40,
+    "network": 18.40,
+    "gateway": 9.13,
+    "classic": 20.44,
 }
-DEFAULT_ELB_COST_EUR = 16.92
+DEFAULT_ELB_COST_USD = 18.40
 
 
 class ELBUnusedDetector(SteampipeWasteDetector):
@@ -44,7 +44,7 @@ class ELBUnusedDetector(SteampipeWasteDetector):
         items = []
         for row in rows:
             lb_type = row.get("lb_type") or "application"
-            cost = ELB_MONTHLY_COST_EUR.get(lb_type, DEFAULT_ELB_COST_EUR)
+            cost = ELB_MONTHLY_COST_USD.get(lb_type, DEFAULT_ELB_COST_USD)
             reason = row.get("reason") or ("no_instances" if lb_type == "classic" else "no_targets")
             registered = int(row.get("registered_targets") or 0)
             # "no_traffic" is a slightly weaker signal than an empty LB (a

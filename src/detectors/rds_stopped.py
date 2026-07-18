@@ -16,7 +16,7 @@ import sys
 from typing import Any, Dict, List
 
 from collectors.steampipe import SteampipeError
-from detectors.rds_pricing import storage_eur
+from detectors.rds_pricing import storage_usd
 from detectors.steampipe_base import SteampipeWasteDetector
 
 logging.basicConfig(
@@ -37,7 +37,7 @@ class RDSStoppedDetector(SteampipeWasteDetector):
         for row in rows:
             storage_gb = float(row.get("allocated_storage") or 0)
             storage_type = row.get("storage_type") or "gp2"
-            cost = storage_eur(storage_gb, storage_type)
+            cost = storage_usd(storage_gb, storage_type)
             age_days = row.get("age_days")
             db_id = row["db_instance_identifier"]
             items.append(

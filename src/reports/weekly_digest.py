@@ -39,7 +39,7 @@ NARRATIVE_PROMPT = """\
 You are the FinOps assistant inside wasteless, an AWS cost-waste detector.
 Write the narrative introduction of the activity report below.
 
-Report data (JSON, amounts in EUR/month unless stated): {data}
+Report data (JSON, amounts in USD/month unless stated): {data}
 
 Write 3-5 short sentences, plain language, no markdown:
 1. the headline of the period (the most significant number or change);
@@ -192,16 +192,16 @@ def format_digest(data: Dict[str, Any]) -> str:
         f"Wasteless — activity report ({period['start']} to {period['end']})",
         "=" * 60,
         "",
-        f"New waste detected: {new['count']} resource(s), " f"{new['monthly_eur']:.2f} EUR/month",
+        f"New waste detected: {new['count']} resource(s), " f"{new['monthly_eur']:.2f} USD/month",
     ]
     for resource_type, count, eur in new["by_type"]:
-        lines.append(f"  - {resource_type}: {count} ({eur:.2f} EUR/month)")
+        lines.append(f"  - {resource_type}: {count} ({eur:.2f} USD/month)")
 
     if pending["scope"] == "snapshot":
         lines += [
             "",
             f"Pending recommendations: {pending['count']} "
-            f"({pending['monthly_eur']:.2f} EUR/month of potential savings)",
+            f"({pending['monthly_eur']:.2f} USD/month of potential savings)",
         ]
         if pending["oldest_days"] is not None and pending["count"] > 0:
             lines.append(f"  Oldest has been waiting {pending['oldest_days']} day(s).")
@@ -209,14 +209,14 @@ def format_digest(data: Dict[str, Any]) -> str:
         lines += [
             "",
             f"Recommendations created in the period: {pending['count']} "
-            f"({pending['monthly_eur']:.2f} EUR/month of potential savings)",
+            f"({pending['monthly_eur']:.2f} USD/month of potential savings)",
         ]
 
     lines += [
         "",
         f"Actions executed: {actions['succeeded']} succeeded, "
         f"{actions['failed']} failed ({actions['dry_run']} dry-run)",
-        f"Savings verified this period: {data['verified_savings_eur']:.2f} EUR",
+        f"Savings verified this period: {data['verified_savings_eur']:.2f} USD",
     ]
     return "\n".join(lines)
 

@@ -965,7 +965,7 @@
         function formatCurrency(value) {
             return new Intl.NumberFormat('en-EU', {
                 style: 'currency',
-                currency: 'EUR'
+                currency: 'USD'
             }).format(value);
         }
 
@@ -1146,7 +1146,7 @@
 
             const savingsEl = document.createElement('span');
             savingsEl.className = 'notif-item-savings';
-            savingsEl.textContent = Number(savings || 0).toFixed(2) + ' €';
+            savingsEl.textContent = Number(savings || 0).toFixed(2) + ' $';
 
             row.append(idLink, copyBtn);
             if (manual) {
@@ -1246,7 +1246,7 @@
         // KPI count-up: the server renders the final value; the number is
         // re-counted from 0 client-side (~700ms, cubic ease-out). Prefix,
         // suffix, decimals and thousands grouping are inferred from the
-        // rendered text so a plain class="countup" works on '€3.36',
+        // rendered text so a plain class="countup" works on '$3.36',
         // '85%', '1,234' alike. Skipped under prefers-reduced-motion.
         (function () {
             if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;

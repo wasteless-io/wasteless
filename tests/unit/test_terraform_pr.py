@@ -121,14 +121,14 @@ class TestProposeRemoval:
             monthly_savings_eur=3.65,
             confidence=0.92,
             reason="unattached for 21 days",
-            cost_evidence={"Cost last 30 days": "3.65 €"},
+            cost_evidence={"Cost last 30 days": "$3.65"},
             workdir=tf_dir,
             mapper=TerraformMapper(STATE),
         )
-        assert "3.65 €/month" in proposal.body  # savings estimate
+        assert "$3.65/month" in proposal.body  # savings estimate
         assert "**low** (detection confidence 92%)" in proposal.body  # risk
         assert "## Rollback plan" in proposal.body  # rollback
-        assert "Cost last 30 days | 3.65 €" in proposal.body  # CE proof
+        assert "Cost last 30 days | $3.65" in proposal.body  # CE proof
         assert "unattached for 21 days" in proposal.body
 
     def test_block_is_removed_and_diffed(self, remediator, tf_dir):

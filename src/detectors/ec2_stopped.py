@@ -37,17 +37,17 @@ logger = logging.getLogger(__name__)
 
 STOPPED_DAYS = 7  # minimum days stopped before flagging
 
-# EBS pricing EUR/GiB/month (eu-west-1)
-EBS_PRICING_EUR_PER_GIB: Dict[str, float] = {
-    "gp3": 0.0736,
-    "gp2": 0.0920,
-    "io1": 0.1150,
-    "io2": 0.1150,
-    "st1": 0.0460,
-    "sc1": 0.0230,
-    "standard": 0.0552,
+# EBS pricing USD/GiB/month (eu-west-1), AWS list prices, no conversion
+EBS_PRICING_USD_PER_GIB: Dict[str, float] = {
+    "gp3": 0.08,
+    "gp2": 0.10,
+    "io1": 0.125,
+    "io2": 0.125,
+    "st1": 0.05,
+    "sc1": 0.025,
+    "standard": 0.06,
 }
-DEFAULT_EBS_PRICE = 0.0920
+DEFAULT_EBS_PRICE = 0.10  # gp2 fallback
 
 # Périmètre de scan partagé avec le collecteur CloudWatch (et surchargeable
 # via AWS_REGIONS) — voir src/constants.py.
@@ -55,7 +55,7 @@ REGIONS = AWS_SCAN_REGIONS
 
 
 def _ebs_cost(size_gb: int, vol_type: str) -> float:
-    price = EBS_PRICING_EUR_PER_GIB.get(vol_type, DEFAULT_EBS_PRICE)
+    price = EBS_PRICING_USD_PER_GIB.get(vol_type, DEFAULT_EBS_PRICE)
     return round(size_gb * price, 2)
 
 
@@ -300,7 +300,7 @@ class EC2StoppedDetector:
                         estimated_monthly_savings_eur = EXCLUDED.estimated_monthly_savings_eur,
                         -- The AI insight quotes generation-time figures: drop
                         -- it when the resynced savings drifts beyond
-                        -- max(10 pct of old, 0.50 EUR) so enrich_recommendations()
+                        -- max(10 pct of old, 0.50 USD) so enrich_recommendations()
                         -- rewrites it with fresh numbers on the next run.
                         ai_insight = CASE
                             WHEN abs(recommendations.estimated_monthly_savings_eur
@@ -316,7 +316,7 @@ class EC2StoppedDetector:
                         "terminate_instance",
                         f"TERMINATE stopped instance {instance_id} ({itype}) in {region} — "
                         f"stopped for >= {days} days, still billing {vol_count} EBS volume(s) "
-                        f"at {ebs_cost:.2f} EUR/mo; snapshot the volumes first",
+                        f"at {ebs_cost:.2f} USD/mo; snapshot the volumes first",
                         ebs_cost,
                         "pending",
                     ),
@@ -349,14 +349,14 @@ class EC2StoppedDetector:
 
         total_waste = sum(i["ebs_cost"] for i in instances)
         print(f"Stopped instances found: {len(instances)}")
-        print(f"Total EBS waste:         {total_waste:.2f} EUR/mo")
-        print(f"Annual waste:            {total_waste * 12:.2f} EUR/year\n")
+        print(f"Total EBS waste:         {total_waste:.2f} USD/mo")
+        print(f"Annual waste:            {total_waste * 12:.2f} USD/year\n")
 
         for inst in instances:
             vol_info = f"{len(inst['volumes'])} volume(s)"
             print(
                 f"  - {inst['instance_id']} ({inst['instance_type']}) "
-                f"in {inst['region']} — {vol_info} → {inst['ebs_cost']:.2f} EUR/mo"
+                f"in {inst['region']} — {vol_info} → {inst['ebs_cost']:.2f} USD/mo"
             )
 
         waste_ids = self.save(instances)

@@ -5,7 +5,7 @@ Unused NAT Gateway Detector for Wasteless (Steampipe collection)
 Flags NAT gateways that are not 'available' or had zero outbound traffic
 over the last 30 days. NAT gateways bill hourly even when idle.
 
-Pricing: $0.048/hour (eu-west-1) * 730h * 0.92 EUR/USD ≈ 32.24 EUR/month
+Pricing: $0.048/hour (eu-west-1) * 730h = 35.04 USD/month
 (data processing charges excluded — an idle gateway has none).
 """
 
@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-NAT_GATEWAY_MONTHLY_COST_EUR = 32.24  # $0.048/h * 730h * 0.92 EUR/USD
+NAT_GATEWAY_MONTHLY_COST_USD = 35.04  # $0.048/h * 730h
 
 
 class NATGatewayUnusedDetector(SteampipeWasteDetector):
@@ -42,7 +42,7 @@ class NATGatewayUnusedDetector(SteampipeWasteDetector):
             items.append(
                 {
                     "resource_id": row["nat_gateway_id"],
-                    "monthly_cost": NAT_GATEWAY_MONTHLY_COST_EUR,
+                    "monthly_cost": NAT_GATEWAY_MONTHLY_COST_USD,
                     "confidence": 0.90,
                     "action": (
                         f"DELETE unused NAT gateway {row['nat_gateway_id']} "
@@ -53,7 +53,7 @@ class NATGatewayUnusedDetector(SteampipeWasteDetector):
                         "state": state,
                         "region": row.get("region") or "",
                         "bytes_out_30d": row.get("bytes_out_30d") or 0,
-                        "monthly_cost_eur": NAT_GATEWAY_MONTHLY_COST_EUR,
+                        "monthly_cost_eur": NAT_GATEWAY_MONTHLY_COST_USD,
                     },
                 }
             )

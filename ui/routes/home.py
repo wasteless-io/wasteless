@@ -6,7 +6,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from state import (
     get_db,
     templates,
-    USD_TO_EUR,
     DAYS_PER_MONTH,
     aws_connection_configured,
 )
@@ -37,8 +36,7 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
     cursor = conn.cursor()
 
     # Fetch metrics in single query
-    cursor.execute(
-        """
+    cursor.execute("""
         WITH pending AS (
             SELECT COUNT(*) as pending_count,
                    COALESCE(SUM(estimated_monthly_savings_eur), 0) as pending_eur
@@ -59,12 +57,11 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
             WHERE r.status = 'rejected'
         ),
         -- Dénominateur du Waste Rate : dernier mois calendaire complet,
-        -- converti en EUR (les writers stockent de l'USD Cost Explorer).
+        -- montants bruts tels que facturés (USD, aucune conversion).
         -- Le mois courant serait un month-to-date partiel face à un waste
         -- exprimé en taux mensuel : ratio mécaniquement surévalué.
         raw_costs AS (
-            SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
-                                     ELSE cost END), 0) as total_spend
+            SELECT COALESCE(SUM(cost), 0) as total_spend
             FROM cloud_costs_raw
             WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
               AND usage_date < DATE_TRUNC('month', CURRENT_DATE)
@@ -90,9 +87,7 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
         CROSS JOIN declined d
         CROSS JOIN raw_costs r
         CROSS JOIN savings s;
-    """,
-        (USD_TO_EUR,),
-    )
+    """)
     result = cursor.fetchone()
 
     # Waste by type (grouped) — active waste only
@@ -191,7 +186,7 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
     current_waste = float(result["total_waste"]) if result else 0
     savings_trend = (current_waste - float(week_ago_eur)) if week_ago_eur is not None else None
     # Percentage variant for the KPI banner; None when week-ago base is 0
-    # (division impossible), the template then falls back to the € delta.
+    # (division impossible), the template then falls back to the $ delta.
     savings_trend_pct = (
         savings_trend / float(week_ago_eur) * 100
         if savings_trend is not None and float(week_ago_eur) > 0
@@ -201,20 +196,15 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
     # Real bill from Cost Explorer (cloud_costs_raw, collected daily by
     # cost_collector_job): last 30 days rolling — the only window the
     # 30-day collection guarantees complete (a calendar month can have a
-    # hole if collection started mid-month). USD kept for the tooltip.
-    cursor.execute(
-        """
-        SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
-                                 ELSE cost END), 0) as spend_eur,
-               COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost
-                                 ELSE 0 END), 0) as spend_usd,
+    # hole if collection started mid-month). Raw amounts as billed (USD).
+    cursor.execute("""
+        SELECT COALESCE(SUM(cost), 0) as spend_eur,
+               COALESCE(SUM(cost), 0) as spend_usd,
                COUNT(DISTINCT service) as service_count,
                COUNT(*) as row_count
         FROM cloud_costs_raw
         WHERE usage_date >= CURRENT_DATE - 30
-    """,
-        (USD_TO_EUR,),
-    )
+    """)
     spend_row = cursor.fetchone()
     aws_spend_30d_eur = (
         float(spend_row["spend_eur"]) if spend_row and spend_row["row_count"] > 0 else None
@@ -252,15 +242,11 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
     # the displayed window, delta mechanically ~0) show no arrow.
     aws_spend_vs_avg = None
     aws_spend_avg_eur = None
-    cursor.execute(
-        """
-        SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
-                                 ELSE cost END), 0) as total_eur,
+    cursor.execute("""
+        SELECT COALESCE(SUM(cost), 0) as total_eur,
                MAX(usage_date) - MIN(usage_date) + 1 as days_covered
         FROM cloud_costs_raw
-    """,
-        (USD_TO_EUR,),
-    )
+    """)
     avg_row = cursor.fetchone()
     if avg_row and avg_row["days_covered"] and aws_spend_30d_eur is not None:
         aws_spend_avg_eur = float(avg_row["total_eur"]) / avg_row["days_covered"] * DAYS_PER_MONTH
@@ -273,19 +259,15 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
 
     # Services view of the waste card: top services by real spend, same
     # source and window as the AWS Spend tile so the card and the KPI agree.
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT service,
-               SUM(CASE WHEN currency = 'USD' THEN cost * %s
-                        ELSE cost END) as total_eur
+               SUM(cost) as total_eur
         FROM cloud_costs_raw
         WHERE usage_date >= CURRENT_DATE - 30
         GROUP BY service
         ORDER BY total_eur DESC
         LIMIT 8
-    """,
-        (USD_TO_EUR,),
-    )
+    """)
     top_services = cursor.fetchall()
 
     cursor.close()

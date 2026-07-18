@@ -215,23 +215,23 @@
 <div class="grid grid-3 mb-1 no-print">
     <div class="card">
         <div class="card-title">Waste detected (period)</div>
-        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="All waste detected between {{ report.period.start }} and {{ report.period.end }}, at its detection-time monthly rate — including items since remediated, declined or gone (obsolete). A historical detection total across every status, not the current active figure (see the Overview's 'Monthly Waste')."><span class="kpi-zoom"><span class="countup">€{{ "%.2f"|format(report.new_waste.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
+        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="All waste detected between {{ report.period.start }} and {{ report.period.end }}, at its detection-time monthly rate — including items since remediated, declined or gone (obsolete). A historical detection total across every status, not the current active figure (see the Overview's 'Monthly Waste')."><span class="kpi-zoom"><span class="countup">${{ "%.2f"|format(report.new_waste.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
         <div class="card-delta">{{ report.new_waste.count }} resource(s) · all statuses</div>
     </div>
     <div class="card">
         {% if report.pending.scope == 'snapshot' %}
         <div class="card-title">Recommendations <span class="badge badge-info">live</span></div>
-        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Live view — what is pending approval right now, not a period total · recoverable every month if approved"><span class="kpi-zoom"><span class="countup">€{{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
+        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Live view — what is pending approval right now, not a period total · recoverable every month if approved"><span class="kpi-zoom"><span class="countup">${{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
         <div class="card-delta">{{ report.pending.count }} pending{% if report.pending.oldest_days is not none and report.pending.count > 0 %} · oldest {{ report.pending.oldest_days }}d{% endif %}</div>
         {% else %}
         <div class="card-title">Recommendations created</div>
-        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Recommendations created during this period, at their estimated monthly savings"><span class="kpi-zoom"><span class="countup">€{{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
+        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Recommendations created during this period, at their estimated monthly savings"><span class="kpi-zoom"><span class="countup">${{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
         <div class="card-delta-neutral">{{ report.pending.count }} in the period</div>
         {% endif %}
     </div>
     <div class="card">
         <div class="card-title">Savings verified</div>
-        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Verified via AWS Cost Explorer after applied actions — measured, not estimated"><span class="kpi-zoom"><span class="countup">€{{ "%.2f"|format(report.verified_savings_eur) }}</span></span></span></div>
+        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Verified via AWS Cost Explorer after applied actions — measured, not estimated"><span class="kpi-zoom"><span class="countup">${{ "%.2f"|format(report.verified_savings_eur) }}</span></span></span></div>
         <div class="card-delta">via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a></div>
     </div>
 </div>
@@ -242,17 +242,17 @@
     <tbody>
         <tr>
             <td class="label">Detected waste (period)</td>
-            <td class="value">€{{ "%.2f"|format(report.new_waste.monthly_eur) }}/mo</td>
+            <td class="value">${{ "%.2f"|format(report.new_waste.monthly_eur) }}/mo</td>
             <td class="note">{{ report.new_waste.count }} resource(s)</td>
         </tr>
         <tr>
             {% if report.pending.scope == 'snapshot' %}
             <td class="label">Potential savings (pending recommendations, live)</td>
-            <td class="value">€{{ "%.2f"|format(report.pending.monthly_eur) }}/mo</td>
+            <td class="value">${{ "%.2f"|format(report.pending.monthly_eur) }}/mo</td>
             <td class="note">{{ report.pending.count }} pending{% if report.pending.oldest_days is not none and report.pending.count > 0 %} &middot; oldest {{ report.pending.oldest_days }}d{% endif %}</td>
             {% else %}
             <td class="label">Potential savings (recommendations created)</td>
-            <td class="value">€{{ "%.2f"|format(report.pending.monthly_eur) }}/mo</td>
+            <td class="value">${{ "%.2f"|format(report.pending.monthly_eur) }}/mo</td>
             <td class="note">{{ report.pending.count }} in the period</td>
             {% endif %}
         </tr>
@@ -263,7 +263,7 @@
         </tr>
         <tr>
             <td class="label">Confirmed savings (verified via Cost Explorer)</td>
-            <td class="value">€{{ "%.2f"|format(report.verified_savings_eur) }}</td>
+            <td class="value">${{ "%.2f"|format(report.verified_savings_eur) }}</td>
             <td class="note">requires completed actions</td>
         </tr>
     </tbody>
@@ -287,7 +287,7 @@
                 <tr style="border-top: 1px solid var(--gray-200);">
                     <td style="padding: 0.5rem 1rem;">{{ resource_type }}</td>
                     <td style="padding: 0.5rem 1rem;">{{ count }}</td>
-                    <td style="padding: 0.5rem 1rem;">€{{ "%.2f"|format(eur) }}/mo</td>
+                    <td style="padding: 0.5rem 1rem;">${{ "%.2f"|format(eur) }}/mo</td>
                 </tr>
                 {% else %}
                 <tr style="border-top: 1px solid var(--gray-200);">
@@ -298,7 +298,7 @@
                 <tr class="print-only print-total">
                     <td style="padding: 0.5rem 1rem;">Total</td>
                     <td style="padding: 0.5rem 1rem;">{{ report.new_waste.count }}</td>
-                    <td style="padding: 0.5rem 1rem;">€{{ "%.2f"|format(report.new_waste.monthly_eur) }}/mo</td>
+                    <td style="padding: 0.5rem 1rem;">${{ "%.2f"|format(report.new_waste.monthly_eur) }}/mo</td>
                 </tr>
                 {% endif %}
             </tbody>

@@ -32,13 +32,13 @@ def _detector_with_mock_conn():
 
 class TestEbsCost:
     def test_known_volume_types(self):
-        assert _ebs_cost(100, "gp2") == 9.20
-        assert _ebs_cost(100, "gp3") == 7.36
+        assert _ebs_cost(100, "gp2") == 10.00
+        assert _ebs_cost(100, "gp3") == 8.00
 
     def test_unknown_type_falls_back_to_default(self):
         # Default is the gp2 price — the most common (and most expensive
         # of the general-purpose types), so unknown types aren't underbilled
-        assert _ebs_cost(100, "weird-new-type") == 9.20
+        assert _ebs_cost(100, "weird-new-type") == 10.00
 
 
 class TestFetchEbsCostForInstance:
@@ -63,7 +63,7 @@ class TestFetchEbsCostForInstance:
             info = _fetch_ebs_cost_for_instance("i-abc", "eu-west-1")
 
         assert info["found"] is True
-        assert info["ebs_cost"] == 12.88  # 9.20 + 3.68
+        assert info["ebs_cost"] == 14.00  # 10.00 + 4.00
         assert [v["volume_id"] for v in info["volumes"]] == ["vol-1", "vol-2"]
 
     def test_instance_not_in_region(self):

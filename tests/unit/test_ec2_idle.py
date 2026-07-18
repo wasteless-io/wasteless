@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from detectors.ec2_idle import (
-    DEFAULT_INSTANCE_COST_EUR,
+    DEFAULT_INSTANCE_COST_USD,
     EC2IdleDetector,
 )
 
@@ -49,15 +49,15 @@ def _detect(rows, cpu_threshold=5.0, days=7):
 class TestInstanceMonthlyCost:
     def test_known_type(self):
         detector = _detector_with_mock_conn()
-        assert detector.get_instance_monthly_cost("t3.medium") == 28.44
+        assert detector.get_instance_monthly_cost("t3.medium") == 30.91
 
     def test_unknown_type_falls_back_to_default(self):
         detector = _detector_with_mock_conn()
-        assert detector.get_instance_monthly_cost("z9.mega") == DEFAULT_INSTANCE_COST_EUR
+        assert detector.get_instance_monthly_cost("z9.mega") == DEFAULT_INSTANCE_COST_USD
 
     def test_empty_type_falls_back_to_default(self):
         detector = _detector_with_mock_conn()
-        assert detector.get_instance_monthly_cost("") == DEFAULT_INSTANCE_COST_EUR
+        assert detector.get_instance_monthly_cost("") == DEFAULT_INSTANCE_COST_USD
 
 
 class TestConfidenceScore:
@@ -90,7 +90,7 @@ class TestWasteEstimate:
     def test_waste_is_cost_times_idle_ratio(self):
         waste = _detect([_metric_row(cpu_avg=2.0, instance_type="t3.medium")])
         # 28.44 * (1 - 2/100) = 27.87
-        assert waste[0]["monthly_waste_eur"] == 27.87
+        assert waste[0]["monthly_waste_eur"] == 30.29
 
     def test_metadata_carries_detection_context(self):
         waste = _detect([_metric_row(cpu_avg=1.0, datapoints=7)], cpu_threshold=5.0, days=7)

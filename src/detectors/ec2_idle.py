@@ -38,41 +38,43 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# EC2 instance pricing (EUR/month, eu-west-1)
+# EC2 instance pricing (USD/month, eu-west-1)
 # Source: AWS Pricing Calculator + https://instances.vantage.sh/
 # Updated: 2026-01-11
-# Calculation: hourly_rate_USD * 730 hours * 0.92 EUR/USD
+# Calculation: hourly_rate_USD * 730 hours. No currency conversion anywhere
+# in the pipeline since 2026-07-18: figures stay in AWS's billing currency
+# (values below are the former EUR table divided back by the 0.92 rate).
 EC2_PRICING: Dict[str, float] = {
     # T2 instances
-    "t2.nano": 4.76,
-    "t2.micro": 9.50,
-    "t2.small": 19.00,
-    "t2.medium": 38.00,
+    "t2.nano": 5.17,
+    "t2.micro": 10.33,
+    "t2.small": 20.65,
+    "t2.medium": 41.30,
     # T3 instances (most common)
-    "t3.nano": 3.56,
-    "t3.micro": 7.11,
-    "t3.small": 14.22,
-    "t3.medium": 28.44,
-    "t3.large": 56.88,
-    "t3.xlarge": 113.76,
-    "t3.2xlarge": 227.52,
+    "t3.nano": 3.87,
+    "t3.micro": 7.73,
+    "t3.small": 15.46,
+    "t3.medium": 30.91,
+    "t3.large": 61.83,
+    "t3.xlarge": 123.65,
+    "t3.2xlarge": 247.30,
     # M5 instances
-    "m5.large": 96.00,
-    "m5.xlarge": 192.00,
-    "m5.2xlarge": 384.00,
-    "m5.4xlarge": 768.00,
+    "m5.large": 104.35,
+    "m5.xlarge": 208.70,
+    "m5.2xlarge": 417.39,
+    "m5.4xlarge": 834.78,
     # C5 instances
-    "c5.large": 85.00,
-    "c5.xlarge": 170.00,
-    "c5.2xlarge": 340.00,
+    "c5.large": 92.39,
+    "c5.xlarge": 184.78,
+    "c5.2xlarge": 369.57,
     # R5 instances
-    "r5.large": 126.00,
-    "r5.xlarge": 252.00,
-    "r5.2xlarge": 504.00,
+    "r5.large": 136.96,
+    "r5.xlarge": 273.91,
+    "r5.2xlarge": 547.83,
 }
 
 # Default cost for unknown instance types
-DEFAULT_INSTANCE_COST_EUR = 50.0
+DEFAULT_INSTANCE_COST_USD = 54.35
 
 
 class DetectorError(Exception):
@@ -155,19 +157,19 @@ class EC2IdleDetector:
             instance_type: EC2 instance type (e.g., 't3.medium')
 
         Returns:
-            Monthly cost in EUR
+            Monthly cost in USD
         """
         if not instance_type:
             logger.warning("Empty instance_type, using default cost")
-            return DEFAULT_INSTANCE_COST_EUR
+            return DEFAULT_INSTANCE_COST_USD
 
         cost = EC2_PRICING.get(instance_type)
         if cost is None:
             logger.warning(
                 f"Pricing not found for {instance_type}, "
-                f"using default {DEFAULT_INSTANCE_COST_EUR} EUR/month"
+                f"using default {DEFAULT_INSTANCE_COST_USD} USD/month"
             )
-            return DEFAULT_INSTANCE_COST_EUR
+            return DEFAULT_INSTANCE_COST_USD
         return cost
 
     def detect_idle_instances(
@@ -293,7 +295,7 @@ class EC2IdleDetector:
 
                 logger.info(
                     f"  - {instance_id} ({instance_type}): "
-                    f"CPU {cpu_avg:.2f}%, waste {monthly_waste} EUR/mo, "
+                    f"CPU {cpu_avg:.2f}%, waste {monthly_waste} USD/mo, "
                     f"confidence {confidence:.2f}"
                 )
 
@@ -492,7 +494,7 @@ class EC2IdleDetector:
                         applied_at = NULL,
                         -- The AI insight quotes generation-time figures: drop
                         -- it when the resynced savings drifts beyond
-                        -- max(10 pct of old, 0.50 EUR) so enrich_recommendations()
+                        -- max(10 pct of old, 0.50 USD) so enrich_recommendations()
                         -- rewrites it with fresh numbers on the next run. Also
                         -- dropped when the recommended action itself changed
                         -- (stop vs downsize) or the reco revives from obsolete
@@ -569,7 +571,7 @@ class EC2IdleDetector:
         print("\nIDLE INSTANCES DETECTED")
         print("=" * 70)
         print(f"Instances found: {len(waste_list)}")
-        print(f"Total monthly waste: {total_waste:,.2f} EUR")
+        print(f"Total monthly waste: {total_waste:,.2f} USD")
         print(f"Average confidence: {avg_confidence:.2f}")
         print("=" * 70)
 
@@ -593,8 +595,8 @@ class EC2IdleDetector:
         print("=" * 70)
         print(f"Waste records saved: {len(waste_ids)}")
         print(f"Recommendations created: {recommendations_count}")
-        print(f"Potential monthly savings: {total_waste:,.2f} EUR")
-        print(f"Annual savings potential: {total_waste * 12:,.2f} EUR")
+        print(f"Potential monthly savings: {total_waste:,.2f} USD")
+        print(f"Annual savings potential: {total_waste * 12:,.2f} USD")
         print("=" * 70)
 
         print("\nDetection completed successfully!")

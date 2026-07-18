@@ -13,11 +13,11 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from detectors.nat_gateway_unused import NATGatewayUnusedDetector, NAT_GATEWAY_MONTHLY_COST_EUR
-from detectors.ebs_gp2_migration import EBSGp2MigrationDetector, GP2_TO_GP3_SAVINGS_EUR_PER_GIB
-from detectors.elb_unused import ELBUnusedDetector, ELB_MONTHLY_COST_EUR
+from detectors.nat_gateway_unused import NATGatewayUnusedDetector, NAT_GATEWAY_MONTHLY_COST_USD
+from detectors.ebs_gp2_migration import EBSGp2MigrationDetector, GP2_TO_GP3_SAVINGS_USD_PER_GIB
+from detectors.elb_unused import ELBUnusedDetector, ELB_MONTHLY_COST_USD
 from detectors.vpc_unused import VPCUnusedDetector
-from detectors.ami_orphan import AMIOrphanDetector, SNAPSHOT_EUR_PER_GIB
+from detectors.ami_orphan import AMIOrphanDetector, SNAPSHOT_USD_PER_GIB
 from detectors.rds_stopped import RDSStoppedDetector
 from detectors.rds_snapshot_orphan import RDSSnapshotOrphanDetector
 from detectors.rds_idle import RDSIdleDetector
@@ -46,7 +46,7 @@ class TestNATGatewayMapping:
         )
         item = items[0]
         assert item["resource_id"] == "nat-0abc"
-        assert item["monthly_cost"] == NAT_GATEWAY_MONTHLY_COST_EUR
+        assert item["monthly_cost"] == NAT_GATEWAY_MONTHLY_COST_USD
         assert "no outbound traffic" in item["action"]
 
     def test_non_available_state(self):
@@ -80,9 +80,9 @@ class TestGp2MigrationMapping:
                 }
             ]
         )[0]
-        # 100 GiB * (0.0920 - 0.0736) = 1.84 EUR/mo
-        assert item["monthly_cost"] == pytest.approx(1.84)
-        assert GP2_TO_GP3_SAVINGS_EUR_PER_GIB == pytest.approx(0.0184)
+        # 100 GiB * (0.10 - 0.08) = 2.00 USD/mo
+        assert item["monthly_cost"] == pytest.approx(2.00)
+        assert GP2_TO_GP3_SAVINGS_USD_PER_GIB == pytest.approx(0.02)
         assert "MIGRATE" in item["action"]
         assert "data (vol-1)" in item["action"]
 
@@ -112,7 +112,7 @@ class TestELBUnusedMapping:
         ]
         items = _bare(ELBUnusedDetector).map_rows(rows)
         for item, row in zip(items, rows):
-            assert item["monthly_cost"] == ELB_MONTHLY_COST_EUR[row["lb_type"]]
+            assert item["monthly_cost"] == ELB_MONTHLY_COST_USD[row["lb_type"]]
             assert item["resource_id"] == row["arn"]
 
     def test_classic_reason_differs(self):
@@ -173,7 +173,7 @@ class TestAMIOrphanMapping:
             ]
         )[0]
         assert item["resource_id"] == "ami-0abc"
-        assert item["monthly_cost"] == round(30 * SNAPSHOT_EUR_PER_GIB, 2)
+        assert item["monthly_cost"] == round(30 * SNAPSHOT_USD_PER_GIB, 2)
         assert "DEREGISTER" in item["action"]
         assert "base-image (ami-0abc)" in item["action"]
         assert item["metadata"]["snapshot_count"] == 2
@@ -207,7 +207,7 @@ class TestRDSStoppedMapping:
             ]
         )[0]
         assert item["resource_id"] == "db-prod"
-        assert item["monthly_cost"] == rds_pricing.storage_eur(100, "gp3")
+        assert item["monthly_cost"] == rds_pricing.storage_usd(100, "gp3")
         assert "auto-restarts after 7 days" in item["action"]
 
     def test_empty_input(self):
@@ -231,7 +231,7 @@ class TestRDSSnapshotOrphanMapping:
             ]
         )[0]
         assert item["resource_id"] == "snap-manual-1"
-        assert item["monthly_cost"] == rds_pricing.snapshot_eur(50)
+        assert item["monthly_cost"] == rds_pricing.snapshot_usd(50)
         assert "db-old" in item["action"]
 
     def test_empty_input(self):
@@ -255,7 +255,7 @@ class TestRDSIdleMapping:
                 }
             ]
         )[0]
-        assert single["monthly_cost"] == rds_pricing.instance_eur("db.m5.large", False, 100, "gp3")
+        assert single["monthly_cost"] == rds_pricing.instance_usd("db.m5.large", False, 100, "gp3")
         assert "0 connections in 14 days" in single["action"]
         # multi-AZ roughly doubles the compute portion → strictly more expensive
         multi = _bare(RDSIdleDetector).map_rows(
@@ -281,7 +281,7 @@ class TestRDSIdleMapping:
                 }
             ]
         )[0]
-        expected = rds_pricing.instance_eur("db.weird.42xlarge", False, 20, "gp2")
+        expected = rds_pricing.instance_usd("db.weird.42xlarge", False, 20, "gp2")
         assert item["monthly_cost"] == expected
         assert expected > 0
 

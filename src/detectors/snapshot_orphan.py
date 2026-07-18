@@ -9,7 +9,7 @@ Detection criteria:
 - Owner = self
 - Age > SNAPSHOT_AGE_DAYS (default: 90)
 
-Pricing: $0.05/GiB/month (eu-west-1) * 0.92 EUR/USD = 0.046 EUR/GiB/month
+Pricing: $0.05/GiB/month (eu-west-1, standard tier)
 """
 
 import os
@@ -34,13 +34,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SNAPSHOT_PRICE_EUR_PER_GIB = 0.046  # $0.05 * 0.92 EUR/USD
+SNAPSHOT_PRICE_USD_PER_GIB = 0.05  # AWS list price, standard tier
 SNAPSHOT_AGE_DAYS = 90
 REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
 
 
 def _snapshot_monthly_cost(size_gb: int) -> float:
-    return round(size_gb * SNAPSHOT_PRICE_EUR_PER_GIB, 2)
+    return round(size_gb * SNAPSHOT_PRICE_USD_PER_GIB, 2)
 
 
 def _fetch_ami_snapshot_ids(ec2_client) -> set:
@@ -248,7 +248,7 @@ class SnapshotOrphanDetector:
                         estimated_monthly_savings_eur = EXCLUDED.estimated_monthly_savings_eur,
                         -- The AI insight quotes generation-time figures: drop
                         -- it when the resynced savings drifts beyond
-                        -- max(10 pct of old, 0.50 EUR) so enrich_recommendations()
+                        -- max(10 pct of old, 0.50 USD) so enrich_recommendations()
                         -- rewrites it with fresh numbers on the next run.
                         ai_insight = CASE
                             WHEN abs(recommendations.estimated_monthly_savings_eur
@@ -330,8 +330,8 @@ class SnapshotOrphanDetector:
 
         total_waste = sum(s["monthly_cost"] for s in snapshots)
         print(f"Old snapshots found:  {len(snapshots)}")
-        print(f"Total monthly waste:  {total_waste:.2f} EUR/mo")
-        print(f"Annual waste:         {total_waste * 12:.2f} EUR/year\n")
+        print(f"Total monthly waste:  {total_waste:.2f} USD/mo")
+        print(f"Annual waste:         {total_waste * 12:.2f} USD/year\n")
 
         for s in snapshots:
             label = s["snapshot_id"]
@@ -339,7 +339,7 @@ class SnapshotOrphanDetector:
                 label += f" ({s['description'][:30]})"
             print(
                 f"  - {label}: {s['size_gb']} GiB, {s['age_days']}d old "
-                f"({s['region']}) → {s['monthly_cost']:.2f} EUR/mo"
+                f"({s['region']}) → {s['monthly_cost']:.2f} USD/mo"
             )
 
         waste_ids = self.save(snapshots)

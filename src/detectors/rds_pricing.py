@@ -1,14 +1,12 @@
 """
-Shared RDS price approximations (eu-west-1, on-demand), converted to EUR at
-the repo-wide USD_TO_EUR rate. Deliberately a small, documented map rather
+Shared RDS price approximations (eu-west-1, on-demand, USD list prices).
+Deliberately a small, documented map rather
 than a live pricing API: RDS idle/stopped detection only needs an
 order-of-magnitude monthly figure for a manual-review recommendation.
 
 Not exhaustive — unknown storage types / instance classes fall back to a
 conservative default. Refresh the numbers when they drift materially.
 """
-
-from constants import USD_TO_EUR
 
 HOURS_PER_MONTH = 730
 
@@ -50,21 +48,21 @@ RDS_INSTANCE_USD_PER_HOUR = {
 RDS_INSTANCE_DEFAULT_USD_PER_HOUR = 0.145  # ~db.t3.large, conservative middle
 
 
-def storage_eur(gb: float, storage_type: str) -> float:
-    """Monthly EUR cost of `gb` GiB of RDS storage of `storage_type`."""
+def storage_usd(gb: float, storage_type: str) -> float:
+    """Monthly USD cost of `gb` GiB of RDS storage of `storage_type`."""
     usd = RDS_STORAGE_USD_PER_GB.get(storage_type, RDS_STORAGE_DEFAULT_USD)
-    return round((gb or 0) * usd * USD_TO_EUR, 2)
+    return round((gb or 0) * usd, 2)
 
 
-def snapshot_eur(gb: float) -> float:
-    """Monthly EUR cost of a `gb` GiB manual RDS snapshot."""
-    return round((gb or 0) * RDS_SNAPSHOT_USD_PER_GB * USD_TO_EUR, 2)
+def snapshot_usd(gb: float) -> float:
+    """Monthly USD cost of a `gb` GiB manual RDS snapshot."""
+    return round((gb or 0) * RDS_SNAPSHOT_USD_PER_GB, 2)
 
 
-def instance_eur(
+def instance_usd(
     instance_class: str, multi_az: bool, storage_gb: float, storage_type: str
 ) -> float:
-    """Monthly EUR cost of a running RDS instance (compute + storage)."""
+    """Monthly USD cost of a running RDS instance (compute + storage)."""
     hourly = RDS_INSTANCE_USD_PER_HOUR.get(instance_class, RDS_INSTANCE_DEFAULT_USD_PER_HOUR)
     compute_usd = hourly * HOURS_PER_MONTH * (2 if multi_az else 1)
-    return round(compute_usd * USD_TO_EUR + storage_eur(storage_gb, storage_type), 2)
+    return round(compute_usd + storage_usd(storage_gb, storage_type), 2)

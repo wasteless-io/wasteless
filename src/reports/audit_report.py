@@ -62,7 +62,7 @@ RISK_LEVELS = ("critical", "high", "medium", "low")
 
 def _fmt_eur(value: Any) -> str:
     try:
-        return f"€{float(value):.2f}"
+        return f"${float(value):.2f}"
     except (TypeError, ValueError):
         return "Not provided"
 

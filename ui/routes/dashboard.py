@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 
-from state import get_db, templates, USD_TO_EUR, DAYS_PER_MONTH, TREND_RANGES
+from state import get_db, templates, DAYS_PER_MONTH, TREND_RANGES
 
 router = APIRouter()
 
@@ -145,8 +145,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     cursor = conn.cursor()
 
     # Fetch KPIs including new CTO metrics
-    cursor.execute(
-        """
+    cursor.execute("""
         WITH metrics AS (
             SELECT COALESCE(SUM(estimated_monthly_savings_eur), 0) as potential_monthly
             FROM recommendations WHERE status = 'pending'
@@ -176,34 +175,36 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             WHERE action_status = 'failed'
               AND action_date >= NOW() - INTERVAL '7 days'
         ),
-        cumulative AS (
-            SELECT COALESCE(SUM(actual_savings_eur), 0) as total_saved
-            FROM savings_realized
-        ),
         pending AS (
             SELECT COUNT(*) as pending_count
             FROM recommendations
             WHERE status = 'pending'
         ),
-        -- "Wasted so far": what the still-pending resources have already cost
-        -- since each was created — monthly cost prorated per fractional day of
-        -- age. Backward-looking cumulative amount (moved here from the
-        -- Recommendations bar, where it collided with the forward Savings/mo
-        -- rate). GREATEST keeps it honest for resources younger than their
-        -- detection: metadata age_days wins when older, hours-since-created
-        -- wins when fresh.
-        wasted AS (
-            SELECT COALESCE(SUM(
-                COALESCE((w.metadata->>'monthly_cost_eur')::numeric,
-                         r.estimated_monthly_savings_eur, 0)
-                * GREATEST(
-                    COALESCE((w.metadata->>'age_days')::numeric, 0),
-                    EXTRACT(EPOCH FROM (NOW() - w.created_at)) / 86400.0
-                  )
-            ), 0) / %s as wasted_so_far
-            FROM recommendations r
-            JOIN waste_detected w ON r.waste_id = w.id
-            WHERE r.status = 'pending'
+        -- Estimation accuracy: verified savings vs what was estimated before
+        -- the action, over every Cost Explorer measurement. NULL until the
+        -- first verification lands.
+        accuracy AS (
+            SELECT CASE WHEN COALESCE(SUM(estimated_savings_eur), 0) > 0
+                        THEN SUM(actual_savings_eur) / SUM(estimated_savings_eur) * 100
+                   END as accuracy_pct,
+                   COUNT(*) as verified_count
+            FROM savings_realized
+        ),
+        -- Control-loop queues: what sits between "reviewed" and "applied".
+        queued_auto AS (
+            SELECT COUNT(*) as scheduled_count,
+                   COALESCE(SUM(estimated_monthly_savings_eur), 0) as scheduled_monthly
+            FROM recommendations WHERE status = 'scheduled'
+        ),
+        queued_manual AS (
+            SELECT COUNT(*) as manual_count,
+                   COALESCE(SUM(estimated_monthly_savings_eur), 0) as manual_monthly
+            FROM recommendations WHERE status = 'approved_manual'
+        ),
+        applied AS (
+            SELECT COUNT(*) as applied_count
+            FROM actions_log
+            WHERE action_status = 'success'
         ),
         last_scan AS (
             SELECT MAX(updated_at) as last_analysis
@@ -217,22 +218,27 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             d.declined_count,
             d.declined_monthly,
             f.failed_7d,
-            c.total_saved as cumulative_savings,
             p.pending_count,
-            wd.wasted_so_far,
+            a.accuracy_pct,
+            a.verified_count,
+            qa.scheduled_count,
+            qa.scheduled_monthly,
+            qm.manual_count,
+            qm.manual_monthly,
+            ap.applied_count,
             l.last_analysis
         FROM metrics m
         CROSS JOIN savings s
         CROSS JOIN waste w
         CROSS JOIN declined d
         CROSS JOIN failed f
-        CROSS JOIN cumulative c
         CROSS JOIN pending p
-        CROSS JOIN wasted wd
+        CROSS JOIN accuracy a
+        CROSS JOIN queued_auto qa
+        CROSS JOIN queued_manual qm
+        CROSS JOIN applied ap
         CROSS JOIN last_scan l;
-    """,
-        (DAYS_PER_MONTH,),
-    )
+    """)
     kpis = cursor.fetchone()
 
     # Cost of inaction: first detection date + daily burn rate (active waste)
@@ -251,22 +257,101 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     # (cloud_costs_raw, collected daily by cost_collector_job) — same
     # denominator convention as home's Waste Rate: the current month would
     # be a partial month-to-date and mechanically understate the bill.
-    cursor.execute(
-        """
-        SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
-                                 ELSE cost END), 0) as spend_eur,
-               COUNT(*) as row_count
+    cursor.execute("""
+        SELECT COALESCE(SUM(cost)
+                        FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+                                                    - INTERVAL '1 month'), 0) as spend_eur,
+               COUNT(*) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+                                                    - INTERVAL '1 month') as row_count,
+               MIN(usage_date) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+                                                           - INTERVAL '1 month') as period_start,
+               MAX(usage_date) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+                                                           - INTERVAL '1 month') as period_end,
+               COUNT(DISTINCT usage_date)
+                   FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+                                               - INTERVAL '1 month') as days_covered,
+               COALESCE(SUM(cost)
+                        FILTER (WHERE usage_date < DATE_TRUNC('month', CURRENT_DATE)
+                                                   - INTERVAL '1 month'), 0) as prev_spend_eur,
+               COUNT(*) FILTER (WHERE usage_date < DATE_TRUNC('month', CURRENT_DATE)
+                                                   - INTERVAL '1 month') as prev_row_count
         FROM cloud_costs_raw
-        WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+        WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 months'
           AND usage_date < DATE_TRUNC('month', CURRENT_DATE)
-    """,
-        (USD_TO_EUR,),
-    )
+    """)
     spend_row = cursor.fetchone()
     aws_spend_eur = (
         float(spend_row["spend_eur"]) if spend_row and spend_row["row_count"] > 0 else None
     )
     aws_spend_month = (date.today().replace(day=1) - timedelta(days=1)).strftime("%B %Y")
+    # Exact days covered by the collection inside that month: a fresh install
+    # only has data from its first collection day, and "June 2026" alone
+    # would overclaim (same honesty rule as the resource chart's subtitle).
+    # The sub-label reads "June · 17–30 collected", so the period is
+    # day numbers only; the month name comes from aws_spend_month.
+    aws_spend_period = None
+    aws_spend_detail = None
+    if aws_spend_eur is not None:
+        start, end = spend_row["period_start"], spend_row["period_end"]
+        if start == end:
+            aws_spend_period = start.strftime("%-d")
+        else:
+            aws_spend_period = f"{start.strftime('%-d')}–{end.strftime('%-d')}"
+
+        # Per-service breakdown of the same window, for the click-through
+        # modal: where the figure comes from, service by service.
+        cursor.execute("""
+            SELECT service,
+                   SUM(cost) as eur
+            FROM cloud_costs_raw
+            WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+              AND usage_date < DATE_TRUNC('month', CURRENT_DATE)
+            GROUP BY service
+            ORDER BY eur DESC
+        """)
+        aws_spend_detail = {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days_covered": spend_row["days_covered"],
+            "services": [
+                {
+                    "service": r["service"],
+                    "eur": float(r["eur"]),
+                    "pct": float(r["eur"]) / aws_spend_eur * 100 if aws_spend_eur else 0,
+                }
+                for r in cursor.fetchall()
+            ],
+        }
+    # Month-over-month delta, only when both full months have data: a partial
+    # first month of collection would fake a huge increase.
+    aws_spend_delta_pct = None
+    if (
+        aws_spend_eur is not None
+        and spend_row["prev_row_count"] > 0
+        and float(spend_row["prev_spend_eur"]) > 0
+    ):
+        prev = float(spend_row["prev_spend_eur"])
+        aws_spend_delta_pct = (aws_spend_eur - prev) / prev * 100
+
+    # Next best actions: the three highest-value pending recommendations,
+    # with the evidence the reviewer needs (confidence, age). Age mirrors the
+    # "wasted so far" convention: metadata age_days when older, else
+    # days-since-created.
+    cursor.execute("""
+        SELECT r.id, r.action_required, r.recommendation_type,
+               r.estimated_monthly_savings_eur,
+               w.resource_id, w.resource_type, w.waste_type, w.confidence_score,
+               GREATEST(
+                   COALESCE((w.metadata->>'age_days')::numeric, 0),
+                   EXTRACT(EPOCH FROM (NOW() - w.created_at)) / 86400.0
+               )::int as age_days
+        FROM recommendations r
+        JOIN waste_detected w ON r.waste_id = w.id
+        WHERE r.status = 'pending'
+        ORDER BY r.estimated_monthly_savings_eur DESC NULLS LAST
+        LIMIT 3
+    """)
+    next_actions = cursor.fetchall()
 
     # Trend: active-waste totals from waste_snapshots (stable history written
     # by detector runs + one-shot backfill)
@@ -353,9 +438,9 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     ai_daily_cost = None
     ai_roi = None
     if llm_row and llm_row["calls"]:
-        ai_daily_cost = float(llm_row["cost_usd"]) * USD_TO_EUR / llm_row["days_covered"]
+        ai_daily_cost = float(llm_row["cost_usd"]) / llm_row["days_covered"]
         ai_usage = {
-            "cost_eur": float(llm_row["cost_usd"]) * USD_TO_EUR,
+            "cost_eur": float(llm_row["cost_usd"]),
             "calls": llm_row["calls"],
             "tokens": llm_row["tokens"],
             "models": llm_models,
@@ -365,11 +450,17 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
                     "feature": f["feature"],
                     "calls": f["calls"],
                     "tokens": f["tokens"],
-                    "cost_eur": float(f["cost_usd"]) * USD_TO_EUR,
+                    "cost_eur": float(f["cost_usd"]),
                 }
                 for f in llm_features
             ],
         }
+
+    # Waste as a share of the real bill, computed here because the SQL
+    # values come back as Decimal and the spend as float
+    waste_pct_of_bill = None
+    if aws_spend_eur and float(kpis["active_monthly"] or 0) > 0:
+        waste_pct_of_bill = float(kpis["active_monthly"]) / aws_spend_eur * 100
 
     daily_burn = float(inaction_row["daily_burn"]) if inaction_row else 0
     if ai_daily_cost:
@@ -399,6 +490,11 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             "last_run": last_run,
             "aws_spend_eur": aws_spend_eur,
             "aws_spend_month": aws_spend_month,
+            "aws_spend_delta_pct": aws_spend_delta_pct,
+            "aws_spend_period": aws_spend_period,
+            "aws_spend_detail": aws_spend_detail,
+            "waste_pct_of_bill": waste_pct_of_bill,
+            "next_actions": next_actions,
         },
     )
 

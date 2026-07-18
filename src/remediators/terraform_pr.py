@@ -145,7 +145,7 @@ class TerraformPRRemediator:
         branch = f"wasteless/remove-{resource_id}"
         title = (
             f"chore(wasteless): remove {resource_label} "
-            f"{resource_id} (~{monthly_savings_eur:.0f} €/mo)"
+            f"{resource_id} (~${monthly_savings_eur:.0f}/mo)"
         )
         body = self._pr_body(
             resource,
@@ -234,8 +234,8 @@ class TerraformPRRemediator:
             f"| Resource | `{resource.resource_id}` ({resource_label}) |",
             f"| Terraform address | `{resource.address}` |",
             f"| File | `{resource.file}` (lines {resource.start_line}-{resource.end_line}) |",
-            f"| Estimated savings | **{monthly_savings_eur:.2f} €/month** "
-            f"(~{monthly_savings_eur * 12:.0f} €/year) |",
+            f"| Estimated savings | **${monthly_savings_eur:.2f}/month** "
+            f"(~${monthly_savings_eur * 12:.0f}/year) |",
             f"| Risk | **{risk}** (detection confidence {confidence:.0%}) |",
         ]
         if reason:
