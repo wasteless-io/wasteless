@@ -321,6 +321,22 @@ class TestDashboardCoherence(unittest.TestCase):
         body = self._page_body()
         self.assertIn("lived 2d before remediation", body)
 
+    def test_upcoming_card_lists_scheduled_executions(self):
+        _, reco_id = self._seed_waste("i-coherence-upcoming", 120.00, status="scheduled")
+        self.cur.execute(
+            "UPDATE recommendations SET execute_after = NOW() + INTERVAL '3 days' "
+            "WHERE id = %s RETURNING execute_after",
+            (reco_id,),
+        )
+        execute_after = self.cur.fetchone()["execute_after"]
+
+        body = self._page_body()
+        self.assertIn("Upcoming", body)
+        self.assertIn("i-coherence-upcoming", body)
+        self.assertIn(execute_after.strftime("%b %-d, %H:%M"), body)
+        # The veto window must link back to the cancellable list
+        self.assertIn("Cancel window open", body)
+
     def test_saved_breakdown_shortens_arns_to_resource_name(self):
         arn = (
             "arn:aws:elasticloadbalancing:eu-west-1:604110133218:"

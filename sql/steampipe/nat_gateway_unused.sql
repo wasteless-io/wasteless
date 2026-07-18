@@ -7,6 +7,7 @@ select
   nat.vpc_id,
   nat.state,
   nat.region,
+  nat.create_time,
   coalesce(sum(m.average), 0)::bigint as bytes_out_30d
 from
   aws_vpc_nat_gateway nat
@@ -16,6 +17,6 @@ from
 where
   nat.state = 'available'
 group by
-  nat.nat_gateway_id, nat.vpc_id, nat.state, nat.region
+  nat.nat_gateway_id, nat.vpc_id, nat.state, nat.region, nat.create_time
 having
   coalesce(sum(m.average), 0) = 0;

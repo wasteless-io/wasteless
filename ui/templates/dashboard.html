@@ -20,6 +20,26 @@
         --danger-text: #b91c1c;
     }
 
+    /* Hero banner: same chrome plane and live clock as the Overview and
+       Recommendations headers; the left slot carries the Upcoming deadlines */
+    .card--no-hover:hover { border-color: transparent; }
+    .hero-clock { text-align: right; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .hero-clock .hero-clock-time { display: block; font-size: 1.3rem; font-weight: 700; color: #1d1d1f; letter-spacing: -0.01em; }
+    .hero-clock .hero-clock-date { display: block; font-size: 0.8rem; color: #52514e; }
+    /* Upcoming button + dropdown: same pattern as the To-do bell on the
+       recommendations hero (pill button, notification-style panel) */
+    .upcoming-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.75rem; border: 1px solid var(--hairline, #d9d6d0); border-radius: 999px; background: white; color: var(--gray-500); font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: border-color 0.2s ease, color 0.2s ease; }
+    .upcoming-btn:hover { border-color: var(--ink, #1d1d1f); color: var(--ink, #1d1d1f); }
+    .upcoming-btn--active { color: var(--primary); border-color: rgba(0,113,227,0.35); }
+    .upcoming-btn--active .upcoming-count { background: var(--primary); }
+    .upcoming-count { display: inline-flex; align-items: center; justify-content: center; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--warning); color: white; font-size: 0.72rem; }
+    .upcoming-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 1500; width: 380px; max-height: 60vh; overflow-y: auto; background: white; border: 1px solid var(--gray-200); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+    .upcoming-panel-head { padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--gray-100); display: flex; flex-direction: column; gap: 0.15rem; }
+    .upcoming-row { padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--gray-100); font-size: 0.8rem; color: var(--gray-700); line-height: 1.5; }
+    .upcoming-row:last-child { border-bottom: none; }
+    .upcoming-row .u-meta { font-size: 0.72rem; color: var(--gray-500); }
+    .upcoming-empty { padding: 1.5rem 1rem; text-align: center; font-size: 0.82rem; color: var(--gray-500); }
+
     /* Exception banner: only rendered when recent actions failed */
     .alert-banner {
         display: flex;
@@ -276,10 +296,55 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header mb-1">
-    <h1>Dashboard</h1>
-    <p>Live overview of your AWS waste and savings</p>
-</div>
+{# Hero banner, same chrome plane (#efede8) as the Overview and
+   Recommendations headers. Three zones (1fr auto 1fr keeps the title
+   centered whatever the sides weigh): the Upcoming deadlines on the left,
+   the page title dead-center, the live clock on the right. #}
+<header class="card mb-1 card--no-hover" style="padding: 0.9rem 1.5rem; background: #efede8; color: #1d1d1f; overflow: visible; position: relative; z-index: 50;">
+    <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;">
+        <div style="justify-self: start; position: relative;">
+            {% set exec_count = upcoming | selectattr('kind', 'equalto', 'execution') | list | length %}
+            {# Blinks only while a scheduled execution's veto window is
+               running; a passive verification date lights it without blink #}
+            <button type="button" id="upcomingBtn" onclick="toggleUpcomingPanel(event)"
+                    class="upcoming-btn{% if upcoming %} upcoming-btn--active{% endif %}{% if exec_count > 0 %} pending-blink{% endif %}"
+                    aria-haspopup="true" aria-expanded="false">
+                <span>Upcoming</span>
+                <span class="upcoming-count"{% if not upcoming %} style="display:none;"{% endif %}>{{ upcoming|length }}</span>
+            </button>
+            <div id="upcomingPanel" class="upcoming-panel" style="display: none;">
+                <div class="upcoming-panel-head">
+                    <strong>Upcoming deadlines</strong>
+                    <span style="font-size: 0.72rem; color: var(--gray-500);">Scheduled executions stay cancellable on Recommendations until they run.</span>
+                </div>
+                {% for u in upcoming %}
+                <div class="upcoming-row">
+                    {% if u.kind == 'execution' %}
+                    <strong>{{ u.when.strftime('%b %-d, %H:%M') }}</strong> · {{ u.action }}
+                    <div><span style="font-family: var(--font-mono); font-size: 0.78rem;" title="{{ u.resource_id }}">{{ u.label }}</span> · {{ eur(u.amount) }}/mo</div>
+                    <a href="/recommendations" class="kpi-link">Cancel window open &rarr;</a>
+                    {% else %}
+                    <strong>~{{ u.when.strftime('%b %-d') }}</strong> · {{ u.label }}
+                    <div class="u-meta">automatic · needs 7 days of billing data</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% if not upcoming %}
+                <div class="upcoming-empty">
+                    <div style="font-size: 1.4rem; margin-bottom: 0.2rem;">&#10003;</div>
+                    No upcoming deadlines
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <h1 style="margin: 0; font-size: 1.3rem; font-weight: 700; color: #1d1d1f; text-align: center;">Wasteless Dashboard</h1>
+        {# Live clock, Europe/Paris, same wall clock as the DB stamps #}
+        <time id="hero-clock" class="hero-clock" style="justify-self: end;">
+            <span class="hero-clock-time" id="hero-clock-time"></span>
+            <span class="hero-clock-date" id="hero-clock-date"></span>
+        </time>
+    </div>
+</header>
 
 {% if (kpis.failed_7d or 0) > 0 %}
 <div class="alert-banner" role="alert">
@@ -354,7 +419,7 @@
             {% else %}
             <div class="kpi-value is-muted">—</div>
             <div class="kpi-label">Verified Savings</div>
-            <div class="kpi-sub">Appears after your first verified action</div>
+            <div class="kpi-sub">{% if next_verification %}first measurement expected ~{{ next_verification.strftime('%b %-d') }}{% else %}Appears after your first verified action{% endif %}</div>
             {% endif %}
         </div>
 
@@ -728,7 +793,7 @@
             <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; {% if not loop.last %}border-bottom: 1px solid var(--gray-100);{% endif %} align-items: baseline;">
                 <span style="flex: 1; min-width: 0;">
                     <span style="display: block; font-family: var(--font-mono); font-size: 0.78rem; color: var(--gray-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ a.resource_id }}">{{ a.label }}</span>
-                    <span style="display: block; font-size: 0.72rem; color: var(--gray-500);">{{ a.action }} · {{ a.date }} · {% if a.still_counting %}{{ eur(a.monthly_rate) }}/mo, still counting{% elif a.stop_reason == 'restart' %}stopped {{ a.stopped_on }} (started again){% else %}capped {{ a.stopped_on }} (lived {{ a.lifetime_days }}d before remediation){% endif %}</span>
+                    <span style="display: block; font-size: 0.72rem; color: var(--gray-500);">{{ a.action }} · {{ a.date }} · {% if a.still_counting %}{{ eur(a.monthly_rate) }}/mo · ends {{ a.cap_until }}{% elif a.stop_reason == 'restart' %}stopped {{ a.stopped_on }} (started again){% else %}capped {{ a.stopped_on }} (lived {{ a.lifetime_days }}d before remediation){% endif %}</span>
                 </span>
                 <span style="flex: 0 0 auto; color: var(--gray-800); font-weight: 500;">{{ eur(a.accrued) }}</span>
                 <span style="flex: 0 0 42px; text-align: right; color: var(--gray-500);">{{ "%.0f"|format(a.pct) }}%</span>
@@ -852,6 +917,58 @@
     renderCostChart('stacked');
 })();
 {% endif %}
+
+// Upcoming dropdown: same behavior as the recommendations To-do bell
+// (toggle on click, click-away and Escape close).
+function toggleUpcomingPanel(e) {
+    e.stopPropagation();
+    const panel = document.getElementById('upcomingPanel');
+    const btn = document.getElementById('upcomingBtn');
+    const open = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'block';
+    btn.setAttribute('aria-expanded', String(!open));
+}
+function closeUpcomingPanel() {
+    const panel = document.getElementById('upcomingPanel');
+    if (!panel || panel.style.display === 'none') return;
+    panel.style.display = 'none';
+    document.getElementById('upcomingBtn').setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('click', (e) => {
+    const panel = document.getElementById('upcomingPanel');
+    if (panel && panel.style.display !== 'none' && !panel.contains(e.target)) closeUpcomingPanel();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeUpcomingPanel();
+});
+
+// Live banner clock, Europe/Paris, same wall clock as the DB stamps and
+// the Overview/Recommendations headers. Temporal when the browser ships
+// it, Intl otherwise; ticks align to the minute boundary.
+(function () {
+    const root = document.getElementById('hero-clock');
+    if (!root) return;
+    const timeEl = document.getElementById('hero-clock-time');
+    const dateEl = document.getElementById('hero-clock-date');
+    const TZ = 'Europe/Paris';
+    const timeFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
+    const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ });
+    function render() {
+        if (typeof Temporal !== 'undefined') {
+            const now = Temporal.Now.zonedDateTimeISO(TZ);
+            root.dateTime = now.toString({ timeZoneName: 'never', smallestUnit: 'minute' });
+            timeEl.textContent = now.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            dateEl.textContent = now.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+        } else {
+            const now = new Date();
+            root.dateTime = now.toISOString();
+            timeEl.textContent = timeFmt.format(now);
+            dateEl.textContent = dateFmt.format(now);
+        }
+        setTimeout(render, 60250 - (Date.now() % 60000));
+    }
+    render();
+})();
 
 // Cost details modals (AWS Spend, Total Cost): a11y mirrors the
 // recommendations page's resource modal (Esc + backdrop to close, focus

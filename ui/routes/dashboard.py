@@ -90,7 +90,18 @@ def fetch_waste_trend(cursor, trend: str):
         """,
             (trend_days,),
         )
-    return trend, granularity, subtitle, cursor.fetchall()
+    rows = cursor.fetchall()
+
+    # Honesty rule: snapshots older than the first detection ever recorded
+    # can only come from the age-based backfill, so say so when the window
+    # shows any (fresh installs: the whole curve at first, then the real
+    # history takes over day by day).
+    if rows:
+        cursor.execute("SELECT MIN(created_at)::date AS first_real FROM waste_detected")
+        first_real = cursor.fetchone()["first_real"]
+        if first_real is not None and rows[0]["date"] < first_real:
+            subtitle += " · early history reconstructed from resource ages"
+    return trend, granularity, subtitle, rows
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -344,6 +355,57 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             ],
         }
 
+    # Upcoming deadlines, merged and sorted: scheduled executions still in
+    # their grace-period veto window (the authoritative, cancellable list
+    # lives on /recommendations), plus the first Cost Explorer verification
+    # expected (earliest unverified real action + the tracker's 7-day
+    # minimum). Dates only; internal mechanics like accrual caps stay in
+    # their own modals.
+    cursor.execute("""
+        SELECT r.recommendation_type, r.execute_after,
+               r.estimated_monthly_savings_eur, w.resource_id
+        FROM recommendations r
+        JOIN waste_detected w ON w.id = r.waste_id
+        WHERE r.status = 'scheduled' AND r.execute_after IS NOT NULL
+        ORDER BY r.execute_after
+        LIMIT 5
+    """)
+    upcoming = [
+        {
+            "kind": "execution",
+            "when": r["execute_after"],
+            "action": (r["recommendation_type"] or "").replace("_", " "),
+            "label": _short_resource_label(r["resource_id"]),
+            "resource_id": r["resource_id"],
+            "amount": float(r["estimated_monthly_savings_eur"] or 0),
+        }
+        for r in cursor.fetchall()
+    ]
+    cursor.execute("""
+        SELECT MIN(a.action_date) AS first_action
+        FROM actions_log a
+        LEFT JOIN savings_realized s ON s.recommendation_id = a.recommendation_id
+        WHERE a.action_status = 'success'
+          AND a.dry_run = false
+          AND a.action_type IN ('stop', 'terminate', 'downsize')
+          AND s.id IS NULL
+    """)
+    verif_row = cursor.fetchone()
+    next_verification = None
+    if verif_row and verif_row["first_action"] is not None:
+        next_verification = verif_row["first_action"] + timedelta(days=7)
+        upcoming.append(
+            {
+                "kind": "verification",
+                "when": next_verification,
+                "action": None,
+                "label": "first Cost Explorer verification of applied savings",
+                "resource_id": None,
+                "amount": None,
+            }
+        )
+    upcoming.sort(key=lambda u: u["when"])
+
     # Trend: active-waste totals from waste_snapshots (stable history written
     # by detector runs + one-shot backfill)
     trend, trend_granularity, trend_subtitle, waste_trend = fetch_waste_trend(cursor, trend)
@@ -466,6 +528,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
                           AND u.action_status = 'success'
                           AND u.dry_run = false
                           AND u.action_date > s.action_date) AS restarted_at,
+                       s.action_date + s.lifetime_days * INTERVAL '1 day' AS cap_end,
                        LEAST(
                            COALESCE((SELECT MIN(u.action_date)
                                      FROM actions_log u
@@ -479,7 +542,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
                 FROM saving_actions s
             )
             SELECT resource_id, action_type, action_date, monthly_rate,
-                   lifetime_days, restarted_at,
+                   lifetime_days, restarted_at, cap_end,
                    monthly_rate / %s
                        * EXTRACT(EPOCH FROM accrual_end - action_date) / 86400.0 AS accrued,
                    (accrual_end > NOW() - INTERVAL '1 minute') AS still_counting,
@@ -517,6 +580,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
                     "pct": accrued / saved_total_f * 100,
                     "still_counting": r["still_counting"],
                     "lifetime_days": round(float(r["lifetime_days"] or 0)),
+                    "cap_until": r["cap_end"].strftime("%b %-d, %H:%M"),
                     "stop_reason": stop_reason,
                     "stopped_on": (
                         None if r["still_counting"] else r["accrual_end"].strftime("%b %-d")
@@ -631,6 +695,8 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             "total_cost_period": total_cost_period,
             "total_cost_detail": total_cost_detail,
             "cost_chart": cost_chart,
+            "upcoming": upcoming,
+            "next_verification": next_verification,
         },
     )
 
@@ -659,7 +725,10 @@ def api_metrics(conn=Depends(get_db)):
                 COALESCE(SUM(estimated_monthly_savings_eur)
                          FILTER (WHERE status = 'pending'), 0) as potential_savings,
                 COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
-                COUNT(*) FILTER (WHERE status = 'approved_manual') as manual_todo_count
+                COUNT(*) FILTER (WHERE status = 'approved_manual') as manual_todo_count,
+                COUNT(*) FILTER (WHERE status = 'scheduled'
+                                 AND execute_after <= NOW() + INTERVAL '48 hours')
+                    as imminent_count
             FROM recommendations
         ),
         actions AS (
@@ -667,7 +736,8 @@ def api_metrics(conn=Depends(get_db)):
             FROM actions_log
             WHERE action_status = 'success'
         )
-        SELECT m.potential_savings, m.pending_count, m.manual_todo_count, a.success_count
+        SELECT m.potential_savings, m.pending_count, m.manual_todo_count,
+               m.imminent_count, a.success_count
         FROM metrics m CROSS JOIN actions a;
     """)
     result = cursor.fetchone()
@@ -677,5 +747,6 @@ def api_metrics(conn=Depends(get_db)):
         "potential_savings": float(result["potential_savings"]),
         "pending_count": int(result["pending_count"]),
         "manual_todo_count": int(result["manual_todo_count"]),
+        "imminent_count": int(result["imminent_count"]),
         "actions_count": int(result["success_count"]),
     }

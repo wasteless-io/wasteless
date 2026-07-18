@@ -297,7 +297,7 @@
                 <tr id="scheduled-row-{{ s.id }}" style="border-top: 1px solid var(--gray-200, #e5e7eb);">
                     <td style="padding: 0.4rem 0.6rem; font-family: monospace;">{{ s.resource_id }}</td>
                     <td style="padding: 0.4rem 0.6rem;">{{ s.recommendation_type }}</td>
-                    <td style="padding: 0.4rem 0.6rem;">EUR {{ "%.2f"|format(s.estimated_monthly_savings_eur or 0) }}/mo</td>
+                    <td style="padding: 0.4rem 0.6rem;">${{ "%.2f"|format(s.estimated_monthly_savings_eur or 0) }}/mo</td>
                     <td style="padding: 0.4rem 0.6rem;">
                         executes {{ s.execute_after.strftime('%Y-%m-%d %H:%M') }}
                         ({{ s.days_left }} day{{ 's' if s.days_left > 1 }} left)

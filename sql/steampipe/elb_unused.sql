@@ -29,6 +29,7 @@ nlb_flow as (
 )
 select
   'application' as lb_type, a.name, a.arn, a.region,
+  a.created_time,
   coalesce(t.registered_targets, 0) as registered_targets,
   case when coalesce(t.registered_targets, 0) = 0 then 'no_targets' else 'no_traffic' end as reason
 from aws_ec2_application_load_balancer a
@@ -41,6 +42,7 @@ union all
 
 select
   'network' as lb_type, n.name, n.arn, n.region,
+  n.created_time,
   coalesce(t.registered_targets, 0) as registered_targets,
   case when coalesce(t.registered_targets, 0) = 0 then 'no_targets' else 'no_traffic' end as reason
 from aws_ec2_network_load_balancer n
@@ -53,6 +55,7 @@ union all
 
 select
   'gateway' as lb_type, g.name, g.arn, g.region,
+  g.created_time,
   coalesce(t.registered_targets, 0) as registered_targets,
   'no_targets' as reason
 from aws_ec2_gateway_load_balancer g
@@ -64,6 +67,7 @@ union all
 -- Classic LBs register instances directly, no target groups
 select
   'classic' as lb_type, c.name, c.arn, c.region,
+  c.created_time,
   0 as registered_targets,
   'no_instances' as reason
 from aws_ec2_classic_load_balancer c

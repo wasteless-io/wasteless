@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 
 
 from collectors.steampipe import SteampipeError
-from detectors.steampipe_base import SteampipeWasteDetector
+from detectors.steampipe_base import SteampipeWasteDetector, age_days_from
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -53,6 +53,7 @@ class NATGatewayUnusedDetector(SteampipeWasteDetector):
                         "state": state,
                         "region": row.get("region") or "",
                         "bytes_out_30d": row.get("bytes_out_30d") or 0,
+                        "age_days": age_days_from(row.get("create_time")),
                         "monthly_cost_eur": NAT_GATEWAY_MONTHLY_COST_USD,
                     },
                 }
