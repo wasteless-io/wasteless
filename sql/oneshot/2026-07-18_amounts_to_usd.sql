@@ -6,12 +6,16 @@
 -- back by 0.92 so old and new data share the same currency. The *_eur
 -- column names are kept (legacy naming, amounts are USD).
 --
--- Idempotence warning: running this twice inflates amounts twice. Run once.
+-- Idempotence warning: running this twice inflates amounts twice. Run once,
+-- manually. It lives in sql/oneshot/ (NOT sql/migrations/) because
+-- install.sh and CI auto-apply every file in sql/migrations/ on each run,
+-- which would re-divide amounts on every install and break on fresh
+-- databases where savings_realized does not exist yet.
 -- Rollback: multiply the same columns by 0.92.
 --
 -- Apply with:
 --   docker exec -i wasteless-postgres psql -U wasteless -d wasteless \
---     < sql/migrations/2026-07-18_amounts_to_usd.sql
+--     < sql/oneshot/2026-07-18_amounts_to_usd.sql
 
 BEGIN;
 
