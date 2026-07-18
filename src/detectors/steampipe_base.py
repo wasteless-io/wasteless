@@ -21,8 +21,8 @@ like the historical detectors (same ON CONFLICT dedupe).
 import json
 import logging
 import os
-from datetime import date
-from typing import Any, Dict, List
+from datetime import date, datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 
@@ -36,6 +36,22 @@ from core.snapshots import snapshot_active_waste
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+def age_days_from(value: Any) -> Optional[int]:
+    """Days elapsed since an ISO timestamp as Steampipe returns them, or
+    None when absent/unparseable. Detectors store it as metadata age_days,
+    which feeds the trend-history backfill and the Saved-so-far lifetime
+    cap — both treat a missing age as 'lived only since detection'."""
+    if not value:
+        return None
+    try:
+        created = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return max((datetime.now(timezone.utc) - created).days, 0)
 
 
 class SteampipeWasteDetector:

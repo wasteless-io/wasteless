@@ -1001,6 +1001,10 @@
         // bell counts them alongside pending reviews. Kept separate so the
         // popover can label the two kinds distinctly.
         let _manualCount = 0;
+        // Scheduled executions inside their last 48h of grace period: the
+        // veto window is closing, the bell is how it stays visible on every
+        // page (cancel from /recommendations).
+        let _imminentCount = 0;
 
         function _renderPendingBadges(n) {
             document.querySelectorAll('.js-pending-badge').forEach(badge => {
@@ -1033,6 +1037,10 @@
             if (_manualCount > 0) {
                 parts.push(_manualCount + ' to execute manually on AWS');
             }
+            if (_imminentCount > 0) {
+                parts.push(_imminentCount + ' scheduled execution' + (_imminentCount > 1 ? 's' : '')
+                    + ' within 48h (cancellable until then)');
+            }
             if (parts.length) {
                 // Sentence-case the joined summary ("… and …").
                 body.textContent = parts.join(' · ') + '.';
@@ -1050,8 +1058,9 @@
                 const data = await res.json();
                 _pendingCount = data.pending_count || 0;
                 _manualCount = data.manual_todo_count || 0;
-                // Badge = both kinds of pending attention.
-                _renderPendingBadges(_pendingCount + _manualCount);
+                _imminentCount = data.imminent_count || 0;
+                // Badge = every kind of pending attention.
+                _renderPendingBadges(_pendingCount + _manualCount + _imminentCount);
                 _renderNotifBody();
             } catch (e) {
                 // network hiccup: keep the current badges
