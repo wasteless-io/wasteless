@@ -15,7 +15,12 @@ from typing import Callable, Dict, List, Set
 
 logger = logging.getLogger(__name__)
 
-SYNC_REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
+# The shared product-wide perimeter, never a local list: a resource living
+# in an unswept region reads as vanished and its recommendation flips to
+# obsolete (which the next detector tick revives - a silent oscillation).
+from state import CLOUD_REGIONS
+
+SYNC_REGIONS = CLOUD_REGIONS
 
 
 def _existing_instances(ec2, ids: List[str]) -> Set[str]:

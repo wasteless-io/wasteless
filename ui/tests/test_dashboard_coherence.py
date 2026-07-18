@@ -142,6 +142,9 @@ class TestDashboardCoherence(unittest.TestCase):
         self.assertNotIn("Remediation control loop", body)
         self.assertNotIn("Next best action", body)
         self.assertNotIn("Cost by Resource Type", body)
+        self.assertNotIn("Operational Status", body)
+        # Their replacement lives on: the async Resources-by-Region card
+        self.assertIn('id="regionCard"', body)
 
     def test_recoverable_now_matches_pending_recommendations(self):
         self._seed_waste("i-coherence-pending", 2233.44)

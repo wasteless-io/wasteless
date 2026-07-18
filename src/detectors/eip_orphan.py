@@ -35,7 +35,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 EIP_MONTHLY_COST_USD = 3.65  # $0.005/hr * 730h
-REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
+# One scan perimeter for the whole pipeline (overridable via AWS_REGIONS):
+# a private copy here silently shrank this detector's coverage when new
+# regions were added to constants.
+from constants import AWS_SCAN_REGIONS
+
+REGIONS = AWS_SCAN_REGIONS
 
 
 def _fetch_unassociated_eips(region: str) -> List[Dict[str, Any]]:

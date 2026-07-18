@@ -163,3 +163,28 @@ def test_pricing_source_required_for_high_confidence():
     assert assess_confidence(metadata, signal_confidence=0.95) == "medium"
     metadata["pricing_source"] = "aws_price_list_api"
     assert assess_confidence(metadata, signal_confidence=0.95) == "high"
+
+
+def test_pricing_stamp_is_fresh():
+    """Static price tables age silently: t4g was missing for 6 months and
+    every t4g.micro got the 54.35 default, a 9x overestimate (found
+    2026-07-18). When this fails, review every static table (EC2, EBS,
+    EIP, snapshot, NAT, RDS) against current AWS list prices, then bump
+    constants.PRICING_AS_OF to the review date."""
+    from datetime import date
+
+    import constants
+
+    as_of = date.fromisoformat(constants.PRICING_AS_OF)
+    age_days = (date.today() - as_of).days
+    assert 0 <= age_days <= 180, f"PRICING_AS_OF ({constants.PRICING_AS_OF}) is {age_days} days old"
+
+
+def test_ebs_price_tables_stay_identical():
+    """ebs_orphan and ec2_stopped each embed an EBS price table; until they
+    share one module this guard keeps the two copies from drifting apart
+    (same disease as the private region lists fixed the same day)."""
+    from detectors import ebs_orphan, ec2_stopped
+
+    assert ebs_orphan.EBS_PRICING_USD_PER_GIB == ec2_stopped.EBS_PRICING_USD_PER_GIB
+    assert ebs_orphan.DEFAULT_EBS_PRICE == ec2_stopped.DEFAULT_EBS_PRICE

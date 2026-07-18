@@ -2,13 +2,8 @@
 
 {% block title %}Dashboard - Wasteless.io{% endblock %}
 
-{# Single money format for the whole page: "<$0.01" under a cent, cents up
-   to $100, whole dollars (grouped) above — large KPIs don't need cent noise. #}
-{# .countup: re-counted from 0 at load by the shared script in base.html #}
-{% macro eur(v) -%}
-{%- set v = v or 0 -%}
-<span class="countup">{%- if v > 0 and v < 0.01 -%}&lt;$0.01{%- elif v < 100 -%}${{ "%.2f"|format(v) }}{%- else -%}${{ "{:,.0f}".format(v) }}{%- endif -%}</span>
-{%- endmacro %}
+{# Money format shared with the Overview via _money.html #}
+{% from "_money.html" import eur %}
 
 {% block extra_css %}
 <style>
@@ -59,7 +54,7 @@
     /* Top row: 4 financial KPIs capped at 880px, Saved so far fills the rest */
     .top-grid {
         display: grid;
-        grid-template-columns: minmax(0, 880px) 1fr;
+        grid-template-columns: minmax(0, 1040px) 1fr;
         gap: 1rem;
         margin-bottom: 0.5rem;
     }
@@ -280,9 +275,10 @@
             top: -0.7rem;
             transform: translateX(-50%);
         }
-        /* .grid-3/.grid-4 wrap to 2 columns here (base.html): keep the
-           divider only where a left neighbour actually remains */
+        /* .grid-3/.grid-4 wrap to 2 columns here, .grid-5 to 3 (base.html):
+           keep the divider only where a left neighbour actually remains */
         .grid-3 .kpi:nth-child(odd), .grid-4 .kpi:nth-child(odd) { border-left: none; }
+        .grid-5 .kpi:nth-child(3n+1) { border-left: none; }
     }
     @media (max-width: 768px) {
         .kpi + .kpi {
@@ -346,6 +342,19 @@
     </div>
 </header>
 
+{# Last-scan stamp under the hero, same placement as the Last-sync line on
+   the recommendations page. Relative freshness first, clock time as
+   detail; turns amber past 24h and red past 48h. #}
+<div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 1rem;">
+    {% if kpis.last_analysis %}
+    {% set hours_ago = last_scan_hours_ago %}
+    {% set days_ago = (hours_ago / 24) | int %}
+    <span style="font-size: 0.7rem;{% if hours_ago < 24 %} color: var(--gray-400);{% endif %}" class="{% if hours_ago >= 48 %}text-danger{% elif hours_ago >= 24 %}text-warning{% endif %}">Last scan: {{ kpis.last_analysis | localtime }} · {% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}{% if hours_ago >= 48 %} · overdue{% elif hours_ago >= 24 %} · stale{% endif %}</span>
+    {% else %}
+    <span style="font-size: 0.7rem; color: var(--gray-400);">Last scan: none yet</span>
+    {% endif %}
+</div>
+
 {% if (kpis.failed_7d or 0) > 0 %}
 <div class="alert-banner" role="alert">
     <svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -365,65 +374,10 @@
 <div class="top-grid">
 <div class="card compact">
     <div class="section-label">Financial Overview</div>
-    <div class="grid grid-4">
-
-        <!-- Total Cost (Cost Explorer): the cumulative bill over the whole
-             collected window, all services and months confounded -->
-        <div class="kpi">
-            {% if total_cost_eur is not none %}
-            <div class="kpi-value"><span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="Everything Cost Explorer has reported since collection began ({{ total_cost_period }}): all services, taxes included · click for the breakdown" onclick="openCostModal('totalCostModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('totalCostModal');}"><span class="kpi-zoom">{{ eur(total_cost_eur) }}</span></span></div>
-            <div class="kpi-label">Total Cost</div>
-            <div class="kpi-sub">{{ total_cost_period }}</div>
-            {% else %}
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">Total Cost</div>
-            <div class="kpi-sub">Appears after the first daily Cost Explorer collection</div>
-            {% endif %}
-        </div>
-
-        <!-- AWS Spend (last full month, Cost Explorer): the whole bill,
-             so waste and savings read against their real denominator -->
-        <div class="kpi">
-            {% if aws_spend_eur is not none %}
-            <div class="kpi-value"><span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="The whole AWS bill for {{ aws_spend_month }}, not just detected waste · click for the breakdown" onclick="openCostModal('spendModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('spendModal');}"><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></span></div>
-            <div class="kpi-label">AWS Spend</div>
-            <div class="kpi-sub">{% if aws_spend_delta_pct is not none %}<span class="{% if aws_spend_delta_pct > 0 %}text-danger{% elif aws_spend_delta_pct < 0 %}text-success{% endif %}" style="font-weight: 600;">{{ '+' if aws_spend_delta_pct > 0 }}{{ "%.1f"|format(aws_spend_delta_pct) }}%</span> vs {{ aws_spend_prev_month }}{% elif aws_spend_period %}{{ aws_spend_month.split(' ')[0] }} · {{ aws_spend_period }} collected{% else %}{{ aws_spend_month }}{% endif %}</div>
-            {% else %}
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">AWS Spend</div>
-            <div class="kpi-sub">Appears after the first daily Cost Explorer collection</div>
-            {% endif %}
-        </div>
-
-        <!-- Recoverable Now (ex-Pending Savings: the amount and the decision
-             count belong together, one card, one call to action) -->
-        <div class="kpi">
-            {% if (kpis.pending_count or 0) > 0 %}
-            <div class="kpi-value text-success pending-blink"><span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="Recoverable every month if you approve the {{ kpis.pending_count }} pending recommendation{{ 's' if (kpis.pending_count or 0) > 1 }} · click for the breakdown" onclick="openCostModal('recoverableModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('recoverableModal');}"><span class="kpi-zoom">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></span></span></div>
-            <div class="kpi-label">Recoverable Now</div>
-            {% else %}
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">Recoverable Now</div>
-            <div class="kpi-sub">Nothing awaiting approval</div>
-            {% endif %}
-        </div>
-
-        <!-- Verified Savings: a monthly rate (savings_realized stores
-             cost_before - cost_after as average monthly cost), previously
-             mislabeled as a cumulative "since launch" total -->
-        <div class="kpi">
-            {% if (kpis.verified_savings or 0) > 0 %}
-            <div class="kpi-value text-success"><span class="kpi-hover" tabindex="0" data-tip="Monthly savings actually measured on the bill after applied actions, verified via AWS Cost Explorer: measured, not estimated"><span class="kpi-zoom">{{ eur(kpis.verified_savings) }}<span class="unit">/mo</span></span></span></div>
-            <div class="kpi-label">Verified Savings</div>
-            <div class="kpi-sub">measured via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a>{% if kpis.accuracy_pct is not none %} · {{ "%.0f"|format(kpis.accuracy_pct) }}% of estimate{% endif %}</div>
-            {% else %}
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">Verified Savings</div>
-            <div class="kpi-sub">{% if next_verification %}first measurement expected ~{{ next_verification.strftime('%b %-d') }}{% else %}Appears after your first verified action{% endif %}</div>
-            {% endif %}
-        </div>
-
-    </div>
+    {# The five tiles live in _financial_tiles.html, shared with the
+       Overview page; only this page has the cost modals, hence the flag #}
+    {% set fin_clickable = true %}
+    {% include "_financial_tiles.html" %}
     {% if cost_chart %}
     <!-- Cost Explorer console-style stacked monthly bill, by service.
          Palette: validated categorical slots (dataviz reference), tail
@@ -471,10 +425,14 @@
              today's pace (sum of the still-counting monthly rates) -->
         <div style="display: flex; align-items: center; justify-content: center; gap: 1.25rem; flex-wrap: wrap;">
             <div class="stat-value">
-                <span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="Estimated savings accumulated by your {{ saved_actions }} applied action{{ 's' if saved_actions != 1 }} since {{ saved_since.strftime('%b %Y') }}, at on-demand list prices. A resource started again stops counting · click for the breakdown" onclick="openCostModal('savedModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('savedModal');}"><span class="kpi-zoom">{{ eur(saved_total) }}</span></span><span class="text-success stat-arrow" aria-hidden="true">&#8593;</span><span class="sr-only">(money saved, growing)</span>
+                <span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="Estimated savings accumulated by your {{ saved_actions }} applied action{{ 's' if saved_actions != 1 }} since {{ saved_since.strftime('%b %Y') }}, at on-demand list prices. A resource started again stops counting · click for the breakdown" onclick="openCostModal('savedModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('savedModal');}"><span class="kpi-zoom">{{ eur(saved_total) }}</span></span>{% if saved_monthly > 0 %}<span class="text-success stat-arrow" aria-hidden="true">&#8593;</span><span class="sr-only">(money saved, growing)</span>{% else %}<span class="sr-only">(money saved, counter currently frozen)</span>{% endif %}
             </div>
             <!-- The two run-rate equivalents stay side by side even when
-                 the narrow column wraps them under the main counter -->
+                 the narrow column wraps them under the main counter. Only
+                 shown while something is still accruing: a frozen counter
+                 displaying three zeros reads as a broken card, and the
+                 freeze story lives in the modal breakdown -->
+            {% if saved_monthly > 0 %}
             <div style="display: flex; gap: 1.25rem; justify-content: center;">
                 <div style="text-align: center;">
                     <span class="kpi-hover" tabindex="0" data-tip="Projection at today's pace: assumes the still-counting resources would have kept running. Each action's credit is capped by its resource's proven lifetime"><div style="font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; color: var(--ink);">{{ eur(saved_monthly) }}</div>
@@ -485,12 +443,10 @@
                     <div style="font-size: 0.72rem; color: var(--gray-500);">per year</div></span>
                 </div>
             </div>
+            {% endif %}
         </div>
         <div class="stat-sub">
-            since {{ saved_since.strftime('%b %-d, %Y') }} · {{ eur(saved_daily) }}/day now
-        </div>
-        <div class="stat-sub">
-            {% if (kpis.verified_savings or 0) > 0 %}incl. {{ eur(kpis.verified_savings) }}/mo verified via Cost Explorer{% else %}estimated · Cost Explorer verification pending{% endif %}{% if aws_spend_eur is not none %} · whole bill: {{ eur(aws_spend_eur) }}/mo{% endif %}
+            since {{ saved_since.strftime('%b %-d, %Y') }}{% if saved_daily > 0 %} · {{ eur(saved_daily) }}/day now{% endif %}
         </div>
     </div>
     <div class="card-footnote">
@@ -511,7 +467,7 @@
     <div class="chart-head">
         <div>
             <h3 class="chart-title">Waste Trend &amp; Forecast</h3>
-            <span id="trendSubtitle" class="chart-subtitle">{{ trend_subtitle }}</span>
+            <span id="trendSubtitle" class="chart-subtitle"{% if 'reconstructed' in trend_subtitle %} data-tip-card="Days before the first real snapshot are estimated from each resource's creation date"{% endif %}>{{ trend_subtitle }}</span>
         </div>
         <div class="trend-controls">
             <div class="trend-ranges" role="group" aria-label="Trend time range">
@@ -543,7 +499,7 @@
         <div class="chart-head">
             <div>
                 <h3 class="chart-title">AI Spend</h3>
-                <span class="chart-subtitle">LLM usage · last 30 days</span>
+                <span class="chart-subtitle">LLM usage · {% if ai_usage and ai_usage.period %}{{ ai_usage.period }}{% else %}last 30 days{% endif %}</span>
             </div>
             {% if ai_usage and ai_usage.provider %}
             <img class="provider-logo" src="/static/providers/{{ ai_usage.provider }}.svg" alt="{{ ai_usage.provider }}" title="{{ ai_usage.provider }}">
@@ -552,7 +508,7 @@
         {% if ai_usage %}
         {% set feature_labels = {'insight': 'Insights', 'narrative': 'Report narratives'} %}
         <div class="stat-block">
-            <div class="stat-value"><span class="kpi-hover" tabindex="0" data-tip="LLM cost over the last 30 days — {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }}, {{ "{:,}".format(ai_usage.tokens) }} tokens"><span class="kpi-zoom">{{ eur(ai_usage.cost_eur) }}</span></span></div>
+            <div class="stat-value"><span class="kpi-hover" tabindex="0" data-tip="LLM cost, {{ ai_usage.period }} (30-day window) — {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }}, {{ "{:,}".format(ai_usage.tokens) }} tokens"><span class="kpi-zoom">{{ eur(ai_usage.cost_eur) }}</span></span></div>
             <div class="stat-sub">
                 {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }} · {{ "{:,}".format(ai_usage.tokens) }} tokens
             </div>
@@ -583,32 +539,19 @@
     </div>
 </div>
 
-<!-- KPIs Row 2, operational view. "Actions Pending" moved into the
-     Recoverable Now KPI and the control loop's Awaiting-review stage. -->
-<div class="card compact mt-1">
-    <div class="section-label">Operational Status</div>
-    <div class="grid grid-2">
-
-        <!-- Waste Detected -->
-        <div class="kpi">
-            <div class="kpi-value"><span class="kpi-hover" tabindex="0" data-tip="Resources currently identified as active waste across all detectors"><span class="kpi-zoom"><span class="countup">{{ kpis.waste_count or 0 }}</span></span></span></div>
-            <div class="kpi-label">Waste Detected</div>
-            <div class="kpi-sub">resources identified</div>
-        </div>
-
-        <!-- Last Scan: relative freshness is the signal, clock time is detail -->
-        <div class="kpi">
-            {% if kpis.last_analysis %}
-            {% set hours_ago = ((now() - kpis.last_analysis).total_seconds() / 3600) | int %}
-            {% set days_ago = (hours_ago / 24) | int %}
-            <div class="kpi-value {% if hours_ago >= 48 %}text-danger{% elif hours_ago >= 24 %}text-warning{% endif %}"><span class="kpi-hover" tabindex="0" data-tip="Last collection: {{ kpis.last_analysis.strftime('%d %b, %H:%M') }} — flagged stale after 24h, overdue after 48h"><span class="kpi-zoom">{% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}</span></span></div>
-            <div class="kpi-label">Last Scan</div>
-            <div class="kpi-sub">{{ kpis.last_analysis.strftime('%d %b, %H:%M') }}{% if hours_ago >= 48 %} — overdue{% elif hours_ago >= 24 %} — stale{% endif %}</div>
-            {% else %}
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">Last Scan</div>
-            <div class="kpi-sub">No scan yet</div>
-            {% endif %}
+<!-- Resources by Region: live inventory counts per AWS region (cached
+     endpoint, loaded after render so the page stays a pure-Postgres
+     render). Map dots and bars are proportional to the resource count;
+     one hue only, the bar length already carries the magnitude. -->
+<div class="card compact mt-1 mb-1" id="regionCard">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem;">
+        <div class="section-label" style="margin-bottom: 0.25rem;">Resources by Region</div>
+        <span class="chart-subtitle" id="regionSubtitle">live inventory · refreshed every 10 min</span>
+    </div>
+    <div style="display: flex; gap: 2rem; align-items: center; flex-wrap: wrap;">
+        <div id="regionMap" role="img" aria-label="World map, countries hosting resources highlighted" style="flex: 1.3; min-width: 340px; max-width: 640px; position: relative;"></div>
+        <div id="regionBars" style="flex: 1; min-width: 260px;">
+            <p class="text-muted" style="font-size: 0.82rem; margin: 0;">Loading inventory&hellip;</p>
         </div>
     </div>
 </div>
@@ -771,7 +714,7 @@
         <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
             <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Estimated savings, accruing daily</div>
             <div style="font-size: 1.3rem; font-weight: 600; color: var(--success-text);">{{ eur(saved_total) }}</div>
-            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ saved_actions }} applied action{{ 's' if saved_actions != 1 }} · {{ eur(saved_daily) }}/day now</div>
+            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ saved_actions }} applied action{{ 's' if saved_actions != 1 }}{% if saved_daily > 0 %} · {{ eur(saved_daily) }}/day now{% endif %}</div>
         </div>
         <div style="font-size: 0.85rem; color: var(--gray-700);">
             <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
@@ -918,6 +861,154 @@
 })();
 {% endif %}
 
+// Resources by Region: async fill from the cached inventory endpoint.
+// The world SVG is inlined so the hosting countries can be colored and
+// carry the shared card tooltip (country + region title, resource list).
+// Rows are built via createElement/textContent — resource and region
+// strings come from AWS APIs, never interpolate them into HTML.
+(async function () {
+    const barsEl = document.getElementById('regionBars');
+    const mapEl = document.getElementById('regionMap');
+    if (!barsEl || !mapEl) return;
+
+    function message(text) {
+        barsEl.innerHTML = '';
+        const p = document.createElement('p');
+        p.className = 'text-muted';
+        p.style.cssText = 'font-size: 0.82rem; margin: 0;';
+        p.textContent = text;
+        barsEl.appendChild(p);
+    }
+
+    // Friendly resource-type labels for tooltips and row subtitles
+    const TYPE_LABELS = {
+        instances: 'EC2', volumes: 'EBS', elastic_ips: 'EIP',
+        nat_gateways: 'NAT', load_balancers: 'ELB', rds_instances: 'RDS'
+    };
+    const breakdownLabel = (b) => Object.entries(b)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => `${v} ${TYPE_LABELS[k] || k.replace(/_/g, ' ')}`)
+        .join(' · ');
+
+    let svgText = null;
+    let data = null;
+    try {
+        const [svgRes, dataRes] = await Promise.all([
+            fetch('/static/world-map.svg'),
+            fetch('/api/dashboard/resources-by-region')
+        ]);
+        if (svgRes.ok) svgText = await svgRes.text();
+        if (!dataRes.ok) { message('Inventory unavailable'); return; }
+        data = await dataRes.json();
+    } catch (e) { message('Inventory unavailable'); return; }
+
+    if (svgText) {
+        // Inline the map (an <img> cannot be styled per country) and make
+        // it fluid: the viewBox drives the aspect ratio
+        mapEl.innerHTML = svgText;
+        const svg = mapEl.querySelector('svg');
+        if (svg) {
+            svg.removeAttribute('width');
+            svg.removeAttribute('height');
+            svg.style.cssText = 'width: 100%; height: auto; display: block;';
+            // The asset's <title> renders as a native browser tooltip that
+            // shadows the per-country cards (attribution stays in comments)
+            svg.querySelectorAll('title').forEach((t) => t.remove());
+        }
+    }
+
+    if (!data.available) { message('AWS not reachable'); return; }
+    if (!data.regions.length) { message('No resources found in the scanned regions'); return; }
+
+    barsEl.innerHTML = '';
+    // Group regions per hosting country: several AWS regions can share one
+    // country path (the four US ones), which then carries one merged tooltip
+    const byCountry = {};
+    data.regions.forEach((r) => {
+        if (!r.country) return;
+        (byCountry[r.country] = byCountry[r.country] || []).push(r);
+    });
+
+    Object.entries(byCountry).forEach(([iso, regions]) => {
+        const path = mapEl.querySelector('#' + iso.replace(/[^a-z]/g, ''));
+        if (!path) return;
+        // Multi-part countries (us, se, au) are <g> wrappers: inline fill on
+        // the group loses to the sheet's path rule, so paint each child path
+        path.style.fill = 'var(--primary)';
+        path.querySelectorAll('path').forEach((p) => { p.style.fill = 'var(--primary)'; });
+        path.style.cursor = 'pointer';
+        path.setAttribute('data-tip-card-title',
+            regions.map((r) => `${r.name} · ${r.region}`).join('  +  '));
+        path.setAttribute('data-tip-card',
+            regions.map((r) => breakdownLabel(r.breakdown)).join('  ·  '));
+    });
+
+    // Donut of the share per region: categorical palette in fixed order
+    // (validated slots), white 2px borders as the surface gap, the total
+    // resource count in the hole. Slice tooltips carry the breakdown.
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'height: 280px; position: relative;';
+    const canvas = document.createElement('canvas');
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', 'Share of resources per AWS region');
+    wrap.appendChild(canvas);
+    barsEl.appendChild(wrap);
+
+    const palette = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
+    const otherColor = '#a8a69f';
+    const centerTotal = {
+        id: 'centerTotal',
+        afterDraw(chart) {
+            const meta = chart.getDatasetMeta(0);
+            if (!meta.data.length) return;
+            const { x, y } = meta.data[0];
+            const c = chart.ctx;
+            c.save();
+            c.textAlign = 'center';
+            c.font = '600 1.35rem system-ui, sans-serif';
+            c.fillStyle = '#1d1d1f';
+            c.fillText(String(data.total), x, y - 2);
+            c.font = '0.7rem system-ui, sans-serif';
+            c.fillStyle = '#898781';
+            c.fillText(`resource${data.total > 1 ? 's' : ''}`, x, y + 16);
+            c.restore();
+        }
+    };
+
+    new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels: data.regions.map((r) => `${r.name} · ${r.region}`),
+            datasets: [{
+                data: data.regions.map((r) => r.count),
+                backgroundColor: data.regions.map((r, i) => i < palette.length ? palette[i] : otherColor),
+                borderColor: '#ffffff',
+                borderWidth: 2
+            }]
+        },
+        plugins: [centerTotal],
+        options: {
+            maintainAspectRatio: false,
+            cutout: '58%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { boxWidth: 9, boxHeight: 9, font: { size: 10 }, color: '#52514e' }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const r = data.regions[ctx.dataIndex];
+                            return ` ${r.count} resource${r.count > 1 ? 's' : ''} · ${r.pct}%`;
+                        },
+                        afterLabel: (ctx) => breakdownLabel(data.regions[ctx.dataIndex].breakdown)
+                    }
+                }
+            }
+        }
+    });
+})();
+
 // Upcoming dropdown: same behavior as the recommendations To-do bell
 // (toggle on click, click-away and Escape close).
 function toggleUpcomingPanel(e) {
@@ -1028,6 +1119,19 @@ function renderTrendChart(labels, raw, granularity) {
     const fc = trendForecast.computeForecast(raw, granularity);
     const horizon = fc.horizon;
 
+    // Honesty note when a dominant step froze the forecast flat (an event
+    // is not a trend). The subtitle is (re)set before each render, so
+    // append/remove is idempotent per render.
+    const subEl = document.getElementById('trendSubtitle');
+    const stepNote = ' · flat forecast: recent step change, no established trend yet';
+    if (subEl) {
+        if (fc.stepBreak && !subEl.textContent.includes(stepNote)) {
+            subEl.textContent += stepNote;
+        } else if (!fc.stepBreak && subEl.textContent.includes(stepNote)) {
+            subEl.textContent = subEl.textContent.replace(stepNote, '');
+        }
+    }
+
     const legend = document.getElementById('forecastLegend');
     const wrap = document.getElementById('forecastChartWrap');
     const empty = document.getElementById('forecastEmpty');
@@ -1100,6 +1204,17 @@ function renderTrendChart(labels, raw, granularity) {
         granularity === 'day'
             ? { day: 'numeric', month: 'short', year: 'numeric' }
             : { month: 'long', year: 'numeric' });
+    // Compact axis variant of fmtDate ("18 Jun" / "Jun 2026"): the year
+    // stays in the tooltip, the axis only needs to order the days
+    const fmtTick = iso => new Date(iso).toLocaleDateString('en-GB',
+        granularity === 'day'
+            ? { day: 'numeric', month: 'short' }
+            : { month: 'short', year: 'numeric' });
+    // Same money format as the page's eur() macro, pinned to en-US so the
+    // browser locale cannot swap the decimal separator ("2,5")
+    const fmtMoney = v => '$' + (v >= 100
+        ? Math.round(v).toLocaleString('en-US')
+        : Number(v).toFixed(2));
 
     trendChart = new Chart(document.getElementById('forecastChart'), {
         type: 'line',
@@ -1127,8 +1242,19 @@ function renderTrendChart(labels, raw, granularity) {
                 }
             },
             scales: {
-                x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 10 } } },
-                y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 } }, beginAtZero: true }
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        maxTicksLimit: 8,
+                        font: { size: 10 },
+                        callback: function(value) { return fmtTick(this.getLabelForValue(value)); }
+                    }
+                },
+                y: {
+                    grid: { color: 'rgba(0,0,0,0.04)' },
+                    ticks: { font: { size: 10 }, callback: (v) => fmtMoney(v) },
+                    beginAtZero: true
+                }
             }
         }
     });
@@ -1149,12 +1275,21 @@ document.querySelectorAll('.trend-range-btn').forEach(btn => {
             const res = await fetch(`/api/dashboard/trend?range=${btn.dataset.range}`);
             if (!res.ok) return;
             const data = await res.json();
+            // Subtitle first: renderTrendChart may append its step-change
+            // note, which a later overwrite would erase
+            const subEl = document.getElementById('trendSubtitle');
+            subEl.textContent = data.subtitle;
+            if (data.subtitle.includes('reconstructed')) {
+                subEl.setAttribute('data-tip-card',
+                    "Days before the first real snapshot are estimated from each resource's creation date");
+            } else {
+                subEl.removeAttribute('data-tip-card');
+            }
             renderTrendChart(
                 data.points.map(p => p.date),
                 data.points.map(p => p.total),
                 data.granularity
             );
-            document.getElementById('trendSubtitle').textContent = data.subtitle;
             document.querySelectorAll('.trend-range-btn').forEach(b => {
                 b.classList.toggle('btn-primary', b === btn);
                 b.classList.toggle('btn-outline', b !== btn);

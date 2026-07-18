@@ -45,7 +45,12 @@ EBS_PRICING_USD_PER_GIB: Dict[str, float] = {
 }
 DEFAULT_EBS_PRICE = 0.10  # gp2 fallback
 
-REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
+# One scan perimeter for the whole pipeline (overridable via AWS_REGIONS):
+# a private copy here silently shrank this detector's coverage when new
+# regions were added to constants.
+from constants import AWS_SCAN_REGIONS
+
+REGIONS = AWS_SCAN_REGIONS
 
 
 def _volume_monthly_cost(size_gb: int, vol_type: str) -> float:
@@ -82,6 +87,9 @@ def _fetch_orphaned_volumes(region: str) -> List[Dict[str, Any]]:
                     "encrypted": vol.get("Encrypted", False),
                     "monthly_cost": _volume_monthly_cost(size_gb, vol_type),
                     "age_days": age_days,
+                    # A type outside the static table gets the default
+                    # price: a guess, stamped as such (surfaced by the UI)
+                    "pricing_fallback": vol_type not in EBS_PRICING_USD_PER_GIB,
                 }
             )
         logger.info(f"  {region}: {len(result)} orphaned volume(s)")
@@ -158,6 +166,14 @@ class EBSOrphanDetector:
                                     "encrypted": vol["encrypted"],
                                     "monthly_cost_eur": vol["monthly_cost"],
                                     "age_days": vol.get("age_days"),
+                                    **(
+                                        {
+                                            "pricing_source": "static_default_unknown_type",
+                                            "pricing_fallback": True,
+                                        }
+                                        if vol.get("pricing_fallback")
+                                        else {}
+                                    ),
                                 }
                             )
                         ),

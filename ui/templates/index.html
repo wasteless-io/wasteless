@@ -316,54 +316,12 @@
 {# Section title for the dials #}
 <h2 style="margin: 0.5rem 0 0.75rem 0.25rem; font-size: 1.05rem; font-weight: 700; color: #1d1d1f;">Analytics</h2>
 
-<!-- KPI Banner: numbers before prose — three distinct dimensions,
-     not one figure at three time scales. Standalone card, square
-     corners on purpose (the one card on the page that isn't rounded). -->
-<!-- Daily / Monthly Waste Banner -->
+<!-- KPI Banner: the same five Financial Overview tiles as the Dashboard
+     (shared partial, 2026-07-18 — the old rings row is gone). Standalone
+     card, square corners on purpose (the one card that isn't rounded). -->
 <div class="card mb-1" style="padding: 0.85rem 1.25rem; border-radius: 0;">
-    <div style="display: flex; justify-content: space-around; align-items: center;">
-
-    <!-- What leaks: current waste + how it moved -->
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Active waste — what your still-existing, not-yet-remediated idle and orphaned resources cost per month if nothing changes (includes any you've declined or queued). This is smaller than the Reports page's 'Waste detected', which also counts items since resolved or gone (obsolete)."><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span><span class="ring-unit">$</span><span class="ring-month">{{ now().strftime('%B') }}</span></span></span></div>
-    </div>
-
-    <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
-
-    <!-- What awaits a decision -->
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Pending Actions</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.pending_count or 0) > 0 %}var(--gray-800){% else %}var(--gray-400){% endif %};"><a class="kpi-hover kpi-ring" href="/recommendations" data-tip="How many actions are awaiting your approval. Click to review them"><span class="kpi-zoom"><span class="countup{% if (metrics.pending_count or 0) > 0 %} pending-blink{% endif %}">{{ metrics.pending_count or 0 }}</span></span></a></div>
-    </div>
-
-    <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
-
-    <!-- What is proven: the number that justifies the tool -->
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Savings actually measured on your bill after applied actions, verified rather than estimated"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span><span class="ring-unit">$</span></span></span></div>
-    </div>
-
-    {# Real AWS bill (Cost Explorer) — only earns a slot once collected.
-       The waste share moves to the sub-line: the headline is the fact. #}
-    {% if aws_spend_30d_eur is not none %}
-    <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Spend</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><a class="kpi-hover kpi-ring" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Your real AWS bill over the last 30 days (rolling window), straight from Cost Explorer. The Dashboard's AWS Spend covers the last full calendar month instead. Click to open the console"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(aws_spend_30d_eur) }}</span><span class="ring-unit">$</span>{% if aws_spend_vs_avg == 'above' %}<span style="font-size: 0.55rem; color: var(--danger); vertical-align: 8px;" aria-hidden="true">&#9650;</span><span class="sr-only">above monthly average</span>{% elif aws_spend_vs_avg == 'below' %}<span style="font-size: 0.55rem; color: var(--success); vertical-align: 8px;" aria-hidden="true">&#9660;</span><span class="sr-only">below monthly average</span>{% endif %}<span class="ring-month">30 days</span></span></a></div>
-    </div>
-
-    {# Billed-services count, same source and window as AWS Spend #}
-    {% if aws_service_count > 0 %}
-    <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
-    <div style="text-align: center;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Services</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" role="button" style="cursor: pointer;" data-tip="How many distinct AWS services generated charges over the last 30 days. Click to see the breakdown" onclick="document.getElementById('top-services-card')?.scrollIntoView({behavior:'smooth',block:'center'})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('top-services-card')?.scrollIntoView({behavior:'smooth',block:'center'});}"><span class="kpi-zoom"><span class="countup">{{ aws_service_count }}</span></span></span></div>
-    </div>
-    {% endif %}
-    {% endif %}
-    </div>
+    {# fin_clickable stays unset: the cost modals only exist on /dashboard #}
+    {% include "_financial_tiles.html" %}
 
     {# Collection provenance under the rings — same footer treatment as
        the AI-caution line of the briefing card. The healthy line shows
