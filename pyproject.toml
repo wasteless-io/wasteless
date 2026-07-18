@@ -10,14 +10,15 @@ requires-python = ">=3.11"
 # Editable-installed into ui/venv so ui/utils/remediator.py can do
 # `from remediators.ec2_remediator import EC2Remediator` instead of a
 # sys.path.insert() hack pointing at the repo root. Only the packages
-# that already have __init__.py are exposed: trackers/ and utils/ (the
-# latter would collide with ui/utils/) stay out of scope on purpose.
+# with __init__.py are exposed: utils/ stays out of scope on purpose
+# (it would collide with ui/utils/). trackers/ joined the list on
+# 2026-07-18 for ui/jobs.py's savings_verifier_job.
 [tool.setuptools]
 package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["core*", "detectors*", "remediators*", "reports*", "collectors*"]
+include = ["core*", "detectors*", "remediators*", "reports*", "collectors*", "trackers*"]
 
 [tool.black]
 line-length = 100

@@ -440,20 +440,35 @@ def cost_collector_job() -> None:
             if row and row["latest"] is not None and row["latest"] >= yesterday:
                 return  # fresh enough — don't pay for another CE call
 
+            # 180 days (Cost Explorer console's 6-month default), so the
+            # dashboard's Total Cost matches the console figure instead of
+            # starting at the install date. The upsert makes the daily
+            # re-fetch idempotent; a long window can paginate, each page
+            # is one billed request.
             end = date.today()
-            start = end - timedelta(days=30)
+            start = end - timedelta(days=180)
             ce = get_client("ce", region=os.getenv("AWS_REGION", "eu-west-1"))
-            response = ce.get_cost_and_usage(
-                TimePeriod={"Start": str(start), "End": str(end)},
-                Granularity="DAILY",
-                Metrics=["UnblendedCost"],
-                GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
-            )
+            results_by_time: List[Dict[str, Any]] = []
+            next_token: Optional[str] = None
+            while True:
+                kwargs: Dict[str, Any] = {
+                    "TimePeriod": {"Start": str(start), "End": str(end)},
+                    "Granularity": "DAILY",
+                    "Metrics": ["UnblendedCost"],
+                    "GroupBy": [{"Type": "DIMENSION", "Key": "SERVICE"}],
+                }
+                if next_token:
+                    kwargs["NextPageToken"] = next_token
+                response = ce.get_cost_and_usage(**kwargs)
+                results_by_time.extend(response.get("ResultsByTime", []))
+                next_token = response.get("NextPageToken")
+                if not next_token:
+                    break
 
             account_id = os.getenv("AWS_ACCOUNT_ID", "unknown")
             region = os.getenv("AWS_REGION", "unknown")
             values: List[Tuple[Any, ...]] = []
-            for day in response.get("ResultsByTime", []):
+            for day in results_by_time:
                 usage_date = day["TimePeriod"]["Start"]
                 for group in day.get("Groups", []):
                     cost = float(group["Metrics"]["UnblendedCost"]["Amount"])
@@ -492,3 +507,50 @@ def cost_collector_job() -> None:
 
     except Exception as e:
         print(f"Cost Explorer collect error: {e}")
+
+
+def savings_verifier_job() -> None:
+    """Vérification des économies réelles → savings_realized (le chaînon
+    Applied → Verified de la control loop).
+
+    Compare via Cost Explorer le coût réel avant/après chaque action
+    appliquée, au plus tôt 7 jours après l'action (en dessous le signal
+    n'est pas significatif). S'auto-limite comme cost_collector_job : sort
+    sans importer le tracker ni toucher AWS tant qu'aucune action éligible
+    (réelle, non vérifiée, > 7 jours) n'attend. Chaque vérification coûte
+    ~2 requêtes CE (0,01 $ pièce) et n'est faite qu'une fois : la ligne
+    savings_realized écrite retire l'action de l'éligibilité.
+    """
+    try:
+        with closing(psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)) as conn:
+            cursor = conn.cursor()
+            # Miroir du WHERE de verify_all_unverified_actions: le garde
+            # d'éligibilité doit rester aligné sur ce que le tracker fera.
+            cursor.execute("""
+                SELECT COUNT(*) AS n
+                FROM actions_log a
+                LEFT JOIN savings_realized s ON s.recommendation_id = a.recommendation_id
+                WHERE a.action_status = 'success'
+                  AND a.dry_run = false
+                  AND a.action_type IN ('stop', 'terminate', 'downsize')
+                  AND s.id IS NULL
+                  AND a.action_date < NOW() - INTERVAL '7 days'
+            """)
+            row = cursor.fetchone()
+            if not row or (row["n"] or 0) == 0:
+                return  # nothing eligible: no CE call
+    except Exception as e:
+        print(f"Savings verifier: eligibility check error: {e}")
+        return
+
+    try:
+        from trackers.savings_tracker import SavingsTracker
+
+        tracker = SavingsTracker()
+        results = tracker.verify_all_unverified_actions(min_days_elapsed=7)
+        if results:
+            print(f"Savings verifier: {len(results)} action(s) verified via Cost Explorer")
+    except ImportError as e:
+        print(f"Savings verifier: trackers package not installed (re-run pip install -e .): {e}")
+    except Exception as e:
+        print(f"Savings verifier error: {e}")

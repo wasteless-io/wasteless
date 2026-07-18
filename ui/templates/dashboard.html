@@ -36,7 +36,7 @@
     .alert-banner a { color: var(--danger-text); font-weight: 600; }
 
     .card.compact, .card.slim { padding: 1.5rem; }
-    /* Top row: 4 financial KPIs capped at 880px, Cost of Inaction fills the rest */
+    /* Top row: 4 financial KPIs capped at 880px, Saved so far fills the rest */
     .top-grid {
         display: grid;
         grid-template-columns: minmax(0, 880px) 1fr;
@@ -66,6 +66,31 @@
         color: var(--ink-secondary);
     }
     .kpi-sub { font-size: 0.8rem; color: var(--ink-secondary); margin-top: 0.2rem; }
+
+    /* Chart-type toggle (console-style pill): grouped / line / stacked */
+    #costChartMode {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--gray-300);
+        border-radius: 999px;
+        background: white;
+    }
+    .chart-mode-btn {
+        display: flex;
+        align-items: center;
+        border: none;
+        background: none;
+        cursor: pointer;
+        border-radius: 999px;
+        padding: 0.3rem 0.7rem;
+        color: var(--gray-500);
+        transition: background 0.15s, color 0.15s;
+    }
+    .chart-mode-btn:hover { color: var(--gray-700); }
+    .chart-mode-btn.active { background: var(--primary); color: #fff; }
+    .chart-mode-sep { width: 1px; height: 15px; background: var(--gray-300); }
     .kpi-link { font-size: 0.8rem; color: var(--primary); text-decoration: none; font-weight: 500; }
 
     .text-success { color: var(--success-text); }
@@ -83,78 +108,6 @@
     @media (prefers-reduced-motion: reduce) {
         .pending-blink { animation: none; }
     }
-
-    /* Remediation control loop: five clickable stages, arrows between */
-    .loop { display: grid; grid-template-columns: repeat(5, 1fr); }
-    .stage {
-        display: block;
-        padding: 0.4rem 1rem;
-        text-align: center;
-        position: relative;
-        border-radius: 10px;
-        text-decoration: none;
-        transition: background 0.15s;
-    }
-    .stage:hover { background: var(--gray-100); }
-    .stage + .stage::before {
-        content: "\2192";
-        position: absolute;
-        left: -0.55rem;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--gray-400);
-        font-size: 1rem;
-    }
-    .stage-name {
-        font-size: 0.68rem;
-        font-weight: 600;
-        letter-spacing: 0.09em;
-        text-transform: uppercase;
-        color: var(--gray-500);
-    }
-    .stage-val {
-        font-size: 1.25rem;
-        font-weight: 600;
-        letter-spacing: -0.01em;
-        margin-top: 0.2rem;
-        color: var(--ink);
-    }
-    .stage-val .unit { font-size: 0.8rem; font-weight: 400; }
-    .stage-sub { font-size: 0.72rem; color: var(--gray-500); margin-top: 0.1rem; }
-
-    /* Next best action: the single highest-value pending decision */
-    .nba-amount { font-size: 1.7rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
-    .nba-amount .unit { font-size: 0.85rem; font-weight: 400; color: var(--ink-secondary); }
-    .nba-id { font-family: var(--font-mono); font-size: 0.78rem; color: var(--gray-700); }
-    .nba-evidence {
-        font-size: 0.78rem;
-        color: var(--gray-600);
-        margin: 0.5rem 0 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-    }
-    .nba-next {
-        border-top: 1px solid var(--hairline);
-        margin-top: 0.9rem;
-        padding-top: 0.6rem;
-        font-size: 0.75rem;
-        color: var(--gray-500);
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-    }
-    .nba-next .r { display: flex; justify-content: space-between; gap: 0.5rem; }
-    .nba-next .amt { color: var(--gray-700); font-weight: 600; white-space: nowrap; }
-    .conf-pill {
-        font-size: 0.68rem;
-        font-weight: 600;
-        border-radius: 999px;
-        padding: 0.1rem 0.5rem;
-    }
-    .conf-high { color: var(--success-text); background: rgba(34,197,94,0.1); }
-    .conf-mid { color: var(--warning-text); background: rgba(245,158,11,0.12); }
-    .conf-low { color: var(--danger-text); background: rgba(239,68,68,0.1); }
 
     /* Chart / stat cards */
     .charts-grid {
@@ -234,7 +187,7 @@
         border-radius: 9px;
         padding: 2px;
     }
-    .trend-range-btn, .resource-range-btn { padding: 0.2rem 0.55rem; font-size: 0.72rem; }
+    .trend-range-btn { padding: 0.2rem 0.55rem; font-size: 0.72rem; }
     .trend-ranges .btn {
         border-radius: 7px;
         border: none;
@@ -343,19 +296,33 @@
 </div>
 {% endif %}
 
-<!-- Top row: Financial Overview + Cost of Inaction -->
+<!-- Top row: Financial Overview + Saved so far -->
 <div class="top-grid">
 <div class="card compact">
     <div class="section-label">Financial Overview</div>
     <div class="grid grid-4">
 
+        <!-- Total Cost (Cost Explorer): the cumulative bill over the whole
+             collected window, all services and months confounded -->
+        <div class="kpi">
+            {% if total_cost_eur is not none %}
+            <div class="kpi-value"><span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="Everything Cost Explorer has reported since collection began ({{ total_cost_period }}): all services, taxes included · click for the breakdown" onclick="openCostModal('totalCostModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('totalCostModal');}"><span class="kpi-zoom">{{ eur(total_cost_eur) }}</span></span></div>
+            <div class="kpi-label">Total Cost</div>
+            <div class="kpi-sub">{{ total_cost_period }}</div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">Total Cost</div>
+            <div class="kpi-sub">Appears after the first daily Cost Explorer collection</div>
+            {% endif %}
+        </div>
+
         <!-- AWS Spend (last full month, Cost Explorer): the whole bill,
              so waste and savings read against their real denominator -->
         <div class="kpi">
             {% if aws_spend_eur is not none %}
-            <div class="kpi-value"><span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="The whole AWS bill for {{ aws_spend_month }}, not just detected waste · click for the breakdown" onclick="openSpendModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSpendModal();}"><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></span></div>
+            <div class="kpi-value"><span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="The whole AWS bill for {{ aws_spend_month }}, not just detected waste · click for the breakdown" onclick="openCostModal('spendModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('spendModal');}"><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></span></div>
             <div class="kpi-label">AWS Spend</div>
-            <div class="kpi-sub">{% if aws_spend_delta_pct is not none %}<span class="{% if aws_spend_delta_pct > 0 %}text-danger{% elif aws_spend_delta_pct < 0 %}text-success{% endif %}" style="font-weight: 600;">{{ '+' if aws_spend_delta_pct > 0 }}{{ "%.1f"|format(aws_spend_delta_pct) }}%</span> vs previous month{% elif aws_spend_period %}{{ aws_spend_month.split(' ')[0] }} · {{ aws_spend_period }} collected{% else %}{{ aws_spend_month }}{% endif %}</div>
+            <div class="kpi-sub">{% if aws_spend_delta_pct is not none %}<span class="{% if aws_spend_delta_pct > 0 %}text-danger{% elif aws_spend_delta_pct < 0 %}text-success{% endif %}" style="font-weight: 600;">{{ '+' if aws_spend_delta_pct > 0 }}{{ "%.1f"|format(aws_spend_delta_pct) }}%</span> vs {{ aws_spend_prev_month }}{% elif aws_spend_period %}{{ aws_spend_month.split(' ')[0] }} · {{ aws_spend_period }} collected{% else %}{{ aws_spend_month }}{% endif %}</div>
             {% else %}
             <div class="kpi-value is-muted">—</div>
             <div class="kpi-label">AWS Spend</div>
@@ -363,20 +330,12 @@
             {% endif %}
         </div>
 
-        <!-- Monthly Waste -->
-        <div class="kpi">
-            <div class="kpi-value text-warning"><span class="kpi-hover" tabindex="0" data-tip="Active detected waste per month{% if (kpis.declined_count or 0) > 0 %} — includes {{ "%.2f"|format(kpis.declined_monthly or 0) }} $/mo you reviewed and declined{% endif %} · AWS on-demand list prices, USD"><span class="kpi-zoom">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></span></span></div>
-            <div class="kpi-label">Monthly Waste</div>
-            <div class="kpi-sub">{% if waste_pct_of_bill is not none %}{{ "%.0f"|format(waste_pct_of_bill) }}% of the AWS bill · {% endif %}{{ eur((kpis.active_monthly or 0) * 12) }}/year{% if (kpis.declined_count or 0) > 0 %} · incl. {{ eur(kpis.declined_monthly) }}/mo declined{% endif %}</div>
-        </div>
-
         <!-- Recoverable Now (ex-Pending Savings: the amount and the decision
              count belong together, one card, one call to action) -->
         <div class="kpi">
             {% if (kpis.pending_count or 0) > 0 %}
-            <div class="kpi-value text-success"><span class="kpi-hover" tabindex="0" data-tip="Recoverable every month if you approve the {{ kpis.pending_count }} pending recommendation{{ 's' if (kpis.pending_count or 0) > 1 }}"><span class="kpi-zoom">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></span></span></div>
+            <div class="kpi-value text-success pending-blink"><span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="Recoverable every month if you approve the {{ kpis.pending_count }} pending recommendation{{ 's' if (kpis.pending_count or 0) > 1 }} · click for the breakdown" onclick="openCostModal('recoverableModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('recoverableModal');}"><span class="kpi-zoom">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></span></span></div>
             <div class="kpi-label">Recoverable Now</div>
-            <div class="kpi-sub"><a href="/recommendations" class="kpi-link"><span class="pending-blink">{{ kpis.pending_count }}</span> action{{ 's' if kpis.pending_count > 1 }} await{{ '' if kpis.pending_count > 1 else 's' }} a decision &rarr;</a></div>
             {% else %}
             <div class="kpi-value is-muted">—</div>
             <div class="kpi-label">Recoverable Now</div>
@@ -400,100 +359,88 @@
         </div>
 
     </div>
+    {% if cost_chart %}
+    <!-- Cost Explorer console-style stacked monthly bill, by service.
+         Palette: validated categorical slots (dataviz reference), tail
+         folded into a neutral "Other"; the Total Cost modal's per-service
+         table is the relief view for the low-contrast slots. -->
+    <div style="border-top: 1px solid var(--hairline); margin-top: 1rem; padding-top: 0.9rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+            <div class="section-label" style="margin-bottom: 0;">Cost &amp; usage by month</div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span class="chart-subtitle">Cost Explorer · by service · * partial month</span>
+                <!-- Chart-type toggle, console-style: grouped / line / stacked -->
+                <div id="costChartMode" role="group" aria-label="Chart type">
+                    <button type="button" class="chart-mode-btn" data-mode="grouped" aria-pressed="false" title="Grouped bars"><svg width="16" height="14" viewBox="0 0 16 14" fill="currentColor" aria-hidden="true"><rect x="0" y="4" width="3" height="10" rx="0.5"/><rect x="4.5" y="0" width="3" height="14" rx="0.5"/><rect x="9" y="7" width="3" height="7" rx="0.5"/><rect x="13" y="10" width="3" height="4" rx="0.5"/></svg></button>
+                    <span class="chart-mode-sep" aria-hidden="true"></span>
+                    <button type="button" class="chart-mode-btn" data-mode="line" aria-pressed="false" title="Lines"><svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1 11 L6 4 L11 8 L17 2"/><circle cx="1" cy="11" r="1.6" fill="currentColor" stroke="none"/><circle cx="6" cy="4" r="1.6" fill="currentColor" stroke="none"/><circle cx="11" cy="8" r="1.6" fill="currentColor" stroke="none"/><circle cx="17" cy="2" r="1.6" fill="currentColor" stroke="none"/></svg></button>
+                    <span class="chart-mode-sep" aria-hidden="true"></span>
+                    <button type="button" class="chart-mode-btn active" data-mode="stacked" aria-pressed="true" title="Stacked bars"><svg width="16" height="14" viewBox="0 0 16 14" fill="currentColor" aria-hidden="true"><rect x="0" y="6" width="3" height="8"/><rect x="0" y="2.5" width="3" height="2.5" opacity="0.55"/><rect x="4.5" y="4" width="3" height="10"/><rect x="4.5" y="0.5" width="3" height="2.5" opacity="0.55"/><rect x="9" y="8" width="3" height="6"/><rect x="9" y="4.5" width="3" height="2.5" opacity="0.55"/><rect x="13" y="10" width="3" height="4"/><rect x="13" y="6.5" width="3" height="2.5" opacity="0.55"/></svg></button>
+                </div>
+            </div>
+        </div>
+        <div style="height: 235px; position: relative; margin-top: 0.6rem;">
+            <canvas id="costByServiceChart" role="img" aria-label="Stacked bar chart of the monthly AWS bill by service"></canvas>
+        </div>
+    </div>
+    {% endif %}
     <div class="card-footnote">
         All figures in USD, as billed by AWS · estimates from on-demand list prices
     </div>
 </div>
 
-<!-- Cost of Inaction (merges the former "Already Burned" card and the
-     "Wasted so far" KPI: one backward-looking loss, one daily rate, one
-     projection, one call to action) -->
+<!-- Saved so far: what acting through wasteless has already returned.
+     Counterfactual by construction (assumes each remediated resource
+     would have kept running); a later restart of the same resource
+     stops its accrual. -->
 <div class="card chart-card">
     <div class="chart-head">
         <div>
-            <h3 class="chart-title">Cost of Inaction</h3>
-            <span class="chart-subtitle">What leaving detected waste running has already cost</span>
+            <h3 class="chart-title">Saved so far</h3>
+            <span class="chart-subtitle">What the actions applied through wasteless already saved</span>
         </div>
     </div>
-    {% if burned_total > 0 %}
+    {% if saved_total > 0 %}
     <div class="stat-center">
-        <div class="stat-value">
-            <span class="kpi-hover" tabindex="0" data-tip="Estimated cost of leaving detected waste running, accumulated since {{ burned_since.strftime('%b %Y') }}, currently {{ "%.2f"|format(daily_burn) }} $/day. Early history partly reconstructed"><span class="kpi-zoom">{{ eur(burned_total) }}</span></span><span class="text-danger stat-arrow" aria-hidden="true">&#8595;</span><span class="sr-only">(money lost, growing)</span>
+        <!-- Cumulative counter, flanked by its run-rate equivalents at
+             today's pace (sum of the still-counting monthly rates) -->
+        <div style="display: flex; align-items: center; justify-content: center; gap: 1.25rem; flex-wrap: wrap;">
+            <div class="stat-value">
+                <span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="Estimated savings accumulated by your {{ saved_actions }} applied action{{ 's' if saved_actions != 1 }} since {{ saved_since.strftime('%b %Y') }}, at on-demand list prices. A resource started again stops counting · click for the breakdown" onclick="openCostModal('savedModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('savedModal');}"><span class="kpi-zoom">{{ eur(saved_total) }}</span></span><span class="text-success stat-arrow" aria-hidden="true">&#8593;</span><span class="sr-only">(money saved, growing)</span>
+            </div>
+            <!-- The two run-rate equivalents stay side by side even when
+                 the narrow column wraps them under the main counter -->
+            <div style="display: flex; gap: 1.25rem; justify-content: center;">
+                <div style="text-align: center;">
+                    <span class="kpi-hover" tabindex="0" data-tip="Projection at today's pace: assumes the still-counting resources would have kept running. Each action's credit is capped by its resource's proven lifetime"><div style="font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; color: var(--ink);">{{ eur(saved_monthly) }}</div>
+                    <div style="font-size: 0.72rem; color: var(--gray-500);">per month</div></span>
+                </div>
+                <div style="border-left: 1px solid var(--hairline); padding-left: 1.25rem; text-align: center;">
+                    <span class="kpi-hover" tabindex="0" data-tip="The same pace over a year: an assumption, not a promise. Compare with the whole bill below before quoting it"><div style="font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; color: var(--ink);">{{ eur(saved_monthly * 12) }}</div>
+                    <div style="font-size: 0.72rem; color: var(--gray-500);">per year</div></span>
+                </div>
+            </div>
         </div>
         <div class="stat-sub">
-            since {{ burned_since.strftime('%b %-d, %Y') }} · {{ eur(daily_burn) }}/day now
+            since {{ saved_since.strftime('%b %-d, %Y') }} · {{ eur(saved_daily) }}/day now
         </div>
         <div class="stat-sub">
-            {% if burn_delta is not none and burn_delta|abs >= 0.005 %}{{ '+' if burn_delta > 0 else '−' }}{{ eur(burn_delta|abs) }}/day vs 30 days ago · {% endif %}+{{ eur(kpis.active_monthly) }} more in 30 days
+            {% if (kpis.verified_savings or 0) > 0 %}incl. {{ eur(kpis.verified_savings) }}/mo verified via Cost Explorer{% else %}estimated · Cost Explorer verification pending{% endif %}{% if aws_spend_eur is not none %} · whole bill: {{ eur(aws_spend_eur) }}/mo{% endif %}
         </div>
     </div>
     <div class="card-footnote">
-        {% if (kpis.waste_count or 0) > 0 %}<a href="/recommendations" class="kpi-link">Review the {{ kpis.waste_count }} responsible resource{{ 's' if kpis.waste_count > 1 }} &rarr;</a>{% else %}{{ eur((kpis.active_monthly or 0) * 12) }}/yr at this rate{% endif %}
+        <a href="/history" class="kpi-link">See the {{ saved_actions }} applied action{{ 's' if saved_actions != 1 }} &rarr;</a>
     </div>
     {% else %}
     <div class="chart-empty">
-        <p class="text-muted">No history yet</p>
+        <p class="text-muted">Appears after your first applied action</p>
     </div>
     {% endif %}
 </div>
 </div>
 
-<!-- Remediation control loop: the full journey from detection to proof.
-     Each stage links to the page where that queue is handled. -->
-<div class="card compact mt-1 mb-1">
-    <div class="section-label">Remediation control loop</div>
-    <div class="loop">
-        <a class="stage" href="/cloud-resources">
-            <div class="stage-name">Detected</div>
-            <div class="stage-val text-warning">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></div>
-            <div class="stage-sub">{{ kpis.waste_count or 0 }} resource{{ 's' if (kpis.waste_count or 0) != 1 }}</div>
-        </a>
-        <a class="stage" href="/recommendations">
-            <div class="stage-name">Awaiting review</div>
-            {% if (kpis.pending_count or 0) > 0 %}
-            <div class="stage-val">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></div>
-            <div class="stage-sub">{{ kpis.pending_count }} recommendation{{ 's' if kpis.pending_count != 1 }}</div>
-            {% else %}
-            <div class="stage-val is-muted">—</div>
-            <div class="stage-sub">queue is clear</div>
-            {% endif %}
-        </a>
-        <a class="stage" href="/recommendations">
-            <div class="stage-name">Queued</div>
-            {% if (kpis.scheduled_count or 0) + (kpis.manual_count or 0) > 0 %}
-            <div class="stage-val">{{ eur((kpis.scheduled_monthly or 0) + (kpis.manual_monthly or 0)) }}<span class="unit">/mo</span></div>
-            <div class="stage-sub">{{ kpis.scheduled_count or 0 }} in grace period · {{ kpis.manual_count or 0 }} manual to-do{{ 's' if (kpis.manual_count or 0) != 1 }}</div>
-            {% else %}
-            <div class="stage-val is-muted">—</div>
-            <div class="stage-sub">nothing queued</div>
-            {% endif %}
-        </a>
-        <a class="stage" href="/history">
-            <div class="stage-name">Applied</div>
-            {% if (kpis.applied_count or 0) > 0 %}
-            <div class="stage-val">{{ kpis.applied_count }}</div>
-            <div class="stage-sub">action{{ 's' if kpis.applied_count != 1 }}{% if (kpis.failed_7d or 0) > 0 %} · <span class="text-danger">{{ kpis.failed_7d }} failed (7d)</span>{% endif %}</div>
-            {% else %}
-            <div class="stage-val is-muted">—</div>
-            <div class="stage-sub">no action applied yet</div>
-            {% endif %}
-        </a>
-        <a class="stage" href="/history">
-            <div class="stage-name">Verified</div>
-            {% if (kpis.verified_savings or 0) > 0 %}
-            <div class="stage-val text-success">{{ eur(kpis.verified_savings) }}<span class="unit">/mo</span></div>
-            <div class="stage-sub">{{ kpis.verified_count or 0 }} measurement{{ 's' if (kpis.verified_count or 0) != 1 }} · Cost Explorer</div>
-            {% else %}
-            <div class="stage-val is-muted">—</div>
-            <div class="stage-sub">no measurement yet</div>
-            {% endif %}
-        </a>
-    </div>
-</div>
-
-<!-- Forecast Line Chart + Next best action -->
-{% if waste_trend or next_actions %}
-<div class="{% if waste_trend and next_actions %}charts-grid{% endif %} mb-1">
+<!-- Charts row: waste trend + AI spend -->
+<div class="charts-grid mt-1 mb-1">
 {% if waste_trend %}
 <div class="card chart-card">
     <div class="chart-head">
@@ -525,65 +472,6 @@
     </div>
 </div>
 {% endif %}
-
-{% if next_actions %}
-{% set top = next_actions[0] %}
-<div class="card chart-card">
-    <div class="section-label">Next best action</div>
-    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem;">
-        <div>
-            <div class="nba-amount">{{ eur(top.estimated_monthly_savings_eur) }}<span class="unit">/mo recoverable</span></div>
-            <div style="font-size: 0.82rem; color: var(--gray-700); margin-top: 0.2rem;">{{ top.action_required or top.recommendation_type|replace('_', ' ')|capitalize }}</div>
-            <div class="nba-id">{{ top.resource_id }}</div>
-        </div>
-        {% set conf = (top.confidence_score or 0) * 100 %}
-        <span class="conf-pill {% if conf >= 80 %}conf-high{% elif conf >= 50 %}conf-mid{% else %}conf-low{% endif %}"
-              title="Detector confidence score">{{ "%.0f"|format(conf) }}%</span>
-    </div>
-    <div class="nba-evidence">
-        <span>{{ top.waste_type|replace('_', ' ') }} · {{ top.resource_type|replace('_', ' ') }} · {{ top.age_days }} day{{ 's' if top.age_days != 1 }} old</span>
-        <span>Safeguards run again at execution: nothing touches AWS without approval</span>
-    </div>
-    <div style="margin-top: 0.85rem;">
-        <a class="btn btn-primary btn-sm" href="/recommendations">Review &amp; approve &rarr;</a>
-    </div>
-    {% if next_actions|length > 1 %}
-    <div class="nba-next">
-        {% for a in next_actions[1:] %}
-        <div class="r"><span>{{ a.resource_id|truncate(28, true) }} · {{ a.waste_type|replace('_', ' ') }}</span><span class="amt">{{ eur(a.estimated_monthly_savings_eur) }}/mo</span></div>
-        {% endfor %}
-    </div>
-    {% endif %}
-</div>
-{% endif %}
-</div>
-{% endif %}
-
-<!-- Charts Row -->
-<div class="charts-grid">
-
-    <!-- Cost by Resource Type (horizontal bar) -->
-    <div class="card chart-card">
-        <div class="chart-head">
-            <div>
-                <h3 class="chart-title">Cost by Resource Type</h3>
-                <span id="resourceSubtitle" class="chart-subtitle">{{ resource_subtitle }}</span>
-            </div>
-            <div class="trend-ranges" role="group" aria-label="Resource chart time range">
-                {% for key in ['7d', '30d', '90d', '1y'] %}
-                <button type="button" data-range="{{ key }}"
-                        class="btn resource-range-btn {% if resource_range == key %}btn-primary{% else %}btn-outline{% endif %}"
-                        {% if resource_range == key %}aria-current="true"{% endif %}>{{ key }}</button>
-                {% endfor %}
-            </div>
-        </div>
-        <div id="resourceChartWrap" class="chart-area"{% if not waste_by_resource %} style="display: none;"{% endif %}>
-            <canvas id="costByResourceChart" role="img" aria-label="Bar chart of monthly waste cost by resource type"></canvas>
-        </div>
-        <div id="resourceEmpty" class="chart-empty"{% if waste_by_resource %} style="display: none;"{% endif %}>
-            <p class="text-muted">No data for this range</p>
-        </div>
-    </div>
 
     <!-- AI Spend -->
     <div class="card chart-card">
@@ -678,11 +566,11 @@
      service, with a deep link into Cost Explorer on the same window.
      The console falls back to its default Cost Explorer view if it does
      not recognize the range parameters. -->
-<div id="spendModal" role="dialog" aria-modal="true" aria-labelledby="spendModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeSpendModal()">
+<div id="spendModal" role="dialog" aria-modal="true" aria-labelledby="spendModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeCostModal('spendModal')">
     <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
             <h3 id="spendModalTitle" style="margin: 0; font-size: 1rem;">AWS Spend · {{ aws_spend_month }}</h3>
-            <button type="button" id="spendModalClose" aria-label="Close" onclick="closeSpendModal()" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
+            <button type="button" data-modal-close aria-label="Close" onclick="closeCostModal('spendModal')" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
         </div>
         <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
             <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Whole bill, not just waste</div>
@@ -717,158 +605,279 @@
     </div>
 </div>
 {% endif %}
+
+{% if total_cost_detail %}
+<!-- Total Cost details modal: same gabarit as the AWS Spend one, but over
+     the whole collected window (all months confounded) -->
+<div id="totalCostModal" role="dialog" aria-modal="true" aria-labelledby="totalCostModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeCostModal('totalCostModal')">
+    <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+            <h3 id="totalCostModalTitle" style="margin: 0; font-size: 1rem;">Total Cost · {{ total_cost_period }}</h3>
+            <button type="button" data-modal-close aria-label="Close" onclick="closeCostModal('totalCostModal')" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
+        </div>
+        <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Cumulative bill, every collected month</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: var(--gray-800);">{{ eur(total_cost_eur) }}</div>
+            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ total_cost_detail.days_covered }} day{{ 's' if total_cost_detail.days_covered != 1 }} collected · {{ total_cost_period }}</div>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--gray-700);">
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Source</span>
+                <span style="flex: 1;">AWS Cost Explorer API · daily UnblendedCost by service</span>
+            </div>
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Collected</span>
+                <span style="flex: 1;">once a day by the cost collector job · {{ total_cost_detail.start }} &rarr; {{ total_cost_detail.end }}</span>
+            </div>
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Currency</span>
+                <span style="flex: 1;">USD, as billed by AWS · no conversion applied</span>
+            </div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin: 0.9rem 0 0.3rem;">By service</div>
+            {% for s in total_cost_detail.services %}
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 1; color: var(--gray-700); word-break: break-word;">{{ s.service }}</span>
+                <span style="flex: 0 0 auto; color: var(--gray-800); font-weight: 500;">{{ eur(s.eur) }}</span>
+                <span style="flex: 0 0 42px; text-align: right; color: var(--gray-500);">{{ "%.0f"|format(s.pct) }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="margin-top: 1rem;">
+            <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer?chartStyle=STACK&costAggregate=unBlendedCost&granularity=Daily&groupBy=%5B%22Service%22%5D&startDate={{ total_cost_detail.start }}&endDate={{ total_cost_detail.end }}" target="_blank" rel="noopener" style="font-size: 0.82rem; color: var(--primary); text-decoration: none;">Open this period in Cost Explorer &#8599;</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if recoverable_detail %}
+<!-- Recoverable Now details modal: same gabarit as the cost modals, the
+     breakdown is one row per pending decision, highest savings first -->
+<div id="recoverableModal" role="dialog" aria-modal="true" aria-labelledby="recoverableModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeCostModal('recoverableModal')">
+    <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+            <h3 id="recoverableModalTitle" style="margin: 0; font-size: 1rem;">Recoverable Now · {{ kpis.pending_count }} pending decision{{ 's' if kpis.pending_count > 1 }}</h3>
+            <button type="button" data-modal-close aria-label="Close" onclick="closeCostModal('recoverableModal')" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
+        </div>
+        <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Recoverable every month if you approve</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: var(--success-text);">{{ eur(kpis.potential_monthly) }}<span style="font-size: 0.85rem; font-weight: 400;">/mo</span></div>
+            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ kpis.pending_count }} recommendation{{ 's' if kpis.pending_count > 1 }} awaiting your review</div>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--gray-700);">
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Source</span>
+                <span style="flex: 1;">each pending recommendation's estimated monthly savings, at AWS on-demand list prices</span>
+            </div>
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Next step</span>
+                <span style="flex: 1;">approve, skip or ignore each one on the Recommendations page</span>
+            </div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin: 0.9rem 0 0.3rem;">By decision</div>
+            <!-- Framed, three rows visible, the rest scrolls inside -->
+            <div class="recoverable-list" style="border: 1px solid var(--gray-300); border-radius: 8px; padding: 0 0.6rem; max-height: 153px; overflow-y: auto;">
+            {% for a in recoverable_detail.actions %}
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; {% if not loop.last %}border-bottom: 1px solid var(--gray-100);{% endif %} align-items: baseline;">
+                <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-family: var(--font-mono); font-size: 0.78rem; color: var(--gray-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ a.resource_id }}">{{ a.label }}</span>
+                    <span style="display: block; font-size: 0.72rem; color: var(--gray-500);">{{ a.action }} · {{ a.confidence }}% confidence</span>
+                </span>
+                <span style="flex: 0 0 auto; color: var(--gray-800); font-weight: 500;">{{ eur(a.monthly) }}/mo</span>
+                <span style="flex: 0 0 42px; text-align: right; color: var(--gray-500);">{{ "%.0f"|format(a.pct) }}%</span>
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+        <div style="margin-top: 1rem;">
+            <a href="/recommendations" style="font-size: 0.82rem; color: var(--primary); text-decoration: none;">Review and decide in Recommendations &rarr;</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if saved_detail %}
+<!-- Saved so far details modal: same gabarit as the cost modals, but the
+     breakdown is per applied action, each with its accrual status -->
+<div id="savedModal" role="dialog" aria-modal="true" aria-labelledby="savedModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeCostModal('savedModal')">
+    <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+            <h3 id="savedModalTitle" style="margin: 0; font-size: 1rem;">Saved so far · since {{ saved_since.strftime('%b %-d, %Y') }}</h3>
+            <button type="button" data-modal-close aria-label="Close" onclick="closeCostModal('savedModal')" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
+        </div>
+        <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Estimated savings, accruing daily</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: var(--success-text);">{{ eur(saved_total) }}</div>
+            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ saved_actions }} applied action{{ 's' if saved_actions != 1 }} · {{ eur(saved_daily) }}/day now</div>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--gray-700);">
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Source</span>
+                <span style="flex: 1;">each recommendation's estimated monthly savings, at AWS on-demand list prices</span>
+            </div>
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Method</span>
+                <span style="flex: 1;">accrues from the action date; stops if the resource is started again, and never credits more time than the resource provably lived before remediation</span>
+            </div>
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Verification</span>
+                <span style="flex: 1;">{% if (kpis.verified_savings or 0) > 0 %}{{ eur(kpis.verified_savings) }}/mo already verified via Cost Explorer{% else %}pending: measured on the bill via Cost Explorer after each action{% endif %}</span>
+            </div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin: 0.9rem 0 0.3rem;">By action</div>
+            <!-- Framed, three rows visible, the rest scrolls inside -->
+            <div class="saved-action-list" style="border: 1px solid var(--gray-300); border-radius: 8px; padding: 0 0.6rem; max-height: 153px; overflow-y: auto;">
+            {% for a in saved_detail.actions %}
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; {% if not loop.last %}border-bottom: 1px solid var(--gray-100);{% endif %} align-items: baseline;">
+                <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-family: var(--font-mono); font-size: 0.78rem; color: var(--gray-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ a.resource_id }}">{{ a.label }}</span>
+                    <span style="display: block; font-size: 0.72rem; color: var(--gray-500);">{{ a.action }} · {{ a.date }} · {% if a.still_counting %}{{ eur(a.monthly_rate) }}/mo, still counting{% elif a.stop_reason == 'restart' %}stopped {{ a.stopped_on }} (started again){% else %}capped {{ a.stopped_on }} (lived {{ a.lifetime_days }}d before remediation){% endif %}</span>
+                </span>
+                <span style="flex: 0 0 auto; color: var(--gray-800); font-weight: 500;">{{ eur(a.accrued) }}</span>
+                <span style="flex: 0 0 42px; text-align: right; color: var(--gray-500);">{{ "%.0f"|format(a.pct) }}%</span>
+            </div>
+            {% endfor %}
+            </div>
+            {% if saved_detail.zero_count > 0 %}
+            <div style="font-size: 0.72rem; color: var(--gray-500); padding: 0.4rem 0;">+ {{ saved_detail.zero_count }} applied action{{ 's' if saved_detail.zero_count != 1 }} with no savings estimate attached</div>
+            {% endif %}
+        </div>
+        <div style="margin-top: 1rem;">
+            <a href="/history" style="font-size: 0.82rem; color: var(--primary); text-decoration: none;">See the full action history &rarr;</a>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script src="/static/chart.umd.min.js"></script>
 <script src="/static/trend_forecast.js"></script>
 <script>
+
+{% if cost_chart %}
+// Monthly bill by service (Cost Explorer console-style), with the
+// console's chart-type toggle: grouped bars, lines, stacked bars.
+// Categorical slots in fixed order (validated palette); "Other" is the
+// neutral fold, never a generated 9th hue. Color follows the entity
+// across every mode.
 (function() {
-    const typeLabels = {
-        ebs_snapshot: 'EBS Snapshots',
-        ebs_volume: 'EBS Volumes',
-        ec2_instance: 'EC2 Instances',
-        elastic_ip: 'Elastic IPs',
-        nat_gateway: 'NAT Gateways',
-        load_balancer: 'Load Balancers',
-        vpc: 'VPCs'
-    };
-    let resourceChart = null;
+    const data = {{ cost_chart | tojson }};
+    const palette = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
+    const otherColor = '#a8a69f';
+    const colorFor = (s, i) => s.name === 'Other' ? otherColor : palette[i];
+    let costChart = null;
 
-    // (Re)draw the bar chart in place — called at load and on range change.
-    // items: [{ t: resource_type, v: monthly USD, c: resource count }]
-    function renderResourceChart(items) {
-        const wrap = document.getElementById('resourceChartWrap');
-        const empty = document.getElementById('resourceEmpty');
-        if (resourceChart) { resourceChart.destroy(); resourceChart = null; }
-        if (!items.length) {
-            wrap.style.display = 'none';
-            empty.style.display = 'flex';
-            return;
-        }
-        wrap.style.display = 'block';
-        empty.style.display = 'none';
-
-        const labels = items.map(i => typeLabels[i.t] || i.t.replace(/_/g, ' '));
-        const values = items.map(i => i.v);
-        const counts = items.map(i => i.c);
-        const total = values.reduce((a, b) => a + b, 0);
-
-        // Direct value labels at bar ends (axis is dropped: the values are
-        // read on the bars themselves)
-        const valueLabels = {
-            id: 'valueLabels',
-            afterDatasetsDraw(chart) {
-                const meta = chart.getDatasetMeta(0);
-                const c = chart.ctx;
-                c.save();
-                c.font = '600 11px sans-serif';
-                c.fillStyle = '#374151';
-                c.textBaseline = 'middle';
-                meta.data.forEach((bar, i) => {
-                    c.fillText(`$${values[i].toFixed(2)}`, bar.x + 6, bar.y);
-                });
-                c.restore();
+    function buildDatasets(mode) {
+        return data.series.map((s, i) => {
+            const color = colorFor(s, i);
+            if (mode === 'line') {
+                return {
+                    label: s.name, data: s.data,
+                    borderColor: color, backgroundColor: color,
+                    borderWidth: 2, pointRadius: 2.5, pointHoverRadius: 5, fill: false
+                };
             }
-        };
+            if (mode === 'grouped') {
+                return {
+                    label: s.name, data: s.data,
+                    backgroundColor: color, borderWidth: 0,
+                    borderRadius: 2, maxBarThickness: 8
+                };
+            }
+            return {
+                label: s.name, data: s.data,
+                backgroundColor: color, stack: 'bill',
+                // 1px surface gap between stacked segments
+                borderColor: '#ffffff', borderWidth: 1, maxBarThickness: 36
+            };
+        });
+    }
 
-        resourceChart = new Chart(document.getElementById('costByResourceChart'), {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    data: values,
-                    // One flat hue, no ramp: bar length already encodes the
-                    // amount, so coloring by value would re-encode it — the
-                    // color's only job is "this is waste" (amber = data;
-                    // green stays reserved for savings).
-                    backgroundColor: '#d97706',
-                    hoverBackgroundColor: '#b45309',
-                    borderWidth: 0,
-                    borderRadius: 4,
-                    maxBarThickness: 20
-                }]
-            },
-            plugins: [valueLabels],
+    function renderCostChart(mode) {
+        if (costChart) costChart.destroy();
+        const datasets = buildDatasets(mode);
+        // Rounded data-end on the topmost segment only, anchored stack below
+        if (mode === 'stacked' && datasets.length) {
+            datasets[datasets.length - 1].borderRadius = { topLeft: 4, topRight: 4 };
+        }
+        costChart = new Chart(document.getElementById('costByServiceChart'), {
+            type: mode === 'line' ? 'line' : 'bar',
+            data: { labels: data.labels, datasets: datasets },
             options: {
-                indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
-                layout: { padding: { right: 64 } },
+                interaction: { mode: 'nearest' },
                 plugins: {
-                    legend: { display: false },
+                    legend: {
+                        position: 'bottom',
+                        labels: { boxWidth: 9, boxHeight: 9, font: { size: 10 }, color: '#52514e' }
+                    },
                     tooltip: {
-                        displayColors: false,
-                        padding: 10,
                         callbacks: {
-                            label: ctx => {
-                                const pct = total > 0 ? (ctx.parsed.x / total * 100).toFixed(0) : 0;
-                                const cnt = counts[ctx.dataIndex];
-                                return [
-                                    `$${ctx.parsed.x.toFixed(2)}/mo · ${pct}% of waste`,
-                                    `${cnt} resource${cnt > 1 ? 's' : ''}`
-                                ];
+                            label: (ctx) => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`,
+                            footer: (items) => {
+                                const total = items[0].chart.data.datasets
+                                    .reduce((sum, d) => sum + (d.data[items[0].dataIndex] || 0), 0);
+                                return `Month total: $${total.toFixed(2)}`;
                             }
                         }
                     }
                 },
                 scales: {
-                    x: { display: false },
-                    y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11 } } }
+                    x: {
+                        stacked: mode === 'stacked',
+                        grid: { display: false },
+                        ticks: { color: '#898781', font: { size: 11 } }
+                    },
+                    y: {
+                        stacked: mode === 'stacked',
+                        grid: { color: '#ececec' },
+                        border: { display: false },
+                        ticks: { color: '#898781', font: { size: 11 }, callback: (v) => '$' + v }
+                    }
                 }
             }
         });
     }
 
-    // Range buttons: fetch and redraw in place (state is client-side only,
-    // the ?trend= URL param belongs to the trend chart)
-    document.querySelectorAll('.resource-range-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            try {
-                const res = await fetch(`/api/dashboard/waste-by-resource?range=${btn.dataset.range}`);
-                if (!res.ok) return;
-                const data = await res.json();
-                renderResourceChart(data.items.map(i => ({ t: i.resource_type, v: i.total, c: i.count })));
-                document.getElementById('resourceSubtitle').textContent = data.subtitle;
-                document.querySelectorAll('.resource-range-btn').forEach(b => {
-                    b.classList.toggle('btn-primary', b === btn);
-                    b.classList.toggle('btn-outline', b !== btn);
-                    if (b === btn) b.setAttribute('aria-current', 'true');
-                    else b.removeAttribute('aria-current');
-                });
-            } catch (err) {
-                // Network hiccup: keep the current chart
-            }
+    document.querySelectorAll('#costChartMode .chart-mode-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#costChartMode .chart-mode-btn').forEach((b) => {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
+            btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
+            renderCostChart(btn.dataset.mode);
         });
     });
-
-    // Initial render with server-side data
-    renderResourceChart([
-        {% for item in waste_by_resource %}{ t: '{{ item.resource_type }}', v: {{ "%.4f"|format(item.total_eur or 0) }}, c: {{ item.cnt or 0 }} }{% if not loop.last %},{% endif %}{% endfor %}
-    ]);
+    renderCostChart('stacked');
 })();
+{% endif %}
 
-// AWS Spend details modal: a11y mirrors the recommendations page's
-// resource modal (Esc + backdrop to close, focus moved in, then restored
-// to the opener).
-let spendModalOpener = null;
-function openSpendModal() {
-    const modal = document.getElementById('spendModal');
+// Cost details modals (AWS Spend, Total Cost): a11y mirrors the
+// recommendations page's resource modal (Esc + backdrop to close, focus
+// moved in, then restored to the opener).
+const COST_MODAL_IDS = ['spendModal', 'totalCostModal', 'savedModal', 'recoverableModal'];
+let costModalOpener = null;
+function openCostModal(id) {
+    const modal = document.getElementById(id);
     if (!modal) return;
-    spendModalOpener = document.activeElement;
+    costModalOpener = document.activeElement;
     modal.style.display = 'flex';
-    document.getElementById('spendModalClose').focus();
+    modal.querySelector('[data-modal-close]').focus();
 }
-function closeSpendModal() {
-    const modal = document.getElementById('spendModal');
+function closeCostModal(id) {
+    const modal = document.getElementById(id);
     if (!modal) return;
     modal.style.display = 'none';
-    if (spendModalOpener && spendModalOpener.focus) spendModalOpener.focus();
-    spendModalOpener = null;
+    if (costModalOpener && costModalOpener.focus) costModalOpener.focus();
+    costModalOpener = null;
 }
 document.addEventListener('keydown', (e) => {
-    const modal = document.getElementById('spendModal');
-    if (e.key === 'Escape' && modal && modal.style.display === 'flex') closeSpendModal();
+    if (e.key !== 'Escape') return;
+    COST_MODAL_IDS.forEach((id) => {
+        const modal = document.getElementById(id);
+        if (modal && modal.style.display === 'flex') closeCostModal(id);
+    });
 });
 
 {% if waste_trend %}
