@@ -152,6 +152,7 @@ class SavingsTracker:
             JOIN waste_detected w ON r.waste_id = w.id
             WHERE a.id = %s
               AND a.action_status = 'success'
+              AND a.dry_run = false
               AND a.action_type = 'stop';
         """,
             (action_log_id,),
@@ -329,6 +330,7 @@ class SavingsTracker:
             FROM actions_log a
             LEFT JOIN savings_realized s ON s.recommendation_id = a.recommendation_id
             WHERE a.action_status = 'success'
+              AND a.dry_run = false
               AND a.action_type IN ('stop', 'terminate', 'downsize')
               AND s.id IS NULL
               AND a.action_date < NOW() - INTERVAL '%s days'
