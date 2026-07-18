@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from psycopg2.extras import Json
 
-from state import get_db, templates, _config_manager, _aws_status, USD_TO_EUR, DAYS_PER_MONTH
+from state import get_db, templates, _config_manager, _aws_status, DAYS_PER_MONTH
 from schemas import ActionRequest, AskQuestionRequest
 from jobs import _execute_ec2_boto3
 from utils.action_registry import execution_mode, EXECUTION_MODES
@@ -125,21 +125,18 @@ def recommendations(
 
     # Coherence cap (finops, display-time PER-SERVICE cap). A global cap on the
     # total hides per-service overstatements behind big uncovered lines (EC2
-    # idle estimated at ~7 € while real EC2 compute is 0.26 €, masked by a
-    # 6.81 € WAF bill). So each service's estimated savings are capped at that
+    # idle estimated at ~$7 while real EC2 compute is $0.26, masked by a
+    # $6.81 WAF bill). So each service's estimated savings are capped at that
     # service's own real 30-day Cost Explorer spend, then summed. Same filtered
     # set as total_savings (reuses where_clause); no data is mutated; the raw
     # estimate is disclosed in the note/tooltip.
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT service,
-               SUM(CASE WHEN currency = 'USD' THEN cost * %s ELSE cost END) AS eur
+               SUM(cost) AS eur
         FROM cloud_costs_raw
         WHERE usage_date >= CURRENT_DATE - 30
         GROUP BY service
-        """,
-        (USD_TO_EUR,),
-    )
+        """)
     service_spend = {row["service"]: float(row["eur"] or 0) for row in cursor.fetchall()}
 
     # Age-aware split: only resources old enough to have been billed through
@@ -213,8 +210,8 @@ def recommendations(
         row["savings_capped"] = raw * factor
         row["savings_is_capped"] = factor < 0.9995
         # Same factor scales the row's Monthly cost so an idle resource shows a
-        # realistic cost ≈ its realistic saving (no 3.56 €/mo cost next to a
-        # 0.13 € saving on one line). List price kept for the tooltip. Computed
+        # realistic cost ≈ its realistic saving (no $3.56/mo cost next to a
+        # $0.13 saving on one line). List price kept for the tooltip. Computed
         # here in float — the metadata value is a Decimal and Decimal * float
         # raises in the template.
         mc_raw = float(row["monthly_cost"]) if row["monthly_cost"] is not None else raw
@@ -1114,19 +1111,16 @@ def chat_about_recommendations(body: AskQuestionRequest, conn=Depends(get_db)):
     lines = "\n".join(_fmt_rec_line(r) for r in rows)
 
     # Same per-service coherence cap the summary tile shows ("realistic ·
-    # X € (capped to real spend)") — computed here too so the model can
+    # $X (capped to real spend)"), computed here too so the model can
     # explain that figure instead of denying it exists.
     cursor = conn.cursor()
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT service,
-               SUM(CASE WHEN currency = 'USD' THEN cost * %s ELSE cost END) AS eur
+               SUM(cost) AS eur
         FROM cloud_costs_raw
         WHERE usage_date >= CURRENT_DATE - 30
         GROUP BY service
-        """,
-        (USD_TO_EUR,),
-    )
+        """)
     service_spend = {r["service"]: float(r["eur"] or 0) for r in cursor.fetchall()}
     cursor.close()
     # Age-aware, like the page: only resources older than the billing window

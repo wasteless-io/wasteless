@@ -70,7 +70,7 @@ def test_database_connection():
         row = cursor.fetchone()
         if row:
             print(
-                f"✅ Found pending recommendation: ID={row[0]}, Type={row[1]}, Instance={row[2]}, Savings=€{row[3]:.2f}"
+                f"✅ Found pending recommendation: ID={row[0]}, Type={row[1]}, Instance={row[2]}, Savings=${row[3]:.2f}"
             )
             cursor.close()
             return conn, row[0]  # Return connection and rec_id for next test

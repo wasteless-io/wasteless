@@ -152,7 +152,7 @@
     .col-bar-wrap {
         position: relative;
         width: 20px;
-        min-height: 3px;   /* a 0.01 € service still shows a sliver */
+        min-height: 3px;   /* a 0.01 $ service still shows a sliver */
     }
     .col-value {
         position: absolute;
@@ -305,8 +305,8 @@
     <span aria-hidden="true" style="font-size: 1rem; line-height: 1.2;">&#9888;</span>
     <span>
         <strong>Estimated waste exceeds your real spend.</strong>
-        Active waste is estimated at <strong>{{ "%.2f"|format(waste_exceeds_spend.waste) }} &euro;/mo</strong>,
-        more than your actual cloud bill of <strong>{{ "%.2f"|format(waste_exceeds_spend.spend) }} &euro;</strong>
+        Active waste is estimated at <strong>{{ "%.2f"|format(waste_exceeds_spend.waste) }} $/mo</strong>,
+        more than your actual cloud bill of <strong>{{ "%.2f"|format(waste_exceeds_spend.spend) }} $</strong>
         over the last 30 days &mdash; you can&rsquo;t save more than you spend. Detector estimates use
         on-demand list prices (24/7), so treat these as an upper bound, not the bill.
     </span>
@@ -326,7 +326,7 @@
     <!-- What leaks: current waste + how it moved -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Monthly Waste</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Active waste — what your still-existing, not-yet-remediated idle and orphaned resources cost per month if nothing changes (includes any you've declined or queued). This is smaller than the Reports page's 'Waste detected', which also counts items since resolved or gone (obsolete)."><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span><span class="ring-unit">€</span><span class="ring-month">{{ now().strftime('%B') }}</span></span></span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Active waste — what your still-existing, not-yet-remediated idle and orphaned resources cost per month if nothing changes (includes any you've declined or queued). This is smaller than the Reports page's 'Waste detected', which also counts items since resolved or gone (obsolete)."><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(monthly_cost) }}</span><span class="ring-unit">$</span><span class="ring-month">{{ now().strftime('%B') }}</span></span></span></div>
     </div>
 
     <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
@@ -342,7 +342,7 @@
     <!-- What is proven: the number that justifies the tool -->
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">Savings Realized</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Savings actually measured on your bill after applied actions, verified rather than estimated"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span><span class="ring-unit">€</span></span></span></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: {% if (metrics.savings_realized or 0) > 0 %}var(--success){% else %}var(--gray-400){% endif %};"><span class="kpi-hover kpi-ring" tabindex="0" data-tip="Savings actually measured on your bill after applied actions, verified rather than estimated"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(metrics.savings_realized or 0) }}</span><span class="ring-unit">$</span></span></span></div>
     </div>
 
     {# Real AWS bill (Cost Explorer) — only earns a slot once collected.
@@ -351,7 +351,7 @@
     <div style="width: 1px; height: 56px; background: var(--gray-400);"></div>
     <div style="text-align: center;">
         <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-500); font-weight: 600; margin-bottom: 0.2rem;">AWS Spend</div>
-        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><a class="kpi-hover kpi-ring" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Your real AWS bill over the last 30 days (rolling window), straight from Cost Explorer. The Dashboard's AWS Spend covers the last full calendar month instead. Click to open the console"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(aws_spend_30d_eur) }}</span><span class="ring-unit">€</span>{% if aws_spend_vs_avg == 'above' %}<span style="font-size: 0.55rem; color: var(--danger); vertical-align: 8px;" aria-hidden="true">&#9650;</span><span class="sr-only">above monthly average</span>{% elif aws_spend_vs_avg == 'below' %}<span style="font-size: 0.55rem; color: var(--success); vertical-align: 8px;" aria-hidden="true">&#9660;</span><span class="sr-only">below monthly average</span>{% endif %}<span class="ring-month">30 days</span></span></a></div>
+        <div style="font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--gray-800);"><a class="kpi-hover kpi-ring" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Your real AWS bill over the last 30 days (rolling window), straight from Cost Explorer. The Dashboard's AWS Spend covers the last full calendar month instead. Click to open the console"><span class="kpi-zoom"><span class="countup">{{ "%.2f"|format(aws_spend_30d_eur) }}</span><span class="ring-unit">$</span>{% if aws_spend_vs_avg == 'above' %}<span style="font-size: 0.55rem; color: var(--danger); vertical-align: 8px;" aria-hidden="true">&#9650;</span><span class="sr-only">above monthly average</span>{% elif aws_spend_vs_avg == 'below' %}<span style="font-size: 0.55rem; color: var(--success); vertical-align: 8px;" aria-hidden="true">&#9660;</span><span class="sr-only">below monthly average</span>{% endif %}<span class="ring-month">30 days</span></span></a></div>
     </div>
 
     {# Billed-services count, same source and window as AWS Spend #}
@@ -426,7 +426,7 @@
                 <tr>
                     <th style="padding: 0.35rem 0.5rem; text-align: left;">Type</th>
                     <th style="padding: 0.35rem 0.5rem; text-align: center;">Count</th>
-                    <th style="padding: 0.35rem 0.5rem; text-align: right;">EUR/mo</th>
+                    <th style="padding: 0.35rem 0.5rem; text-align: right;">USD/mo</th>
                     <th style="padding: 0.35rem 0.5rem; text-align: right; min-width: 80px;"></th>
                 </tr>
             </thead>
@@ -448,7 +448,7 @@
                     <td style="padding: 0.35rem 0.5rem; text-align: center;">
                         <span style="background: var(--gray-100); color: var(--gray-700); border-radius: 10px; padding: 0.1rem 0.5rem; font-size: 0.78rem; font-weight: 600;">{{ item.cnt }}</span>
                     </td>
-                    <td style="padding: 0.35rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} €</td>
+                    <td style="padding: 0.35rem 0.5rem; text-align: right; font-weight: 600; color: var(--gray-800);">{{ "%.2f"|format(item.total_eur) }} $</td>
                     <td style="padding: 0.35rem 0.5rem;">
                         <div style="width: 100%; height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden;">
                             <div class="fill-bar" style="height: 100%; width: {{ bar_pct }}%; background: {{ bar_color }}; border-radius: 3px; animation-delay: {{ loop.index0 * 90 }}ms;"></div>
@@ -489,7 +489,7 @@
                         {% else %}{{ item.resource_type | replace('_', ' ') }} detected{% endif %}
                     </span>
                 </div>
-                <span style="font-size: 0.78rem; color: var(--warning); font-weight: 600; flex-shrink: 0;">+{{ "%.2f"|format(item.amount) }} €/mo</span>
+                <span style="font-size: 0.78rem; color: var(--warning); font-weight: 600; flex-shrink: 0;">+{{ "%.2f"|format(item.amount) }} $/mo</span>
                 {% else %}
                 <span style="width: 8px; height: 8px; border-radius: 50%; background: {% if item.action_status == 'success' %}var(--success){% elif item.action_status == 'pending' %}var(--warning){% else %}var(--danger){% endif %}; flex-shrink: 0;"></span>
                 <div style="flex: 1; min-width: 0; overflow: hidden;">
@@ -535,10 +535,10 @@
     <div class="col-chart" role="img" aria-label="Column chart of AWS spend by service over the last 30 days">
         {% for item in top_services %}
         {% set spct = ((item.total_eur / smax) * 100) if smax > 0 else 0 %}
-        <div class="col-slot kpi-hover" tabindex="0" data-tip="{{ item.service }} — {{ '%.2f'|format(item.total_eur) }} € over the last 30 days">
+        <div class="col-slot kpi-hover" tabindex="0" data-tip="{{ item.service }} — {{ '%.2f'|format(item.total_eur) }} $ over the last 30 days">
             <div class="col-track">
                 <div class="col-bar-wrap" style="height: {{ spct }}%;">
-                    <span class="col-value">{{ "%.2f"|format(item.total_eur) }} €</span>
+                    <span class="col-value">{{ "%.2f"|format(item.total_eur) }} $</span>
                     <div class="col-bar fill-col" style="animation-delay: {{ loop.index0 * 90 }}ms;"></div>
                 </div>
             </div>

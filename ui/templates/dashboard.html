@@ -2,12 +2,12 @@
 
 {% block title %}Dashboard - Wasteless.io{% endblock %}
 
-{# Single money format for the whole page: "<€0.01" under a cent, cents up
-   to €100, whole euros (grouped) above — large KPIs don't need cent noise. #}
+{# Single money format for the whole page: "<$0.01" under a cent, cents up
+   to $100, whole dollars (grouped) above — large KPIs don't need cent noise. #}
 {# .countup: re-counted from 0 at load by the shared script in base.html #}
 {% macro eur(v) -%}
 {%- set v = v or 0 -%}
-<span class="countup">{%- if v > 0 and v < 0.01 -%}&lt;€0.01{%- elif v < 100 -%}€{{ "%.2f"|format(v) }}{%- else -%}€{{ "{:,.0f}".format(v) }}{%- endif -%}</span>
+<span class="countup">{%- if v > 0 and v < 0.01 -%}&lt;$0.01{%- elif v < 100 -%}${{ "%.2f"|format(v) }}{%- else -%}${{ "{:,.0f}".format(v) }}{%- endif -%}</span>
 {%- endmacro %}
 
 {% block extra_css %}
@@ -36,7 +36,7 @@
     .alert-banner a { color: var(--danger-text); font-weight: 600; }
 
     .card.compact, .card.slim { padding: 1.5rem; }
-    /* Top row: 3 financial KPIs capped at 880px, Already Burned fills the rest */
+    /* Top row: 4 financial KPIs capped at 880px, Cost of Inaction fills the rest */
     .top-grid {
         display: grid;
         grid-template-columns: minmax(0, 880px) 1fr;
@@ -72,6 +72,89 @@
     .text-warning { color: var(--warning-text); }
     .text-danger { color: var(--danger-text); }
     .is-muted { color: var(--gray-500); }
+
+    /* Same soft opacity swing as the Overview's Pending Actions count:
+       rendered only while something actually awaits a decision. */
+    @keyframes pending-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.25; }
+    }
+    .pending-blink { animation: pending-blink 1.6s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) {
+        .pending-blink { animation: none; }
+    }
+
+    /* Remediation control loop: five clickable stages, arrows between */
+    .loop { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .stage {
+        display: block;
+        padding: 0.4rem 1rem;
+        text-align: center;
+        position: relative;
+        border-radius: 10px;
+        text-decoration: none;
+        transition: background 0.15s;
+    }
+    .stage:hover { background: var(--gray-100); }
+    .stage + .stage::before {
+        content: "\2192";
+        position: absolute;
+        left: -0.55rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gray-400);
+        font-size: 1rem;
+    }
+    .stage-name {
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--gray-500);
+    }
+    .stage-val {
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin-top: 0.2rem;
+        color: var(--ink);
+    }
+    .stage-val .unit { font-size: 0.8rem; font-weight: 400; }
+    .stage-sub { font-size: 0.72rem; color: var(--gray-500); margin-top: 0.1rem; }
+
+    /* Next best action: the single highest-value pending decision */
+    .nba-amount { font-size: 1.7rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+    .nba-amount .unit { font-size: 0.85rem; font-weight: 400; color: var(--ink-secondary); }
+    .nba-id { font-family: var(--font-mono); font-size: 0.78rem; color: var(--gray-700); }
+    .nba-evidence {
+        font-size: 0.78rem;
+        color: var(--gray-600);
+        margin: 0.5rem 0 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .nba-next {
+        border-top: 1px solid var(--hairline);
+        margin-top: 0.9rem;
+        padding-top: 0.6rem;
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .nba-next .r { display: flex; justify-content: space-between; gap: 0.5rem; }
+    .nba-next .amt { color: var(--gray-700); font-weight: 600; white-space: nowrap; }
+    .conf-pill {
+        font-size: 0.68rem;
+        font-weight: 600;
+        border-radius: 999px;
+        padding: 0.1rem 0.5rem;
+    }
+    .conf-high { color: var(--success-text); background: rgba(34,197,94,0.1); }
+    .conf-mid { color: var(--warning-text); background: rgba(245,158,11,0.12); }
+    .conf-low { color: var(--danger-text); background: rgba(239,68,68,0.1); }
 
     /* Chart / stat cards */
     .charts-grid {
@@ -217,6 +300,13 @@
 
     @media (max-width: 1024px) {
         .top-grid, .charts-grid { grid-template-columns: 1fr; }
+        .loop { grid-template-columns: 1fr; }
+        .stage + .stage::before {
+            content: "\2193";
+            left: 50%;
+            top: -0.7rem;
+            transform: translateX(-50%);
+        }
         /* .grid-3/.grid-4 wrap to 2 columns here (base.html): keep the
            divider only where a left neighbour actually remains */
         .grid-3 .kpi:nth-child(odd), .grid-4 .kpi:nth-child(odd) { border-left: none; }
@@ -253,79 +343,19 @@
 </div>
 {% endif %}
 
-<!-- Top row: Financial Overview + Already Burned -->
+<!-- Top row: Financial Overview + Cost of Inaction -->
 <div class="top-grid">
 <div class="card compact">
     <div class="section-label">Financial Overview</div>
-    <div class="grid grid-5">
+    <div class="grid grid-4">
 
-        <!-- Monthly Waste -->
-        <div class="kpi">
-            <div class="kpi-icon">
-                <span class="bg-warning"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
-            </div>
-            <div class="kpi-value text-warning"><span class="kpi-hover" tabindex="0" data-tip="Active detected waste per month{% if (kpis.declined_count or 0) > 0 %} — includes {{ "%.2f"|format(kpis.declined_monthly or 0) }} €/mo you reviewed and declined{% endif %} · AWS on-demand pricing at a fixed {{ usd_to_eur }} USD&rarr;EUR rate"><span class="kpi-zoom">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></span></span></div>
-            <div class="kpi-label">Monthly Waste</div>
-            <div class="kpi-sub">{{ eur((kpis.active_monthly or 0) * 12) }}/year{% if (kpis.declined_count or 0) > 0 %} · incl. {{ eur(kpis.declined_monthly) }}/mo declined after review{% endif %}</div>
-        </div>
-
-        <!-- Wasted so far (cumulative sunk cost of the still-pending backlog;
-             moved here from the Recommendations bar, where it clashed with the
-             forward Savings/mo rate) -->
-        <div class="kpi">
-            <div class="kpi-icon">
-                <span class="{% if (kpis.wasted_so_far or 0) > 0 %}bg-danger{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 22a10 10 0 100-20"/><path d="M12 12l3 2"/></svg></span>
-            </div>
-            {% if (kpis.wasted_so_far or 0) > 0 %}
-            <div class="kpi-value text-danger"><span class="kpi-hover" tabindex="0" data-tip="What the still-pending resources have already cost since each was created — monthly cost prorated per day of age. Grows every day they stay unresolved, and drops as you approve them. Backward-looking cumulative amount, unlike Pending Savings (a forward monthly rate)."><span class="kpi-zoom">{{ eur(kpis.wasted_so_far) }}</span></span></div>
-            <div class="kpi-label">Wasted so far</div>
-            <div class="kpi-sub">Pending backlog · since each was created</div>
-            {% else %}
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">Wasted so far</div>
-            <div class="kpi-sub">Nothing pending long enough to add up</div>
-            {% endif %}
-        </div>
-
-        <!-- Savings Realized -->
-        <div class="kpi">
-            <div class="kpi-icon">
-                <span class="{% if (kpis.cumulative_savings or 0) > 0 %}bg-success{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
-            </div>
-            {% if (kpis.cumulative_savings or 0) > 0 %}
-            <div class="kpi-value text-success"><span class="kpi-hover" tabindex="0" data-tip="Cumulative savings since launch, verified via AWS Cost Explorer — measured, not estimated"><span class="kpi-zoom">{{ eur(kpis.cumulative_savings) }}</span></span></div>
-            <div class="kpi-label">Savings Realized</div>
-            <div class="kpi-sub">Since launch · verified via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a></div>
-            {% else %}
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">Savings Realized</div>
-            <div class="kpi-sub">Appears after your first approved action</div>
-            {% endif %}
-        </div>
-
-        <!-- Pending Savings (amount at stake; the count lives in Operational Status) -->
-        <div class="kpi">
-            <div class="kpi-icon">
-                <span class="{% if (kpis.pending_count or 0) > 0 %}bg-success{% else %}bg-neutral{% endif %}"><svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12M6 22h12M8 2v4l4 4 4-4V2M8 22v-4l4-4 4 4v4"/></svg></span>
-            </div>
-            {% if (kpis.pending_count or 0) > 0 %}
-            <div class="kpi-value text-success"><span class="kpi-hover" tabindex="0" data-tip="Recoverable every month if you approve the {{ kpis.pending_count }} pending recommendation{{ 's' if (kpis.pending_count or 0) > 1 }}"><span class="kpi-zoom">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></span></span></div>
-            <div class="kpi-label">Pending Savings</div>
-            <div class="kpi-sub">Recoverable if approved</div>
-            {% else %}
-            <div class="kpi-value is-muted">—</div>
-            <div class="kpi-label">Pending Savings</div>
-            <div class="kpi-sub">Nothing awaiting approval</div>
-            {% endif %}
-        </div>
-
-        <!-- AWS Spend (last full month, Cost Explorer) — the whole bill,
+        <!-- AWS Spend (last full month, Cost Explorer): the whole bill,
              so waste and savings read against their real denominator -->
         <div class="kpi">
             {% if aws_spend_eur is not none %}
-            <div class="kpi-value"><a class="kpi-hover" href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" data-tip="Total AWS bill for {{ aws_spend_month }} (last full calendar month), from Cost Explorer — collected daily, converted at the fixed {{ usd_to_eur }} USD&rarr;EUR rate. The Overview's AWS Spend covers the last 30 days (rolling) instead · click to open Cost Explorer"><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></a></div>
+            <div class="kpi-value"><span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="The whole AWS bill for {{ aws_spend_month }}, not just detected waste · click for the breakdown" onclick="openSpendModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSpendModal();}"><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></span></div>
             <div class="kpi-label">AWS Spend</div>
-            <div class="kpi-sub">{{ aws_spend_month }} · whole bill, not just waste</div>
+            <div class="kpi-sub">{% if aws_spend_delta_pct is not none %}<span class="{% if aws_spend_delta_pct > 0 %}text-danger{% elif aws_spend_delta_pct < 0 %}text-success{% endif %}" style="font-weight: 600;">{{ '+' if aws_spend_delta_pct > 0 }}{{ "%.1f"|format(aws_spend_delta_pct) }}%</span> vs previous month{% elif aws_spend_period %}{{ aws_spend_month.split(' ')[0] }} · {{ aws_spend_period }} collected{% else %}{{ aws_spend_month }}{% endif %}</div>
             {% else %}
             <div class="kpi-value is-muted">—</div>
             <div class="kpi-label">AWS Spend</div>
@@ -333,36 +363,72 @@
             {% endif %}
         </div>
 
+        <!-- Monthly Waste -->
+        <div class="kpi">
+            <div class="kpi-value text-warning"><span class="kpi-hover" tabindex="0" data-tip="Active detected waste per month{% if (kpis.declined_count or 0) > 0 %} — includes {{ "%.2f"|format(kpis.declined_monthly or 0) }} $/mo you reviewed and declined{% endif %} · AWS on-demand list prices, USD"><span class="kpi-zoom">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></span></span></div>
+            <div class="kpi-label">Monthly Waste</div>
+            <div class="kpi-sub">{% if waste_pct_of_bill is not none %}{{ "%.0f"|format(waste_pct_of_bill) }}% of the AWS bill · {% endif %}{{ eur((kpis.active_monthly or 0) * 12) }}/year{% if (kpis.declined_count or 0) > 0 %} · incl. {{ eur(kpis.declined_monthly) }}/mo declined{% endif %}</div>
+        </div>
+
+        <!-- Recoverable Now (ex-Pending Savings: the amount and the decision
+             count belong together, one card, one call to action) -->
+        <div class="kpi">
+            {% if (kpis.pending_count or 0) > 0 %}
+            <div class="kpi-value text-success"><span class="kpi-hover" tabindex="0" data-tip="Recoverable every month if you approve the {{ kpis.pending_count }} pending recommendation{{ 's' if (kpis.pending_count or 0) > 1 }}"><span class="kpi-zoom">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></span></span></div>
+            <div class="kpi-label">Recoverable Now</div>
+            <div class="kpi-sub"><a href="/recommendations" class="kpi-link"><span class="pending-blink">{{ kpis.pending_count }}</span> action{{ 's' if kpis.pending_count > 1 }} await{{ '' if kpis.pending_count > 1 else 's' }} a decision &rarr;</a></div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">Recoverable Now</div>
+            <div class="kpi-sub">Nothing awaiting approval</div>
+            {% endif %}
+        </div>
+
+        <!-- Verified Savings: a monthly rate (savings_realized stores
+             cost_before - cost_after as average monthly cost), previously
+             mislabeled as a cumulative "since launch" total -->
+        <div class="kpi">
+            {% if (kpis.verified_savings or 0) > 0 %}
+            <div class="kpi-value text-success"><span class="kpi-hover" tabindex="0" data-tip="Monthly savings actually measured on the bill after applied actions, verified via AWS Cost Explorer: measured, not estimated"><span class="kpi-zoom">{{ eur(kpis.verified_savings) }}<span class="unit">/mo</span></span></span></div>
+            <div class="kpi-label">Verified Savings</div>
+            <div class="kpi-sub">measured via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a>{% if kpis.accuracy_pct is not none %} · {{ "%.0f"|format(kpis.accuracy_pct) }}% of estimate{% endif %}</div>
+            {% else %}
+            <div class="kpi-value is-muted">—</div>
+            <div class="kpi-label">Verified Savings</div>
+            <div class="kpi-sub">Appears after your first verified action</div>
+            {% endif %}
+        </div>
+
     </div>
     <div class="card-footnote">
-        All figures in EUR · AWS on-demand pricing at a fixed USD→EUR rate of {{ usd_to_eur }}
+        All figures in USD, as billed by AWS · estimates from on-demand list prices
     </div>
 </div>
 
-<!-- Already Burned (cost of inaction) -->
+<!-- Cost of Inaction (merges the former "Already Burned" card and the
+     "Wasted so far" KPI: one backward-looking loss, one daily rate, one
+     projection, one call to action) -->
 <div class="card chart-card">
     <div class="chart-head">
         <div>
-            <h3 class="chart-title">Already Burned</h3>
-            <span class="chart-subtitle">Estimated cost of inaction · early history partly reconstructed</span>
+            <h3 class="chart-title">Cost of Inaction</h3>
+            <span class="chart-subtitle">What leaving detected waste running has already cost</span>
         </div>
     </div>
     {% if burned_total > 0 %}
     <div class="stat-center">
         <div class="stat-value">
-            <span class="kpi-hover" tabindex="0" data-tip="Estimated cost of leaving detected waste running, accumulated since {{ burned_since.strftime('%b %Y') }} — currently {{ "%.2f"|format(daily_burn) }} €/day"><span class="kpi-zoom">{{ eur(burned_total) }}</span></span><span class="text-danger stat-arrow" aria-hidden="true">&#8595;</span><span class="sr-only">(money lost, growing)</span>
+            <span class="kpi-hover" tabindex="0" data-tip="Estimated cost of leaving detected waste running, accumulated since {{ burned_since.strftime('%b %Y') }}, currently {{ "%.2f"|format(daily_burn) }} $/day. Early history partly reconstructed"><span class="kpi-zoom">{{ eur(burned_total) }}</span></span><span class="text-danger stat-arrow" aria-hidden="true">&#8595;</span><span class="sr-only">(money lost, growing)</span>
         </div>
         <div class="stat-sub">
             since {{ burned_since.strftime('%b %-d, %Y') }} · {{ eur(daily_burn) }}/day now
         </div>
-        {% if burn_delta is not none %}
         <div class="stat-sub">
-            {% if burn_delta|abs < 0.005 %}stable vs 30 days ago{% else %}{{ '+' if burn_delta > 0 else '−' }}{{ eur(burn_delta|abs) }}/day vs 30 days ago{% endif %}
+            {% if burn_delta is not none and burn_delta|abs >= 0.005 %}{{ '+' if burn_delta > 0 else '−' }}{{ eur(burn_delta|abs) }}/day vs 30 days ago · {% endif %}+{{ eur(kpis.active_monthly) }} more in 30 days
         </div>
-        {% endif %}
     </div>
     <div class="card-footnote">
-        {{ eur((kpis.active_monthly or 0) * 12) }}/yr at this rate
+        {% if (kpis.waste_count or 0) > 0 %}<a href="/recommendations" class="kpi-link">Review the {{ kpis.waste_count }} responsible resource{{ 's' if kpis.waste_count > 1 }} &rarr;</a>{% else %}{{ eur((kpis.active_monthly or 0) * 12) }}/yr at this rate{% endif %}
     </div>
     {% else %}
     <div class="chart-empty">
@@ -372,9 +438,64 @@
 </div>
 </div>
 
-<!-- Forecast Line Chart -->
+<!-- Remediation control loop: the full journey from detection to proof.
+     Each stage links to the page where that queue is handled. -->
+<div class="card compact mt-1 mb-1">
+    <div class="section-label">Remediation control loop</div>
+    <div class="loop">
+        <a class="stage" href="/cloud-resources">
+            <div class="stage-name">Detected</div>
+            <div class="stage-val text-warning">{{ eur(kpis.active_monthly) }}<span class="unit">/mo</span></div>
+            <div class="stage-sub">{{ kpis.waste_count or 0 }} resource{{ 's' if (kpis.waste_count or 0) != 1 }}</div>
+        </a>
+        <a class="stage" href="/recommendations">
+            <div class="stage-name">Awaiting review</div>
+            {% if (kpis.pending_count or 0) > 0 %}
+            <div class="stage-val">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></div>
+            <div class="stage-sub">{{ kpis.pending_count }} recommendation{{ 's' if kpis.pending_count != 1 }}</div>
+            {% else %}
+            <div class="stage-val is-muted">—</div>
+            <div class="stage-sub">queue is clear</div>
+            {% endif %}
+        </a>
+        <a class="stage" href="/recommendations">
+            <div class="stage-name">Queued</div>
+            {% if (kpis.scheduled_count or 0) + (kpis.manual_count or 0) > 0 %}
+            <div class="stage-val">{{ eur((kpis.scheduled_monthly or 0) + (kpis.manual_monthly or 0)) }}<span class="unit">/mo</span></div>
+            <div class="stage-sub">{{ kpis.scheduled_count or 0 }} in grace period · {{ kpis.manual_count or 0 }} manual to-do{{ 's' if (kpis.manual_count or 0) != 1 }}</div>
+            {% else %}
+            <div class="stage-val is-muted">—</div>
+            <div class="stage-sub">nothing queued</div>
+            {% endif %}
+        </a>
+        <a class="stage" href="/history">
+            <div class="stage-name">Applied</div>
+            {% if (kpis.applied_count or 0) > 0 %}
+            <div class="stage-val">{{ kpis.applied_count }}</div>
+            <div class="stage-sub">action{{ 's' if kpis.applied_count != 1 }}{% if (kpis.failed_7d or 0) > 0 %} · <span class="text-danger">{{ kpis.failed_7d }} failed (7d)</span>{% endif %}</div>
+            {% else %}
+            <div class="stage-val is-muted">—</div>
+            <div class="stage-sub">no action applied yet</div>
+            {% endif %}
+        </a>
+        <a class="stage" href="/history">
+            <div class="stage-name">Verified</div>
+            {% if (kpis.verified_savings or 0) > 0 %}
+            <div class="stage-val text-success">{{ eur(kpis.verified_savings) }}<span class="unit">/mo</span></div>
+            <div class="stage-sub">{{ kpis.verified_count or 0 }} measurement{{ 's' if (kpis.verified_count or 0) != 1 }} · Cost Explorer</div>
+            {% else %}
+            <div class="stage-val is-muted">—</div>
+            <div class="stage-sub">no measurement yet</div>
+            {% endif %}
+        </a>
+    </div>
+</div>
+
+<!-- Forecast Line Chart + Next best action -->
+{% if waste_trend or next_actions %}
+<div class="{% if waste_trend and next_actions %}charts-grid{% endif %} mb-1">
 {% if waste_trend %}
-<div class="card chart-card mb-1">
+<div class="card chart-card">
     <div class="chart-head">
         <div>
             <h3 class="chart-title">Waste Trend &amp; Forecast</h3>
@@ -402,6 +523,39 @@
         <p class="text-muted hint">The trend and forecast appear once enough history is collected for this range.</p>
         <div class="trend-progress" id="forecastProgress" aria-hidden="true"></div>
     </div>
+</div>
+{% endif %}
+
+{% if next_actions %}
+{% set top = next_actions[0] %}
+<div class="card chart-card">
+    <div class="section-label">Next best action</div>
+    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem;">
+        <div>
+            <div class="nba-amount">{{ eur(top.estimated_monthly_savings_eur) }}<span class="unit">/mo recoverable</span></div>
+            <div style="font-size: 0.82rem; color: var(--gray-700); margin-top: 0.2rem;">{{ top.action_required or top.recommendation_type|replace('_', ' ')|capitalize }}</div>
+            <div class="nba-id">{{ top.resource_id }}</div>
+        </div>
+        {% set conf = (top.confidence_score or 0) * 100 %}
+        <span class="conf-pill {% if conf >= 80 %}conf-high{% elif conf >= 50 %}conf-mid{% else %}conf-low{% endif %}"
+              title="Detector confidence score">{{ "%.0f"|format(conf) }}%</span>
+    </div>
+    <div class="nba-evidence">
+        <span>{{ top.waste_type|replace('_', ' ') }} · {{ top.resource_type|replace('_', ' ') }} · {{ top.age_days }} day{{ 's' if top.age_days != 1 }} old</span>
+        <span>Safeguards run again at execution: nothing touches AWS without approval</span>
+    </div>
+    <div style="margin-top: 0.85rem;">
+        <a class="btn btn-primary btn-sm" href="/recommendations">Review &amp; approve &rarr;</a>
+    </div>
+    {% if next_actions|length > 1 %}
+    <div class="nba-next">
+        {% for a in next_actions[1:] %}
+        <div class="r"><span>{{ a.resource_id|truncate(28, true) }} · {{ a.waste_type|replace('_', ' ') }}</span><span class="amt">{{ eur(a.estimated_monthly_savings_eur) }}/mo</span></div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
 </div>
 {% endif %}
 
@@ -476,29 +630,17 @@
     </div>
 </div>
 
-<!-- KPIs Row 2 — Operational View -->
+<!-- KPIs Row 2, operational view. "Actions Pending" moved into the
+     Recoverable Now KPI and the control loop's Awaiting-review stage. -->
 <div class="card compact mt-1">
     <div class="section-label">Operational Status</div>
-    <div class="grid grid-3">
+    <div class="grid grid-2">
 
         <!-- Waste Detected -->
         <div class="kpi">
             <div class="kpi-value"><span class="kpi-hover" tabindex="0" data-tip="Resources currently identified as active waste across all detectors"><span class="kpi-zoom"><span class="countup">{{ kpis.waste_count or 0 }}</span></span></span></div>
             <div class="kpi-label">Waste Detected</div>
             <div class="kpi-sub">resources identified</div>
-        </div>
-
-        <!-- Actions Pending -->
-        <div class="kpi">
-            <div class="kpi-value {% if (kpis.pending_count or 0) > 0 %}text-warning{% else %}is-muted{% endif %}"><span class="kpi-hover" tabindex="0" data-tip="Recommendations awaiting your review — nothing touches AWS without an approval"><span class="kpi-zoom"><span class="countup">{{ kpis.pending_count or 0 }}</span></span></span></div>
-            <div class="kpi-label">Actions Pending</div>
-            <div class="kpi-sub">
-                {% if (kpis.pending_count or 0) > 0 %}
-                <a href="/recommendations" class="kpi-link">Review &rarr;</a>
-                {% else %}
-                All clear
-                {% endif %}
-            </div>
         </div>
 
         <!-- Last Scan: relative freshness is the signal, clock time is detail -->
@@ -529,10 +671,57 @@
         <button onclick="refreshData()" class="btn btn-outline btn-sm">Refresh</button>
     </div>
 </div>
+
+{% if aws_spend_detail %}
+<!-- AWS Spend details modal (same gabarit as the recommendations page's
+     Resource-details modal): where the figure comes from, service by
+     service, with a deep link into Cost Explorer on the same window.
+     The console falls back to its default Cost Explorer view if it does
+     not recognize the range parameters. -->
+<div id="spendModal" role="dialog" aria-modal="true" aria-labelledby="spendModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeSpendModal()">
+    <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+            <h3 id="spendModalTitle" style="margin: 0; font-size: 1rem;">AWS Spend · {{ aws_spend_month }}</h3>
+            <button type="button" id="spendModalClose" aria-label="Close" onclick="closeSpendModal()" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
+        </div>
+        <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Whole bill, not just waste</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: var(--gray-800);">{{ eur(aws_spend_eur) }}</div>
+            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ aws_spend_detail.days_covered }} day{{ 's' if aws_spend_detail.days_covered != 1 }} collected · {{ aws_spend_month.split(' ')[0] }} {{ aws_spend_period }}</div>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--gray-700);">
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Source</span>
+                <span style="flex: 1;">AWS Cost Explorer API · daily UnblendedCost by service</span>
+            </div>
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Collected</span>
+                <span style="flex: 1;">once a day by the cost collector job · {{ aws_spend_detail.start }} &rarr; {{ aws_spend_detail.end }}</span>
+            </div>
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 0 0 130px; color: var(--gray-500);">Currency</span>
+                <span style="flex: 1;">USD, as billed by AWS · no conversion applied</span>
+            </div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin: 0.9rem 0 0.3rem;">By service</div>
+            {% for s in aws_spend_detail.services %}
+            <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
+                <span style="flex: 1; color: var(--gray-700); word-break: break-word;">{{ s.service }}</span>
+                <span style="flex: 0 0 auto; color: var(--gray-800); font-weight: 500;">{{ eur(s.eur) }}</span>
+                <span style="flex: 0 0 42px; text-align: right; color: var(--gray-500);">{{ "%.0f"|format(s.pct) }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="margin-top: 1rem;">
+            <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer?chartStyle=STACK&costAggregate=unBlendedCost&granularity=Daily&groupBy=%5B%22Service%22%5D&startDate={{ aws_spend_detail.start }}&endDate={{ aws_spend_detail.end }}" target="_blank" rel="noopener" style="font-size: 0.82rem; color: var(--primary); text-decoration: none;">Open this period in Cost Explorer &#8599;</a>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script src="/static/chart.umd.min.js"></script>
+<script src="/static/trend_forecast.js"></script>
 <script>
 (function() {
     const typeLabels = {
@@ -547,7 +736,7 @@
     let resourceChart = null;
 
     // (Re)draw the bar chart in place — called at load and on range change.
-    // items: [{ t: resource_type, v: monthly EUR, c: resource count }]
+    // items: [{ t: resource_type, v: monthly USD, c: resource count }]
     function renderResourceChart(items) {
         const wrap = document.getElementById('resourceChartWrap');
         const empty = document.getElementById('resourceEmpty');
@@ -577,7 +766,7 @@
                 c.fillStyle = '#374151';
                 c.textBaseline = 'middle';
                 meta.data.forEach((bar, i) => {
-                    c.fillText(`€${values[i].toFixed(2)}`, bar.x + 6, bar.y);
+                    c.fillText(`$${values[i].toFixed(2)}`, bar.x + 6, bar.y);
                 });
                 c.restore();
             }
@@ -616,7 +805,7 @@
                                 const pct = total > 0 ? (ctx.parsed.x / total * 100).toFixed(0) : 0;
                                 const cnt = counts[ctx.dataIndex];
                                 return [
-                                    `€${ctx.parsed.x.toFixed(2)}/mo · ${pct}% of waste`,
+                                    `$${ctx.parsed.x.toFixed(2)}/mo · ${pct}% of waste`,
                                     `${cnt} resource${cnt > 1 ? 's' : ''}`
                                 ];
                             }
@@ -659,6 +848,29 @@
     ]);
 })();
 
+// AWS Spend details modal: a11y mirrors the recommendations page's
+// resource modal (Esc + backdrop to close, focus moved in, then restored
+// to the opener).
+let spendModalOpener = null;
+function openSpendModal() {
+    const modal = document.getElementById('spendModal');
+    if (!modal) return;
+    spendModalOpener = document.activeElement;
+    modal.style.display = 'flex';
+    document.getElementById('spendModalClose').focus();
+}
+function closeSpendModal() {
+    const modal = document.getElementById('spendModal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    if (spendModalOpener && spendModalOpener.focus) spendModalOpener.focus();
+    spendModalOpener = null;
+}
+document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('spendModal');
+    if (e.key === 'Escape' && modal && modal.style.display === 'flex') closeSpendModal();
+});
+
 {% if waste_trend %}
 // Vertical crosshair following the hovered x position
 const trendCrosshair = {
@@ -682,12 +894,13 @@ const trendCrosshair = {
 
 let trendChart = null;
 
-// (Re)draw the trend chart in place — called at load and on range change
+// (Re)draw the trend chart in place — called at load and on range change.
+// The forecast math (weighted regression, anchoring, clamping) lives in
+// /static/trend_forecast.js, unit-tested with node --test.
 function renderTrendChart(labels, raw, granularity) {
     const n = raw.length;
-    // Honest minimum for a regression, and forecast horizon, per granularity
-    const minPoints = granularity === 'day' ? 7 : 4;
-    const horizon = granularity === 'day' ? 30 : 6;
+    const fc = trendForecast.computeForecast(raw, granularity);
+    const horizon = fc.horizon;
 
     const legend = document.getElementById('forecastLegend');
     const wrap = document.getElementById('forecastChartWrap');
@@ -699,11 +912,11 @@ function renderTrendChart(labels, raw, granularity) {
 
     // Under the minimum history there is no trend to draw: two points
     // stretched across the card read as a crash. Show a placeholder instead.
-    if (n < minPoints) {
+    if (!fc.points) {
         legend.style.display = 'none';
         wrap.style.display = 'none';
         empty.style.display = 'flex';
-        for (let i = 0; i < minPoints; i++) {
+        for (let i = 0; i < fc.minPoints; i++) {
             const dot = document.createElement('span');
             dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${i < n ? 'var(--gray-700)' : 'var(--gray-200)'};`;
             progress.appendChild(dot);
@@ -714,35 +927,15 @@ function renderTrendChart(labels, raw, granularity) {
     wrap.style.display = 'block';
     empty.style.display = 'none';
 
-    // Weighted linear regression on actual data: recent points count more,
-    // so a real structural break (e.g. a batch of waste dismissed) shows up
-    // in the forecast within a couple of points instead of being diluted
-    // across the whole window by a long flat history before it.
-    // Half-life in points, not days/months, since granularity varies.
-    const halfLife = granularity === 'day' ? 10 : 2;
-    let sw = 0, swx = 0, swy = 0, swxy = 0, swxx = 0;
-    for (let i = 0; i < n; i++) {
-        const w = Math.pow(0.5, (n - 1 - i) / halfLife);
-        sw += w; swx += w * i; swy += w * raw[i]; swxy += w * i * raw[i]; swxx += w * i * i;
-    }
-    const slope = (sw * swxy - swx * swy) / (sw * swxx - swx * swx);
-
     // Forecast labels: next `horizon` steps (days or months)
     const lastDate = new Date(labels[n - 1]);
     const forecastLabels = [];
-    const forecastData = [];
-    // Anchored on the last actual value, not the fitted line's absolute
-    // position: the regression line minimizes error over the whole window,
-    // it doesn't pass through the last point, so using intercept directly
-    // here could jump away from where the data actually left off (e.g. a
-    // recent drop diluted by a long flat history before it). Only the
-    // slope — the trend's direction and rate — comes from the regression.
+    const forecastData = fc.points;
     for (let i = 1; i <= horizon; i++) {
         const d = new Date(lastDate);
         if (granularity === 'day') d.setDate(d.getDate() + i);
         else d.setMonth(d.getMonth() + i);
         forecastLabels.push(d.toISOString().slice(0, 10));
-        forecastData.push(Math.max(0, raw[n - 1] + slope * i));
     }
 
     const datasets = [
@@ -800,7 +993,7 @@ function renderTrendChart(labels, raw, granularity) {
                 tooltip: {
                     callbacks: {
                         title: items => fmtDate(items[0].label),
-                        label: ctx => ` ${ctx.dataset.label}: €${ctx.parsed.y.toFixed(2)}/mo`
+                        label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}/mo`
                     },
                     filter: ctx => ctx.parsed.y != null,
                     displayColors: false,
