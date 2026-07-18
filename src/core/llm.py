@@ -87,7 +87,7 @@ Explain the following recommendation to the human who must approve it.
 
 Recommendation: {action}
 Resource type: {resource_type}
-Estimated savings: {savings} EUR/month
+Estimated savings: {savings} USD/month
 Detection confidence: {confidence}
 Detection metadata (JSON): {metadata}
 
@@ -270,7 +270,7 @@ You are the FinOps assistant inside wasteless, an AWS cost-waste detector.
 A human is asking a question about the WHOLE current set of pending
 recommendations across their AWS estate.
 
-Totals: {count} pending recommendations, {savings} EUR/month total
+Totals: {count} pending recommendations, {savings} USD/month total
 estimated savings, {avg_confidence} average detection confidence (percent).
 {wasted_note}{cap_note}
 
@@ -320,7 +320,7 @@ def answer_estate_question(
     batch-generated insights. `recommendations` is a pre-rendered, capped
     one-line-per-item block built by the route. `capped_savings`, when
     provided, is the per-service realistic figure the UI shows next to the
-    raw total ("realistic · X € (capped to real spend)") — passed so the
+    raw total ("realistic · $X (capped to real spend)"), passed so the
     model can explain that number instead of denying it exists.
 
     Returns None when AI is not configured (or the question is empty);
@@ -338,26 +338,26 @@ def answer_estate_question(
     wasted_note = ""
     if wasted_so_far is not None:
         wasted_note = (
-            f"\nThe UI's 'Wasted so far' tile shows {wasted_so_far} EUR: the "
+            f"\nThe UI's 'Wasted so far' tile shows {wasted_so_far} USD: the "
             "cumulative amount these resources have already cost since their "
             "creation (each item's monthly_cost prorated per day of age_days, "
             "365/12 days per month), unlike the monthly savings rate above.\n"
         )
 
-    # The UI shows this figure right above the chat ("realistic · X €
+    # The UI shows this figure right above the chat ("realistic · $X
     # (capped to real spend)"); without this paragraph the model denied
     # the number existed when asked what it meant.
     cap_note = ""
     if capped_savings is not None:
         cap_note = (
-            f"\nThe UI also shows 'realistic · {capped_savings} EUR (capped to "
+            f"\nThe UI also shows 'realistic · {capped_savings} USD (capped to "
             "real spend)' under the total: per-line savings are on-demand "
             "list-price estimates, so each service's estimated savings are "
             "capped at that service's real spend over the last 30 days (Cost "
             "Explorer) — you cannot save more than you actually spend. Only "
             "resources at least 30 days old are capped; younger ones keep "
             "their full estimate (the trailing bill barely saw them yet). "
-            f"{capped_savings} EUR is the sum after capping; the per-line "
+            f"{capped_savings} USD is the sum after capping; the per-line "
             "figures above remain the uncapped estimates."
         )
 

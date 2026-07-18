@@ -144,12 +144,12 @@ class TestFormatDigest:
     def test_contains_all_numbers(self):
         text = format_digest(SAMPLE_DATA)
         assert "2026-06-28 to 2026-07-04" in text
-        assert "3 resource(s), 120.50 EUR/month" in text
-        assert "ec2_instance: 2 (98.00 EUR/month)" in text
-        assert "8 (312.00 EUR/month of potential savings)" in text
+        assert "3 resource(s), 120.50 USD/month" in text
+        assert "ec2_instance: 2 (98.00 USD/month)" in text
+        assert "8 (312.00 USD/month of potential savings)" in text
         assert "waiting 12 day(s)" in text
         assert "3 succeeded, 1 failed (2 dry-run)" in text
-        assert "45.20 EUR" in text
+        assert "45.20 USD" in text
 
     def test_no_oldest_line_when_no_pending(self):
         data = dict(
@@ -214,14 +214,14 @@ class TestBuildDigest:
         monkeypatch.delenv(MODEL_ENV_VAR, raising=False)
         digest = build_digest(_mock_conn(), WEEK_AGO, TODAY)
         assert digest.startswith("Wasteless — activity report")
-        assert "312.00 EUR/month" in digest
+        assert "312.00 USD/month" in digest
 
     def test_with_llm_prepends_narrative(self, monkeypatch):
         monkeypatch.setenv(MODEL_ENV_VAR, "gpt-4o-mini")
         with (
             patch.dict(sys.modules, {"litellm": MagicMock()}),
             patch.object(
-                weekly_digest, "generate_narrative", return_value="Busy week: 120 EUR of new waste."
+                weekly_digest, "generate_narrative", return_value="Busy week: 120 USD of new waste."
             ),
         ):
             digest = build_digest(_mock_conn(), WEEK_AGO, TODAY)

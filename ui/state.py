@@ -84,9 +84,9 @@ def _get_pool():
     return _pool
 
 
-# Fixed USD→EUR rate, same convention as the detectors' AWS pricing and
-# src/constants.py — used for LLM costs and the Waste Rate denominator
-USD_TO_EUR = float(os.getenv("USD_TO_EUR", "0.92"))
+# No currency conversion since 2026-07-18: every amount stays in AWS's
+# billing currency (USD, like the detectors' price tables and Cost
+# Explorer). Legacy *_eur column/context names keep their spelling.
 
 # Single monthly→daily convention (365/12): detectors price a month as
 # 730 hours, so dividing by a 30-day month would overstate daily rates
@@ -165,9 +165,6 @@ templates.env.globals["get_dry_run"] = _config_manager.get_dry_run
 templates.env.globals["get_grace_period_days"] = _config_manager.get_grace_period_days
 templates.env.globals["get_auto_remediation_enabled"] = _config_manager.get_auto_remediation_enabled
 
-# Every EUR figure derives from AWS USD pricing through this fixed rate;
-# exposed to templates so the conversion is disclosed instead of implicit.
-templates.env.globals["usd_to_eur"] = USD_TO_EUR
 
 # AWS connectivity for the global "connect your account" banner (base.html).
 # Reads the status cached by main.py's startup and the sync job — never

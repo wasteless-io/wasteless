@@ -8,7 +8,7 @@ turns Steampipe rows into waste items:
 
     {
         'resource_id':  str,
-        'monthly_cost': float,   # EUR/month
+        'monthly_cost': float,   # USD/month
         'confidence':   float,   # 0.0-1.0
         'action':       str,     # recommendation text
         'metadata':     dict,    # stored as JSONB
@@ -142,7 +142,7 @@ class SteampipeWasteDetector:
                         estimated_monthly_savings_eur = EXCLUDED.estimated_monthly_savings_eur,
                         -- The AI insight quotes generation-time figures: drop
                         -- it when the resynced savings drifts beyond
-                        -- max(10 pct of old, 0.50 EUR) so enrich_recommendations()
+                        -- max(10 pct of old, 0.50 USD) so enrich_recommendations()
                         -- rewrites it with fresh numbers on the next run.
                         ai_insight = CASE
                             WHEN abs(recommendations.estimated_monthly_savings_eur
@@ -187,11 +187,11 @@ class SteampipeWasteDetector:
 
         total_waste = sum(i["monthly_cost"] for i in items)
         print(f"Items found:         {len(items)}")
-        print(f"Total monthly waste: {total_waste:.2f} EUR/mo")
-        print(f"Annual waste:        {total_waste * 12:.2f} EUR/year\n")
+        print(f"Total monthly waste: {total_waste:.2f} USD/mo")
+        print(f"Annual waste:        {total_waste * 12:.2f} USD/year\n")
 
         for i in items:
-            print(f"  - {i['action']} → {i['monthly_cost']:.2f} EUR/mo")
+            print(f"  - {i['action']} → {i['monthly_cost']:.2f} USD/mo")
 
         waste_ids = self.save(items)
         rec_count = self.recommend(waste_ids, items)

@@ -7,7 +7,7 @@ baseline performance, and the migration is online (no downtime).
 Unattached gp2 volumes are left to the ebs_orphan detector (deletion
 saves more than migration).
 
-Savings: size_gb * (0.0920 - 0.0736) EUR/GiB/month = size_gb * 0.0184
+Savings: size_gb * (0.10 - 0.08) USD/GiB/month = size_gb * 0.02
 """
 
 import logging
@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 
 
 from collectors.steampipe import SteampipeError
-from detectors.ebs_orphan import EBS_PRICING_EUR_PER_GIB
+from detectors.ebs_orphan import EBS_PRICING_USD_PER_GIB
 from detectors.steampipe_base import SteampipeWasteDetector
 
 logging.basicConfig(
@@ -24,8 +24,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-GP2_TO_GP3_SAVINGS_EUR_PER_GIB = round(
-    EBS_PRICING_EUR_PER_GIB["gp2"] - EBS_PRICING_EUR_PER_GIB["gp3"], 4
+GP2_TO_GP3_SAVINGS_USD_PER_GIB = round(
+    EBS_PRICING_USD_PER_GIB["gp2"] - EBS_PRICING_USD_PER_GIB["gp3"], 4
 )
 
 
@@ -40,7 +40,7 @@ class EBSGp2MigrationDetector(SteampipeWasteDetector):
         items = []
         for row in rows:
             size_gb = row.get("size_gb") or 0
-            savings = round(size_gb * GP2_TO_GP3_SAVINGS_EUR_PER_GIB, 2)
+            savings = round(size_gb * GP2_TO_GP3_SAVINGS_USD_PER_GIB, 2)
             name = row.get("name") or ""
             label = f"{name} ({row['volume_id']})" if name else row["volume_id"]
             items.append(
@@ -58,7 +58,7 @@ class EBSGp2MigrationDetector(SteampipeWasteDetector):
                         "size_gb": size_gb,
                         "az": row.get("az") or "",
                         "region": row.get("region") or "",
-                        "savings_eur_per_gib": GP2_TO_GP3_SAVINGS_EUR_PER_GIB,
+                        "savings_eur_per_gib": GP2_TO_GP3_SAVINGS_USD_PER_GIB,
                         "monthly_cost_eur": savings,
                     },
                 }

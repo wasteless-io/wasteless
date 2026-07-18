@@ -573,7 +573,7 @@ class EC2Remediator:
                     f"\n{'='*60}\n"
                     f"Processing recommendation {rec_id}\n"
                     f"Instance: {instance_id}\n"
-                    f"Potential savings: €{savings:.2f}/month\n"
+                    f"Potential savings: ${savings:.2f}/month\n"
                     f"Confidence: {confidence:.2f}\n"
                     f"{'='*60}"
                 )

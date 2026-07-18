@@ -14,7 +14,7 @@ from detectors.ec2_idle import (
     validate_days,
     ValidationError,
     EC2_PRICING,
-    DEFAULT_INSTANCE_COST_EUR,
+    DEFAULT_INSTANCE_COST_USD,
 )
 
 
@@ -129,4 +129,4 @@ class TestEC2Pricing:
 
     def test_default_cost_is_reasonable(self):
         """Default cost should be reasonable (between 10 and 500 EUR)."""
-        assert 10 < DEFAULT_INSTANCE_COST_EUR < 500
+        assert 10 < DEFAULT_INSTANCE_COST_USD < 500
