@@ -37,6 +37,7 @@ from jobs import (
     terraform_pr_sync_job,
     grace_executor_job,
     cost_collector_job,
+    savings_verifier_job,
     _grace_execution_status,  # noqa: F401 -- re-exported for ui/tests `from main import ...`
     _sync_ec2_instance_states,  # noqa: F401 -- re-exported for ui/tests `from main import ...`
 )
@@ -95,6 +96,17 @@ async def lifespan(app: FastAPI):
         "interval",
         hours=6,
         id="cost_collector",
+        next_run_time=datetime.now(),
+    )
+    # Savings verification (Applied -> Verified): immediate first run then
+    # every 6h. The job exits on a cheap DB check while no applied action
+    # is both real and 7+ days old, so idle ticks never call AWS; each
+    # eligible action is verified exactly once (~2 paid CE requests).
+    scheduler.add_job(
+        savings_verifier_job,
+        "interval",
+        hours=6,
+        id="savings_verifier",
         next_run_time=datetime.now(),
     )
     scheduler.start()
