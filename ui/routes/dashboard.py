@@ -2,11 +2,12 @@
 
 import os
 from datetime import date, timedelta
+from typing import Any, Dict
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 
-from state import get_db, templates, DAYS_PER_MONTH, TREND_RANGES
+from state import get_db, templates, CLOUD_REGIONS, DAYS_PER_MONTH, TREND_RANGES
 
 router = APIRouter()
 
@@ -38,6 +39,33 @@ def _short_resource_label(resource_id: str) -> str:
     if parts and parts[0] == "loadbalancer" and len(parts) >= 3:
         return parts[2]
     return parts[-1] if parts else resource_id
+
+
+# AWS region -> (friendly name, ISO country id in ui/static/world-map.svg).
+# The card colors that country path and hangs the shared card tooltip on
+# it; regions missing here (or whose country is absent from the simplified
+# map, like Bahrain) still appear in the bar list, just uncolored.
+_REGION_GEO = {
+    "us-east-1": ("N. Virginia", "us"),
+    "us-east-2": ("Ohio", "us"),
+    "us-west-1": ("N. California", "us"),
+    "us-west-2": ("Oregon", "us"),
+    "ca-central-1": ("Montreal", "ca"),
+    "sa-east-1": ("Sao Paulo", "br"),
+    "eu-west-1": ("Ireland", "ie"),
+    "eu-west-2": ("London", "gb"),
+    "eu-west-3": ("Paris", "fr"),
+    "eu-central-1": ("Frankfurt", "de"),
+    "eu-north-1": ("Stockholm", "se"),
+    "eu-south-1": ("Milan", "it"),
+    "ap-south-1": ("Mumbai", "in"),
+    "ap-southeast-1": ("Singapore", "sg"),
+    "ap-southeast-2": ("Sydney", "au"),
+    "ap-northeast-1": ("Tokyo", "jp"),
+    "ap-northeast-2": ("Seoul", "kr"),
+    "af-south-1": ("Cape Town", "za"),
+    "me-south-1": ("Bahrain", "bh"),
+}
 
 
 def _llm_provider(models):
@@ -92,15 +120,39 @@ def fetch_waste_trend(cursor, trend: str):
         )
     rows = cursor.fetchall()
 
-    # Honesty rule: snapshots older than the first detection ever recorded
-    # can only come from the age-based backfill, so say so when the window
-    # shows any (fresh installs: the whole curve at first, then the real
-    # history takes over day by day).
+    # Honesty rule: never claim a window longer than what is on screen.
+    # When the history is shorter than the range key promises ("Last 12
+    # months" with 7 months of data), the subtitle swaps the claim for the
+    # dates actually covered, like every other chart on the page.
+    if rows:
+        first, last = rows[0]["date"], rows[-1]["date"]
+        expected_start = date.today() - timedelta(days=trend_days)
+        forecast_part = subtitle.split(" · ")[-1]
+        if granularity == "month":
+            if first > expected_start.replace(day=1):
+                if first.year == last.year:
+                    label = f"{first.strftime('%b')} – {last.strftime('%b %Y')}"
+                else:
+                    label = f"{first.strftime('%b %Y')} – {last.strftime('%b %Y')}"
+                subtitle = f"{label} · {forecast_part}"
+        elif first > expected_start + timedelta(days=1):
+            if first.year == last.year:
+                label = f"{first.strftime('%-d %b')} – {last.strftime('%-d %b %Y')}"
+            else:
+                label = f"{first.strftime('%-d %b %Y')} – {last.strftime('%-d %b %Y')}"
+            subtitle = f"{label} · {forecast_part}"
+
+    # Honesty rule twin: snapshots older than the first detection ever
+    # recorded can only come from the age-based backfill, so say so when
+    # the window shows any (fresh installs: the whole curve at first, then
+    # the real history takes over day by day).
     if rows:
         cursor.execute("SELECT MIN(created_at)::date AS first_real FROM waste_detected")
         first_real = cursor.fetchone()["first_real"]
         if first_real is not None and rows[0]["date"] < first_real:
-            subtitle += " · early history reconstructed from resource ages"
+            # Short enough to keep the subtitle on one line; the "from
+            # resource ages" detail lives in the tooltip (template side)
+            subtitle += " · early history reconstructed"
     return trend, granularity, subtitle, rows
 
 
@@ -118,10 +170,6 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         savings AS (
             SELECT COALESCE(SUM(actual_savings_eur), 0) as verified_savings
             FROM savings_realized
-        ),
-        waste AS (
-            SELECT COUNT(*) as waste_count
-            FROM active_waste
         ),
         failed AS (
             SELECT COUNT(*) as failed_7d
@@ -143,27 +191,46 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
                    END as accuracy_pct
             FROM savings_realized
         ),
+        -- Last collection that actually spoke to AWS: same honest source
+        -- as the Overview (created_at + healthy collection_runs only) --
+        -- never updated_at, which advances every tick even with AWS broken
+        -- because detectors re-confirm findings from DB-cached metrics.
+        -- Age computed in SQL against the clock that stamped the rows.
         last_scan AS (
-            SELECT MAX(updated_at) as last_analysis
-            FROM waste_detected
+            SELECT last_analysis,
+                   EXTRACT(EPOCH FROM (NOW()::timestamp - last_analysis)) / 3600.0
+                       AS last_scan_hours
+            FROM (
+                SELECT GREATEST(
+                    (SELECT MAX(created_at) FROM waste_detected),
+                    (SELECT MAX(created_at) FROM cloud_costs_raw),
+                    (SELECT MAX(ran_at) FROM collection_runs
+                     WHERE failed_steps = '{}')
+                ) AS last_analysis
+            ) t
         )
         SELECT
             m.potential_monthly,
             s.verified_savings,
-            w.waste_count,
             f.failed_7d,
             p.pending_count,
             a.accuracy_pct,
-            l.last_analysis
+            l.last_analysis,
+            l.last_scan_hours
         FROM metrics m
         CROSS JOIN savings s
-        CROSS JOIN waste w
         CROSS JOIN failed f
         CROSS JOIN pending p
         CROSS JOIN accuracy a
         CROSS JOIN last_scan l;
     """)
     kpis = cursor.fetchone()
+
+    # Freshness comes from the same SQL clock that stamped the rows;
+    # display goes through the localtime filter (DB stamps are UTC-naive).
+    last_scan_hours_ago = None
+    if kpis["last_scan_hours"] is not None:
+        last_scan_hours_ago = int(kpis["last_scan_hours"])
 
     # Daily burn rate of the active waste: feeds the AI card's ROI line
     cursor.execute(
@@ -205,6 +272,18 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     aws_spend_eur = (
         float(spend_row["spend_eur"]) if spend_row and spend_row["row_count"] > 0 else None
     )
+
+    # Distinct services billed over the last 30 rolling days (the only
+    # window the daily collection guarantees complete). Same figure the
+    # Overview rings used to carry; the tile now lives in Financial
+    # Overview.
+    cursor.execute("""
+        SELECT COUNT(DISTINCT service) AS n
+        FROM cloud_costs_raw
+        WHERE usage_date >= CURRENT_DATE - 30
+        """)
+    aws_service_count = int(cursor.fetchone()["n"])
+
     _last_full_month_end = date.today().replace(day=1) - timedelta(days=1)
     aws_spend_month = _last_full_month_end.strftime("%B %Y")
     # Named month for the MoM delta sub-label ("vs May", not "vs previous month")
@@ -417,7 +496,9 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         SELECT COALESCE(SUM(cost_usd), 0) as cost_usd,
                COUNT(*) as calls,
                COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) as tokens,
-               GREATEST(CURRENT_DATE - MIN(called_at::date) + 1, 1) as days_covered
+               GREATEST(CURRENT_DATE - MIN(called_at::date) + 1, 1) as days_covered,
+               MIN(called_at::date) as first_call,
+               MAX(called_at::date) as last_call
         FROM llm_usage
         WHERE called_at >= NOW() - INTERVAL '30 days'
     """)
@@ -644,8 +725,17 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     ai_roi = None
     if llm_row and llm_row["calls"]:
         ai_daily_cost = float(llm_row["cost_usd"]) / llm_row["days_covered"]
+        # Actual covered dates, not "last 30 days": tracking may be younger
+        # than the window (honesty rule shared with the Total Cost tile)
+        first, last = llm_row["first_call"], llm_row["last_call"]
+        ai_period = (
+            first.strftime("%-d %b")
+            if first == last
+            else f"{first.strftime('%-d %b')} to {last.strftime('%-d %b')}"
+        )
         ai_usage = {
             "cost_eur": float(llm_row["cost_usd"]),
+            "period": ai_period,
             "calls": llm_row["calls"],
             "tokens": llm_row["tokens"],
             "models": llm_models,
@@ -670,6 +760,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         "dashboard.html",
         context={
             "kpis": kpis,
+            "last_scan_hours_ago": last_scan_hours_ago,
             "waste_trend": waste_trend,
             "trend_range": trend,
             "trend_granularity": trend_granularity,
@@ -686,6 +777,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             "ai_roi": ai_roi,
             "last_run": last_run,
             "aws_spend_eur": aws_spend_eur,
+            "aws_service_count": aws_service_count,
             "aws_spend_month": aws_spend_month,
             "aws_spend_prev_month": aws_spend_prev_month,
             "aws_spend_delta_pct": aws_spend_delta_pct,
@@ -713,6 +805,106 @@ def api_dashboard_trend(conn=Depends(get_db), range: str = "30d"):
         "subtitle": subtitle,
         "points": [{"date": str(r["date"]), "total": float(r["total_waste"] or 0)} for r in rows],
     }
+
+
+# In-process cache for the Resources-by-Region sweep: 4 regions x ~6 AWS
+# list calls is too slow (and too chatty) to run on every dashboard load.
+_region_inventory_cache: Dict[str, Any] = {"at": None, "data": None}
+_REGION_INVENTORY_TTL = 600  # seconds
+
+
+@router.get("/api/dashboard/resources-by-region")
+def api_resources_by_region():
+    """Live resource counts per region for the dashboard mini-map.
+
+    Sweeps CLOUD_REGIONS in parallel (instances, volumes, EIPs, NAT
+    gateways, load balancers, RDS), cached in-process for 10 minutes so
+    the dashboard itself stays a pure-Postgres page; the card loads this
+    endpoint after render.
+    """
+    from datetime import datetime
+
+    now = datetime.now()
+    if (
+        _region_inventory_cache["data"] is not None
+        and (now - _region_inventory_cache["at"]).total_seconds() < _REGION_INVENTORY_TTL
+    ):
+        return _region_inventory_cache["data"]
+
+    from state import check_aws_reachable
+
+    if not check_aws_reachable():
+        return {"available": False, "regions": [], "total": 0}
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    from utils.aws_clients import get_client
+
+    def count_region(region: str):
+        counts: Dict[str, int] = {}
+        try:
+            ec2 = get_client("ec2", region=region)
+            n = 0
+            for page in ec2.get_paginator("describe_instances").paginate():
+                for res in page.get("Reservations", []):
+                    n += sum(
+                        1 for i in res.get("Instances", []) if i["State"]["Name"] != "terminated"
+                    )
+            counts["instances"] = n
+            counts["volumes"] = sum(
+                len(p.get("Volumes", [])) for p in ec2.get_paginator("describe_volumes").paginate()
+            )
+            counts["elastic_ips"] = len(ec2.describe_addresses().get("Addresses", []))
+            counts["nat_gateways"] = sum(
+                1
+                for g in ec2.describe_nat_gateways().get("NatGateways", [])
+                if g.get("State") in ("available", "pending")
+            )
+            elbv2 = get_client("elbv2", region=region)
+            counts["load_balancers"] = sum(
+                len(p.get("LoadBalancers", []))
+                for p in elbv2.get_paginator("describe_load_balancers").paginate()
+            )
+            rds = get_client("rds", region=region)
+            counts["rds_instances"] = sum(
+                len(p.get("DBInstances", []))
+                for p in rds.get_paginator("describe_db_instances").paginate()
+            )
+        except Exception as e:
+            print(f"Region inventory error {region}: {e}")
+            return region, None
+        return region, counts
+
+    with ThreadPoolExecutor(max_workers=len(CLOUD_REGIONS)) as pool:
+        results = list(pool.map(count_region, CLOUD_REGIONS))
+
+    regions = []
+    total = 0
+    for region, counts in results:
+        if not counts:
+            continue
+        n = sum(counts.values())
+        if n == 0:
+            continue
+        total += n
+        geo = _REGION_GEO.get(region)
+        regions.append(
+            {
+                "region": region,
+                "name": geo[0] if geo else region,
+                "country": geo[1] if geo else None,
+                "count": n,
+                "breakdown": counts,
+            }
+        )
+    for r in regions:
+        r["pct"] = round(r["count"] / total * 100) if total else 0
+    regions.sort(key=lambda r: -r["count"])
+
+    data = {"available": True, "total": total, "regions": regions}
+    _region_inventory_cache["at"] = now
+    _region_inventory_cache["data"] = data
+    return data
 
 
 @router.get("/api/metrics")

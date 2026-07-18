@@ -16,7 +16,7 @@ import sys
 from typing import Any, Dict, List
 
 from collectors.steampipe import SteampipeError
-from detectors.rds_pricing import instance_usd
+from detectors.rds_pricing import instance_is_priced, instance_usd, storage_is_priced
 from detectors.steampipe_base import SteampipeWasteDetector
 
 logging.basicConfig(
@@ -63,6 +63,14 @@ class RDSIdleDetector(SteampipeWasteDetector):
                         "region": row.get("region") or "",
                         "arn": row.get("arn") or "",
                         "monthly_cost_eur": cost,
+                        **(
+                            {}
+                            if instance_is_priced(db_class) and storage_is_priced(storage_type)
+                            else {
+                                "pricing_source": "static_default_unknown_type",
+                                "pricing_fallback": True,
+                            }
+                        ),
                     },
                 }
             )

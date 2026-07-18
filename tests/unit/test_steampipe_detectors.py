@@ -209,6 +209,24 @@ class TestRDSStoppedMapping:
         assert item["resource_id"] == "db-prod"
         assert item["monthly_cost"] == rds_pricing.storage_usd(100, "gp3")
         assert "auto-restarts after 7 days" in item["action"]
+        # gp3 is in the price table: no fallback stamp
+        assert "pricing_fallback" not in item["metadata"]
+
+    def test_unknown_storage_type_stamps_pricing_fallback(self):
+        """A defaulted cost is a guess, not a measurement: the metadata
+        must say so, so the UI flags it and the sync job can warn."""
+        item = _bare(RDSStoppedDetector).map_rows(
+            [
+                {
+                    "db_instance_identifier": "db-future",
+                    "class": "db.t3.medium",
+                    "allocated_storage": 100,
+                    "storage_type": "gp5-does-not-exist",
+                }
+            ]
+        )[0]
+        assert item["metadata"]["pricing_fallback"] is True
+        assert item["metadata"]["pricing_source"] == "static_default_unknown_type"
 
     def test_empty_input(self):
         assert _bare(RDSStoppedDetector).map_rows([]) == []
@@ -284,6 +302,22 @@ class TestRDSIdleMapping:
         expected = rds_pricing.instance_usd("db.weird.42xlarge", False, 20, "gp2")
         assert item["monthly_cost"] == expected
         assert expected > 0
+        # ... and the guess is stamped so the UI can flag it
+        assert item["metadata"]["pricing_fallback"] is True
+        assert item["metadata"]["pricing_source"] == "static_default_unknown_type"
+
+    def test_known_class_has_no_fallback_stamp(self):
+        item = _bare(RDSIdleDetector).map_rows(
+            [
+                {
+                    "db_instance_identifier": "db-idle",
+                    "class": "db.m5.large",
+                    "allocated_storage": 100,
+                    "storage_type": "gp3",
+                }
+            ]
+        )[0]
+        assert "pricing_fallback" not in item["metadata"]
 
     def test_empty_input(self):
         assert _bare(RDSIdleDetector).map_rows([]) == []

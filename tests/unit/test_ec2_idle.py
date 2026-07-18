@@ -59,6 +59,27 @@ class TestInstanceMonthlyCost:
         detector = _detector_with_mock_conn()
         assert detector.get_instance_monthly_cost("") == DEFAULT_INSTANCE_COST_USD
 
+    def test_current_gen_burstable_families_are_priced(self):
+        """t4g/t3a were missing from the table: every t4g.micro was costed
+        at the 54.35 default, a 9x overestimate that inflated savings."""
+        detector = _detector_with_mock_conn()
+        assert detector.get_instance_monthly_cost("t4g.micro") == 6.72
+        assert detector.get_instance_monthly_cost("t3a.micro") == 7.45
+
+    def test_unknown_type_stamps_pricing_fallback_in_metadata(self):
+        """A defaulted cost is a guess, not a measurement: the metadata must
+        say so, so the UI can flag it instead of passing it off as priced."""
+        waste = _detect([_metric_row(instance_type="z9.mega")])
+        meta = waste[0]["metadata"]
+        assert meta["pricing_fallback"] is True
+        assert meta["pricing_source"] == "static_default_unknown_type"
+
+    def test_known_type_keeps_the_priced_source_stamp(self):
+        waste = _detect([_metric_row(instance_type="t4g.micro")])
+        meta = waste[0]["metadata"]
+        assert "pricing_fallback" not in meta
+        assert meta["pricing_source"] == "aws_on_demand_static"
+
 
 class TestConfidenceScore:
     def test_zero_cpu_full_window_gives_max_confidence(self):

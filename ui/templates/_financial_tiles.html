@@ -1,0 +1,84 @@
+{# The five Financial Overview tiles, shared by /dashboard and the
+   Overview (/) so the two pages can never drift apart. The including
+   template sets `fin_clickable = true` ONLY where the cost modals exist
+   (dashboard.html): elsewhere the values keep their tooltip but lose the
+   click affordance. Context needed: total_cost_eur/_period, aws_spend_eur/
+   _month/_prev_month/_delta_pct/_period, aws_service_count, kpis
+   (potential_monthly, pending_count, verified_savings, accuracy_pct),
+   next_verification, plus the pending-blink CSS from the host page.
+   The .fin-tiles styles live in base.html (next to the .grid classes) so
+   any page including this renders the tiles identically. #}
+{% from "_money.html" import eur %}
+<div class="grid grid-5 fin-tiles">
+
+    <!-- Total Cost (Cost Explorer): the cumulative bill over the whole
+         collected window, all services and months confounded -->
+    <div class="kpi">
+        {% if total_cost_eur is not none %}
+        <div class="kpi-value"><span class="kpi-hover" tabindex="0"{% if fin_clickable %} role="button" style="cursor: pointer;" data-tip="Everything Cost Explorer has reported since collection began ({{ total_cost_period }}): all services, taxes included · click for the breakdown" onclick="openCostModal('totalCostModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('totalCostModal');}"{% else %} data-tip="Everything Cost Explorer has reported since collection began ({{ total_cost_period }}): all services, taxes included"{% endif %}><span class="kpi-zoom">{{ eur(total_cost_eur) }}</span></span></div>
+        <div class="kpi-label">Total Cost</div>
+        <div class="kpi-sub">{{ total_cost_period }}</div>
+        {% else %}
+        <div class="kpi-value is-muted">—</div>
+        <div class="kpi-label">Total Cost</div>
+        <div class="kpi-sub">Appears after the first daily Cost Explorer collection</div>
+        {% endif %}
+    </div>
+
+    <!-- AWS Spend (last full month, Cost Explorer): the whole bill,
+         so waste and savings read against their real denominator -->
+    <div class="kpi">
+        {% if aws_spend_eur is not none %}
+        <div class="kpi-value"><span class="kpi-hover" tabindex="0"{% if fin_clickable %} role="button" style="cursor: pointer;" data-tip="The whole AWS bill for {{ aws_spend_month }}, not just detected waste · click for the breakdown" onclick="openCostModal('spendModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('spendModal');}"{% else %} data-tip="The whole AWS bill for {{ aws_spend_month }}, not just detected waste"{% endif %}><span class="kpi-zoom">{{ eur(aws_spend_eur) }}</span></span></div>
+        <div class="kpi-label">AWS Spend</div>
+        <div class="kpi-sub">{% if aws_spend_delta_pct is not none %}<span class="{% if aws_spend_delta_pct > 0 %}text-danger{% elif aws_spend_delta_pct < 0 %}text-success{% endif %}" style="font-weight: 600;">{{ '+' if aws_spend_delta_pct > 0 }}{{ "%.1f"|format(aws_spend_delta_pct) }}%</span> vs {{ aws_spend_prev_month }}{% elif aws_spend_period %}{{ aws_spend_month.split(' ')[0] }} · {{ aws_spend_period }} collected{% else %}{{ aws_spend_month }}{% endif %}</div>
+        {% else %}
+        <div class="kpi-value is-muted">—</div>
+        <div class="kpi-label">AWS Spend</div>
+        <div class="kpi-sub">Appears after the first daily Cost Explorer collection</div>
+        {% endif %}
+    </div>
+
+    <!-- AWS Services (Cost Explorer): distinct services billed over the
+         last 30 days, the rolling window the daily collection guarantees
+         complete -->
+    <div class="kpi">
+        {% if aws_service_count > 0 %}
+        <div class="kpi-value"><span class="kpi-hover" tabindex="0" data-tip="How many distinct AWS services generated charges over the last 30 days (rolling window, Cost Explorer)"><span class="kpi-zoom">{{ aws_service_count }}</span></span></div>
+        <div class="kpi-label">AWS Services</div>
+        <div class="kpi-sub">billed last 30 days</div>
+        {% else %}
+        <div class="kpi-value is-muted">—</div>
+        <div class="kpi-label">AWS Services</div>
+        <div class="kpi-sub">Appears after the first daily Cost Explorer collection</div>
+        {% endif %}
+    </div>
+
+    <!-- Recoverable Now (ex-Pending Savings: the amount and the decision
+         count belong together, one card, one call to action) -->
+    <div class="kpi">
+        {% if (kpis.pending_count or 0) > 0 %}
+        <div class="kpi-value text-success pending-blink"><span class="kpi-hover" tabindex="0"{% if fin_clickable %} role="button" style="cursor: pointer;" data-tip="Recoverable every month if you approve the {{ kpis.pending_count }} pending recommendation{{ 's' if (kpis.pending_count or 0) > 1 }} · click for the breakdown" onclick="openCostModal('recoverableModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('recoverableModal');}"{% else %} data-tip="Recoverable every month if you approve the {{ kpis.pending_count }} pending recommendation{{ 's' if (kpis.pending_count or 0) > 1 }}"{% endif %}><span class="kpi-zoom">{{ eur(kpis.potential_monthly) }}<span class="unit">/mo</span></span></span></div>
+        <div class="kpi-label">Recoverable Now</div>
+        {% else %}
+        <div class="kpi-value is-muted">—</div>
+        <div class="kpi-label">Recoverable Now</div>
+        <div class="kpi-sub">Nothing awaiting approval</div>
+        {% endif %}
+    </div>
+
+    <!-- Verified Savings: a monthly rate (savings_realized stores
+         cost_before - cost_after as average monthly cost) -->
+    <div class="kpi">
+        {% if (kpis.verified_savings or 0) > 0 %}
+        <div class="kpi-value text-success"><span class="kpi-hover" tabindex="0" data-tip="Monthly savings actually measured on the bill after applied actions, verified via AWS Cost Explorer: measured, not estimated"><span class="kpi-zoom">{{ eur(kpis.verified_savings) }}<span class="unit">/mo</span></span></span></div>
+        <div class="kpi-label">Verified Savings</div>
+        <div class="kpi-sub">measured via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a>{% if kpis.accuracy_pct is not none %} · {{ "%.0f"|format(kpis.accuracy_pct) }}% of estimate{% endif %}</div>
+        {% else %}
+        <div class="kpi-value is-muted">—</div>
+        <div class="kpi-label">Verified Savings</div>
+        <div class="kpi-sub">{% if next_verification %}first measurement expected ~{{ next_verification.strftime('%b %-d') }}{% else %}Appears after your first verified action{% endif %}</div>
+        {% endif %}
+    </div>
+
+</div>

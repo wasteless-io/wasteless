@@ -327,10 +327,28 @@
         .grid-4 { grid-template-columns: repeat(4, 1fr); }
         .grid-5 { grid-template-columns: repeat(5, 1fr); }
 
+        /* Financial Overview tiles (_financial_tiles.html), shared by the
+           Overview and the Dashboard: the styles live here so both pages
+           render the partial identically. */
+        .fin-tiles .kpi { text-align: center; }
+        .fin-tiles .kpi + .kpi { border-left: 1px solid var(--hairline); }
+        .fin-tiles .kpi-value { font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+        .fin-tiles .kpi-value .unit { font-size: 0.9rem; font-weight: 400; }
+        .fin-tiles .kpi-label { font-size: 0.82rem; font-weight: 500; color: var(--ink-secondary); }
+        .fin-tiles .kpi-sub { font-size: 0.8rem; color: var(--ink-secondary); margin-top: 0.2rem; }
+        .fin-tiles .is-muted { color: var(--gray-500); }
+        /* Text-safe status colors (WCAG on white), same values as the
+           dashboard's --success-text/--danger-text */
+        .fin-tiles .text-success { color: #15803d; }
+        .fin-tiles .text-danger { color: #b91c1c; }
+
         @media (max-width: 1024px) {
             .grid-4 { grid-template-columns: repeat(2, 1fr); }
             .grid-3 { grid-template-columns: repeat(2, 1fr); }
             .grid-5 { grid-template-columns: repeat(3, 1fr); }
+            /* wrapped to 3 columns: keep the divider only where a left
+               neighbour actually remains */
+            .fin-tiles.grid-5 .kpi:nth-child(3n+1) { border-left: none; }
         }
 
         /* Mobile nav: the sidebar is hidden under 768px, the burger button
@@ -370,6 +388,11 @@
             /* Clear the fixed burger button */
             .main { margin-left: 0; padding: 4rem 1rem 1.5rem; }
             .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
+            .fin-tiles .kpi + .kpi {
+                border-left: none;
+                border-top: 1px solid var(--gray-200);
+                padding-top: 1rem;
+            }
         }
 
         /* Table */

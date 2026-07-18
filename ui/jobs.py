@@ -14,8 +14,51 @@ from typing import Any, Dict, List, Optional, Tuple
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from state import DB_CONFIG, SYNCABLE_STATUSES, _config_manager, _aws_status, check_aws_reachable
+import logging
+
+from state import (
+    CLOUD_REGIONS,
+    DB_CONFIG,
+    SYNCABLE_STATUSES,
+    _config_manager,
+    _aws_status,
+    check_aws_reachable,
+)
 from utils.action_registry import execution_mode
+
+# Propagates to root, which the /logs ring buffer captures.
+logger = logging.getLogger("wasteless_ui.jobs")
+
+# Last count seen by _warn_default_priced: log on change only, a 5-minute
+# tick repeating the same warning would drown the /logs page.
+_fallback_priced_last: Optional[int] = None
+
+
+def _warn_default_priced(cursor: Any) -> None:
+    """Active signal for figure honesty: pending recommendations whose cost
+    came from a static-table default (pricing_fallback stamp) are guesses,
+    not estimates. Surfaces on /logs without waiting for someone to eyeball
+    a tooltip on /recommendations."""
+    global _fallback_priced_last
+    cursor.execute("""
+        SELECT COUNT(*) AS n
+        FROM recommendations r
+        JOIN waste_detected w ON r.waste_id = w.id
+        WHERE r.status = 'pending'
+          AND (w.metadata->>'pricing_fallback')::boolean IS TRUE
+        """)
+    n = cursor.fetchone()["n"]
+    if n != _fallback_priced_last:
+        if n:
+            logger.warning(
+                "%d pending recommendation(s) priced with a static-table default: "
+                "their savings are placeholders; add the missing types to the "
+                "pricing tables (src/detectors)",
+                n,
+            )
+        elif _fallback_priced_last:
+            logger.info("No pending recommendations left on fallback pricing")
+        _fallback_priced_last = n
 
 
 def _resolve_vanished(cursor: Any, resource_type: str, ids: List[str]) -> int:
@@ -65,7 +108,10 @@ def _sync_ec2_instance_states(cursor: Any, instance_ids: List[str]) -> Tuple[int
     from utils.aws_clients import get_client
 
     aws_states: Dict[str, Dict[str, str]] = {}
-    for region in ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]:
+    # CLOUD_REGIONS, never a local list: an instance living in an unswept
+    # region reads as vanished and its recommendation flips to obsolete
+    # (which the next detector tick revives - a silent oscillation).
+    for region in CLOUD_REGIONS:
         try:
             ec2 = get_client("ec2", region=region)
             response = ec2.describe_instances(
@@ -172,6 +218,8 @@ def sync_aws_job() -> None:
         with closing(psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)) as conn:
             cursor = conn.cursor()
 
+            _warn_default_priced(cursor)
+
             # Open recommendations grouped by resource type — see
             # SYNCABLE_STATUSES for which statuses are checked and why.
             cursor.execute(
@@ -261,7 +309,7 @@ def _execute_ec2_boto3(
     try:
         from utils.aws_clients import get_client
 
-        regions = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
+        regions = list(CLOUD_REGIONS)
         # Use stored region if available
         stored_region = (metadata or {}).get("region")
         if stored_region:

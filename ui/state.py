@@ -129,7 +129,14 @@ TREND_RANGES = {
     "1y": (365, "month", "Last 12 months · 6-month linear forecast"),
 }
 
-CLOUD_REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
+# One scan perimeter for the whole product: the UI sweeps (cloud
+# resources page, dashboard region map) read the same list as the backend
+# pipeline (src/constants, overridable via AWS_REGIONS), so the map can
+# never show a different world than the detectors scan. Import sits after
+# load_dotenv above: constants reads AWS_REGIONS at import time.
+from constants import AWS_SCAN_REGIONS
+
+CLOUD_REGIONS = AWS_SCAN_REGIONS
 
 # Templates
 templates = Jinja2Templates(directory=APP_DIR / "templates")

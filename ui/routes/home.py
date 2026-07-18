@@ -1,5 +1,7 @@
 """Landing page and the home/overview page (/, /landing)."""
 
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -212,6 +214,100 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
     aws_spend_30d_usd = float(spend_row["spend_usd"]) if spend_row else 0.0
     aws_service_count = int(spend_row["service_count"]) if spend_row else 0
 
+    # ---- Financial Overview tiles (shared partial _financial_tiles.html):
+    # the same five figures as /dashboard. The queries below mirror
+    # routes/dashboard.py; the parity test
+    # (ui/tests/test_financial_tiles_parity.py) renders both pages and
+    # fails if the two ever show different values. ----
+    cursor.execute("""
+        SELECT COALESCE(SUM(cost)
+                        FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+                                                    - INTERVAL '1 month'), 0) as spend_eur,
+               COUNT(*) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+                                                    - INTERVAL '1 month') as row_count,
+               MIN(usage_date) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+                                                           - INTERVAL '1 month') as period_start,
+               MAX(usage_date) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
+                                                           - INTERVAL '1 month') as period_end,
+               COALESCE(SUM(cost)
+                        FILTER (WHERE usage_date < DATE_TRUNC('month', CURRENT_DATE)
+                                                   - INTERVAL '1 month'), 0) as prev_spend_eur,
+               COUNT(*) FILTER (WHERE usage_date < DATE_TRUNC('month', CURRENT_DATE)
+                                                   - INTERVAL '1 month') as prev_row_count
+        FROM cloud_costs_raw
+        WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 months'
+          AND usage_date < DATE_TRUNC('month', CURRENT_DATE)
+    """)
+    fin_spend = cursor.fetchone()
+    aws_spend_eur = float(fin_spend["spend_eur"]) if fin_spend["row_count"] > 0 else None
+    _last_full_month_end = date.today().replace(day=1) - timedelta(days=1)
+    aws_spend_month = _last_full_month_end.strftime("%B %Y")
+    aws_spend_prev_month = (_last_full_month_end.replace(day=1) - timedelta(days=1)).strftime("%B")
+    aws_spend_period = None
+    if aws_spend_eur is not None:
+        start, end = fin_spend["period_start"], fin_spend["period_end"]
+        aws_spend_period = (
+            start.strftime("%-d")
+            if start == end
+            else f"{start.strftime('%-d')}–{end.strftime('%-d')}"
+        )
+    aws_spend_delta_pct = None
+    if (
+        aws_spend_eur is not None
+        and fin_spend["prev_row_count"] > 0
+        and float(fin_spend["prev_spend_eur"]) > 0
+    ):
+        prev = float(fin_spend["prev_spend_eur"])
+        aws_spend_delta_pct = (aws_spend_eur - prev) / prev * 100
+
+    cursor.execute("""
+        SELECT COALESCE(SUM(cost), 0) as total_eur,
+               MIN(usage_date) as first_day,
+               MAX(usage_date) as last_day,
+               COUNT(*) as row_count
+        FROM cloud_costs_raw
+    """)
+    total_row = cursor.fetchone()
+    total_cost_eur = float(total_row["total_eur"]) if total_row["row_count"] > 0 else None
+    total_cost_period = None
+    if total_cost_eur is not None:
+        first, last = total_row["first_day"], total_row["last_day"]
+        total_cost_period = (
+            first.strftime("%-d %b")
+            if first == last
+            else f"{first.strftime('%-d %b')} to {last.strftime('%-d %b')}"
+        )
+
+    cursor.execute("""
+        SELECT CASE WHEN COALESCE(SUM(estimated_savings_eur), 0) > 0
+                    THEN SUM(actual_savings_eur) / SUM(estimated_savings_eur) * 100
+               END as accuracy_pct
+        FROM savings_realized
+    """)
+    _accuracy = cursor.fetchone()["accuracy_pct"]
+    fin_kpis = {
+        "potential_monthly": float(result["pending_eur"] or 0),
+        "pending_count": result["pending_count"],
+        "verified_savings": float(result["savings_realized"] or 0),
+        "accuracy_pct": float(_accuracy) if _accuracy is not None else None,
+    }
+
+    cursor.execute("""
+        SELECT MIN(a.action_date) AS first_action
+        FROM actions_log a
+        LEFT JOIN savings_realized s ON s.recommendation_id = a.recommendation_id
+        WHERE a.action_status = 'success'
+          AND a.dry_run = false
+          AND a.action_type IN ('stop', 'terminate', 'downsize')
+          AND s.id IS NULL
+    """)
+    verif_row = cursor.fetchone()
+    next_verification = (
+        verif_row["first_action"] + timedelta(days=7)
+        if verif_row and verif_row["first_action"] is not None
+        else None
+    )
+
     # Coherence guard (finops invariant, wired to live data). Detector
     # cost/savings estimates are list-price based and independent from the
     # metered Cost Explorer bill, so total active waste can exceed real
@@ -293,6 +389,16 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
             "aws_spend_avg_eur": aws_spend_avg_eur,
             "aws_spend_vs_avg": aws_spend_vs_avg,
             "aws_service_count": aws_service_count,
+            # Shared Financial Overview tiles (_financial_tiles.html)
+            "kpis": fin_kpis,
+            "next_verification": next_verification,
+            "total_cost_eur": total_cost_eur,
+            "total_cost_period": total_cost_period,
+            "aws_spend_eur": aws_spend_eur,
+            "aws_spend_month": aws_spend_month,
+            "aws_spend_prev_month": aws_spend_prev_month,
+            "aws_spend_delta_pct": aws_spend_delta_pct,
+            "aws_spend_period": aws_spend_period,
             "top_services": top_services,
             "waste_exceeds_spend": waste_exceeds_spend,
             "welcome": welcome == "1",

@@ -42,30 +42,71 @@
      * left off. Only the slope (the trend's direction and rate) comes from
      * the regression. Waste can't go negative, so points clamp at 0.
      *
-     * Returns { minPoints, horizon, slope, points }:
+     * A single step dominating the window is an event, not a trend: a
+     * batch of resources appearing (or being cleaned up) in one day is a
+     * regime change, and fitting a line through it projects the one-off
+     * as a permanent growth rate. When one jump exceeds half the window's
+     * total range, the slope is estimated from the points AFTER the jump
+     * only; fewer than 3 of those means no established trend yet, so the
+     * forecast stays flat at the current level and `stepBreak` is true
+     * (the chart surfaces it in the subtitle).
+     *
+     * Returns { minPoints, horizon, slope, stepBreak, points }:
      *  - points: array of `horizon` forecast values, or null when raw has
      *    fewer than minPoints entries (no honest trend to draw);
-     *  - slope: per-step trend, or null alongside a null points.
+     *  - slope: per-step trend, or null alongside a null points;
+     *  - stepBreak: true when a dominant step forced a flat forecast.
      */
+    function fitSlope(seg, halfLife) {
+        var n = seg.length;
+        var sw = 0, swx = 0, swy = 0, swxy = 0, swxx = 0;
+        for (var i = 0; i < n; i++) {
+            var w = Math.pow(0.5, (n - 1 - i) / halfLife);
+            sw += w; swx += w * i; swy += w * seg[i]; swxy += w * i * seg[i]; swxx += w * i * i;
+        }
+        return (sw * swxy - swx * swy) / (sw * swxx - swx * swx);
+    }
+
     function computeForecast(raw, granularity) {
         var p = PARAMS[granularity] || PARAMS.day;
         var n = raw.length;
         if (n < p.minPoints) {
-            return { minPoints: p.minPoints, horizon: p.horizon, slope: null, points: null };
+            return {
+                minPoints: p.minPoints, horizon: p.horizon,
+                slope: null, stepBreak: false, points: null
+            };
         }
 
-        var sw = 0, swx = 0, swy = 0, swxy = 0, swxx = 0;
-        for (var i = 0; i < n; i++) {
-            var w = Math.pow(0.5, (n - 1 - i) / p.halfLife);
-            sw += w; swx += w * i; swy += w * raw[i]; swxy += w * i * raw[i]; swxx += w * i * i;
+        var min = raw[0], max = raw[0], jump = 0, jumpAt = 0;
+        for (var i = 1; i < n; i++) {
+            if (raw[i] < min) min = raw[i];
+            if (raw[i] > max) max = raw[i];
+            var d = Math.abs(raw[i] - raw[i - 1]);
+            if (d > jump) { jump = d; jumpAt = i; }
         }
-        var slope = (sw * swxy - swx * swy) / (sw * swxx - swx * swx);
+
+        var slope;
+        var stepBreak = false;
+        if (max - min > 0 && jump > 0.5 * (max - min)) {
+            var seg = raw.slice(jumpAt);
+            if (seg.length >= 3) {
+                slope = fitSlope(seg, p.halfLife);
+            } else {
+                slope = 0;
+                stepBreak = true;
+            }
+        } else {
+            slope = fitSlope(raw, p.halfLife);
+        }
 
         var points = [];
         for (var k = 1; k <= p.horizon; k++) {
             points.push(Math.max(0, raw[n - 1] + slope * k));
         }
-        return { minPoints: p.minPoints, horizon: p.horizon, slope: slope, points: points };
+        return {
+            minPoints: p.minPoints, horizon: p.horizon,
+            slope: slope, stepBreak: stepBreak, points: points
+        };
     }
 
     return { computeForecast: computeForecast, PARAMS: PARAMS };

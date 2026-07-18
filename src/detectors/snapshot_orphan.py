@@ -36,7 +36,12 @@ logger = logging.getLogger(__name__)
 
 SNAPSHOT_PRICE_USD_PER_GIB = 0.05  # AWS list price, standard tier
 SNAPSHOT_AGE_DAYS = 90
-REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
+# One scan perimeter for the whole pipeline (overridable via AWS_REGIONS):
+# a private copy here silently shrank this detector's coverage when new
+# regions were added to constants.
+from constants import AWS_SCAN_REGIONS
+
+REGIONS = AWS_SCAN_REGIONS
 
 
 def _snapshot_monthly_cost(size_gb: int) -> float:

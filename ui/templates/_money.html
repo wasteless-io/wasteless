@@ -1,0 +1,8 @@
+{# Single money format shared by the pages that show financial KPIs:
+   "<$0.01" under a cent, cents up to $100, whole dollars (grouped) above,
+   so large KPIs don't carry cent noise.
+   .countup: re-counted from 0 at load by the shared script in base.html #}
+{% macro eur(v) -%}
+{%- set v = v or 0 -%}
+<span class="countup">{%- if v > 0 and v < 0.01 -%}&lt;$0.01{%- elif v < 100 -%}${{ "%.2f"|format(v) }}{%- else -%}${{ "{:,.0f}".format(v) }}{%- endif -%}</span>
+{%- endmacro %}

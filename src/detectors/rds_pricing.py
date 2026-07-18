@@ -48,6 +48,17 @@ RDS_INSTANCE_USD_PER_HOUR = {
 RDS_INSTANCE_DEFAULT_USD_PER_HOUR = 0.145  # ~db.t3.large, conservative middle
 
 
+def storage_is_priced(storage_type: str) -> bool:
+    """False when storage_usd() would use the default: the figure is then
+    a guess, and the caller must stamp pricing_fallback in the metadata."""
+    return storage_type in RDS_STORAGE_USD_PER_GB
+
+
+def instance_is_priced(instance_class: str) -> bool:
+    """False when instance_usd() would use the default hourly rate."""
+    return instance_class in RDS_INSTANCE_USD_PER_HOUR
+
+
 def storage_usd(gb: float, storage_type: str) -> float:
     """Monthly USD cost of `gb` GiB of RDS storage of `storage_type`."""
     usd = RDS_STORAGE_USD_PER_GB.get(storage_type, RDS_STORAGE_DEFAULT_USD)

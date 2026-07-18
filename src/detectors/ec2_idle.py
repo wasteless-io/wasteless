@@ -40,7 +40,8 @@ logger = logging.getLogger(__name__)
 
 # EC2 instance pricing (USD/month, eu-west-1)
 # Source: AWS Pricing Calculator + https://instances.vantage.sh/
-# Updated: 2026-01-11
+# Updated: 2026-07-18 (t4g/t3a added; the freshness gate in
+# tests/unit/test_pricing_sanity.py forces a review every 180 days)
 # Calculation: hourly_rate_USD * 730 hours. No currency conversion anywhere
 # in the pipeline since 2026-07-18: figures stay in AWS's billing currency
 # (values below are the former EUR table divided back by the 0.92 rate).
@@ -58,6 +59,20 @@ EC2_PRICING: Dict[str, float] = {
     "t3.large": 61.83,
     "t3.xlarge": 123.65,
     "t3.2xlarge": 247.30,
+    # T3a instances (AMD, ~10% below T3) - added 2026-07-18
+    "t3a.nano": 3.72,
+    "t3a.micro": 7.45,
+    "t3a.small": 14.89,
+    "t3a.medium": 29.78,
+    "t3a.large": 59.57,
+    # T4g instances (Graviton, cheapest current-gen) - added 2026-07-18
+    "t4g.nano": 3.36,
+    "t4g.micro": 6.72,
+    "t4g.small": 13.43,
+    "t4g.medium": 26.86,
+    "t4g.large": 53.73,
+    "t4g.xlarge": 107.46,
+    "t4g.2xlarge": 214.91,
     # M5 instances
     "m5.large": 104.35,
     "m5.xlarge": 208.70,
@@ -240,8 +255,13 @@ class EC2IdleDetector:
                     region,
                 ) = instance
 
-                # Get monthly cost
+                # Get monthly cost. A type missing from the static table
+                # falls back to DEFAULT_INSTANCE_COST_USD - an invented
+                # figure, not a measurement - so the fallback is stamped in
+                # the metadata and surfaced by the UI instead of letting it
+                # pass for a priced estimate.
                 monthly_cost = self.get_instance_monthly_cost(instance_type)
+                priced = bool(instance_type) and instance_type in EC2_PRICING
 
                 # Calculate confidence score (0.0-1.0)
                 # Closer to 0% CPU = higher confidence
@@ -287,6 +307,17 @@ class EC2IdleDetector:
                             "observation_days": days,
                             "detection_method": "cloudwatch_cpu_avg",
                             "threshold_used": cpu_threshold,
+                            # Overrides the stamp_pricing() source when the
+                            # cost is the default, so the figure stays
+                            # traceable as a guess.
+                            **(
+                                {}
+                                if priced
+                                else {
+                                    "pricing_source": "static_default_unknown_type",
+                                    "pricing_fallback": True,
+                                }
+                            ),
                         }
                     ),
                 }

@@ -100,11 +100,16 @@ def _fetch_ebs_cost_for_instance(instance_id: str, region: str) -> Dict[str, Any
         vol_resp = ec2.describe_volumes(VolumeIds=volume_ids)
         volumes = []
         total_cost = 0.0
+        pricing_fallback = False
         for vol in vol_resp.get("Volumes", []):
             size = vol["Size"]
             vol_type = vol["VolumeType"]
             cost = _ebs_cost(size, vol_type)
             total_cost += cost
+            # Any volume priced by the default makes the whole figure a
+            # guess: stamped as such (surfaced by the UI)
+            if vol_type not in EBS_PRICING_USD_PER_GIB:
+                pricing_fallback = True
             volumes.append(
                 {
                     "volume_id": vol["VolumeId"],
@@ -117,6 +122,7 @@ def _fetch_ebs_cost_for_instance(instance_id: str, region: str) -> Dict[str, Any
         return {
             "found": True,
             "region": region,
+            "pricing_fallback": pricing_fallback,
             "ebs_cost": round(total_cost, 2),
             "volumes": volumes,
             "age_days": age_days,
@@ -248,6 +254,14 @@ class EC2StoppedDetector:
                                     "volumes": inst["volumes"],
                                     "days_stopped": inst["datapoints"],
                                     "age_days": inst.get("age_days"),
+                                    **(
+                                        {
+                                            "pricing_source": "static_default_unknown_type",
+                                            "pricing_fallback": True,
+                                        }
+                                        if inst.get("pricing_fallback")
+                                        else {}
+                                    ),
                                 }
                             )
                         ),

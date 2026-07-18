@@ -92,6 +92,12 @@ def recommendations(
             GREATEST(COALESCE((w.metadata->>'age_days')::numeric, 0),
                      EXTRACT(EPOCH FROM (NOW() - w.created_at)) / 86400.0) as age_days_frac,
             w.metadata->>'description' as snap_description,
+            -- Honesty markers for idle detections: how much of the CPU
+            -- window was actually observed, and whether the cost is the
+            -- default fallback rather than a priced estimate
+            (w.metadata->>'datapoints')::integer as metrics_days,
+            (w.metadata->>'observation_days')::integer as observation_window_days,
+            (w.metadata->>'pricing_fallback')::boolean as pricing_fallback,
             r.ai_insight
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
