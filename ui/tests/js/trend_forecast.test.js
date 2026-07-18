@@ -101,3 +101,31 @@ test('unknown granularity falls back to daily parameters', () => {
     const fc = computeForecast(Array(10).fill(5), 'fortnight');
     assert.equal(fc.points.length, PARAMS.day.horizon);
 });
+
+test('a single dominant step yields a flat forecast, flagged as stepBreak', () => {
+    // Six quiet days then a batch of resources lands: an event, not a
+    // trend. Projecting its slope would claim +$10/day forever.
+    const raw = [2, 2, 2, 2, 2, 2, 77];
+    const fc = computeForecast(raw, 'day');
+    assert.equal(fc.stepBreak, true);
+    assert.equal(fc.slope, 0);
+    assert.ok(fc.points.every((v) => v === 77), 'forecast must stay flat at the new level');
+});
+
+test('three stable points after the step resume a (flat) fit without the flag', () => {
+    const raw = [2, 2, 2, 2, 77, 77, 77];
+    const fc = computeForecast(raw, 'day');
+    assert.equal(fc.stepBreak, false);
+    assert.ok(Math.abs(fc.slope) < 1e-9);
+    assert.ok(fc.points.every((v) => Math.abs(v - 77) < 1e-9));
+});
+
+test('a real post-step trend is fitted from post-step points only', () => {
+    // The step must not leak into the slope: only the 77→80→83 segment
+    // (a clean +3/day) drives the forecast.
+    const raw = [2, 2, 2, 2, 77, 80, 83];
+    const fc = computeForecast(raw, 'day');
+    assert.equal(fc.stepBreak, false);
+    assert.ok(Math.abs(fc.slope - 3) < 1e-9, `slope ${fc.slope} should be 3`);
+    assert.ok(Math.abs(fc.points[0] - 86) < 1e-9);
+});
