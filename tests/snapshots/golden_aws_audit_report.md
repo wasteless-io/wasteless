@@ -6,16 +6,16 @@
 - AWS account: 123456789012
 - Period analyzed: 2026-06-01 → 2026-06-30
 - Region scope: eu-west-1
-- Currency: EUR
-- Monthly cloud spend: €12000.00
-- Forecast end of month: €12400.00
-- Monthly budget: €15000.00
+- Currency: USD
+- Monthly cloud spend: $12000.00
+- Forecast end of month: $12400.00
+- Monthly budget: $15000.00
 - Budget usage: 80.0%
-- Detected waste: €900.00
-- Potential monthly savings: €750.00
-- Annualized potential savings: €9000.00
-- Realized savings: €0.00
-- Confirmed savings (verified via Cost Explorer): €0.00
+- Detected waste: $900.00
+- Potential monthly savings: $750.00
+- Annualized potential savings: $9000.00
+- Realized savings: $0.00
+- Confirmed savings (verified via Cost Explorer): $0.00
 - Number of recommendations: 3
 - Number of high-confidence recommendations (≥ 0.80): 2
 - Number of critical-risk recommendations: 1
@@ -49,33 +49,33 @@
 
 | Metric | Value |
 |---|---:|
-| Monthly spend | €12000.00 |
-| Forecast | €12400.00 |
-| Budget | €15000.00 |
+| Monthly spend | $12000.00 |
+| Forecast | $12400.00 |
+| Budget | $15000.00 |
 | Budget usage | 80.0% |
-| Detected waste | €900.00 |
-| Potential savings | €750.00 |
-| Annualized potential savings | €9000.00 |
-| Realized savings | €0.00 |
-| Confirmed savings (verified via Cost Explorer) | €0.00 |
+| Detected waste | $900.00 |
+| Potential savings | $750.00 |
+| Annualized potential savings | $9000.00 |
+| Realized savings | $0.00 |
+| Confirmed savings (verified via Cost Explorer) | $0.00 |
 
 ## 4. Cost Breakdown by Service
 
 | Service | Cost | Share |
 |---|---:|---:|
-| EC2 | €7000.00 | 58.3% |
-| NAT Gateway | €2000.00 | 16.7% |
-| EBS | €1500.00 | 12.5% |
-| CloudWatch | €1000.00 | 8.3% |
-| Elastic IP | €500.00 | 4.2% |
+| EC2 | $7000.00 | 58.3% |
+| NAT Gateway | $2000.00 | 16.7% |
+| EBS | $1500.00 | 12.5% |
+| CloudWatch | $1000.00 | 8.3% |
+| Elastic IP | $500.00 | 4.2% |
 
 ## 5. Top Recommendations
 
 | Priority | Resource | Service | Env | Owner | Saving | Risk | Confidence | Action |
 |---:|---|---|---|---|---:|---|---|---|
-| 1 | i-0a1b2c3d4e5f6a7b8 | EC2 | production | platform-team | €320.00 | high | 0.85 | stop_instance |
-| 2 | nat-0123456789abcdef0 | NAT Gateway | production | Not provided | €300.00 | critical | 0.75 | delete_nat_gateway |
-| 3 | vol-0aabbccddeeff0011 | EBS | dev | data-team | €25.00 | medium | 0.90 | delete_volume |
+| 1 | i-0a1b2c3d4e5f6a7b8 | EC2 | production | platform-team | $320.00 | high | 0.85 | stop_instance |
+| 2 | nat-0123456789abcdef0 | NAT Gateway | production | Not provided | $300.00 | critical | 0.75 | delete_nat_gateway |
+| 3 | vol-0aabbccddeeff0011 | EBS | dev | data-team | $25.00 | medium | 0.90 | delete_volume |
 
 ## 6. Detailed Findings
 
@@ -92,8 +92,8 @@
   - cpu_avg_7d: 2.3
   - cpu_max_7d: 6.1
   - observation_days: 7
-- Estimated monthly cost: €400.00
-- Potential monthly saving: €320.00
+- Estimated monthly cost: $400.00
+- Potential monthly saving: $320.00
 - Recommended action: stop_instance
 - Risk: high
 - Confidence: 0.85
@@ -112,8 +112,8 @@
 - Evidence:
   - data_processed_gb_30d: 0
   - route_tables_referencing: 0
-- Estimated monthly cost: €300.00
-- Potential monthly saving: €300.00
+- Estimated monthly cost: $300.00
+- Potential monthly saving: $300.00
 - Recommended action: delete_nat_gateway
 - Risk: critical
 - Confidence: 0.75
@@ -132,8 +132,8 @@
 - Evidence:
   - unattached_days: 21
   - has_snapshot: True
-- Estimated monthly cost: €25.00
-- Potential monthly saving: €25.00
+- Estimated monthly cost: $25.00
+- Potential monthly saving: $25.00
 - Recommended action: delete_volume
 - Risk: medium
 - Confidence: 0.9
@@ -163,7 +163,7 @@ No production destructive action should be executed without explicit approval.
 | Resources analyzed | 42 |
 | Owner tag coverage | 88.1% |
 | Environment tag coverage | 95.2% |
-| Untagged spend | €240.00 |
+| Untagged spend | $240.00 |
 | Resources without owner | 5 |
 
 Missing ownership reduces recommendation confidence and limits accountability.
@@ -199,7 +199,7 @@ Confidence reflects the completeness of the detection metadata (currency, period
 ## 10. Assumptions & Limitations
 
 - Pricing source: AWS Price List API
-- Currency: EUR
+- Currency: USD
 - Period: 2026-06-01 to 2026-06-30
 - Forecast method: Linear burn rate (month-to-date spend / days elapsed x days in month)
 - Services not analyzed: RDS, EKS

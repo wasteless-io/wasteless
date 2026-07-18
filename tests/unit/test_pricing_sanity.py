@@ -24,41 +24,39 @@ from core.finops_invariants import (
     validate_rds_cost,
     validate_recommendation_saving,
 )
-from detectors.ebs_orphan import EBS_PRICING_EUR_PER_GIB
-from detectors.eip_orphan import EIP_MONTHLY_COST_EUR
+from detectors.ebs_orphan import EBS_PRICING_USD_PER_GIB
+from detectors.eip_orphan import EIP_MONTHLY_COST_USD
 from detectors.ec2_idle import EC2_PRICING
-from detectors.nat_gateway_unused import NAT_GATEWAY_MONTHLY_COST_EUR
+from detectors.nat_gateway_unused import NAT_GATEWAY_MONTHLY_COST_USD
 
 # Tarif public AWS pour le data processing NAT Gateway ($0.045/GB dans la
-# plupart des régions), converti au même taux que le reste du pipeline.
+# plupart des régions), brut : plus aucune conversion dans le pipeline.
 NAT_DATA_PROCESSING_USD_PER_GB = 0.045
-USD_TO_EUR = 0.92
-NAT_DATA_PROCESSING_EUR_PER_GB = round(NAT_DATA_PROCESSING_USD_PER_GB * USD_TO_EUR, 4)
 
 
 def test_elastic_ip_monthly_cost_reasonable():
     # Le tarif réel du détecteur passe
     assert (
-        validate_elastic_ip_cost(EIP_MONTHLY_COST_EUR, EIP_MONTHLY_COST_EUR) == EIP_MONTHLY_COST_EUR
+        validate_elastic_ip_cost(EIP_MONTHLY_COST_USD, EIP_MONTHLY_COST_USD) == EIP_MONTHLY_COST_USD
     )
     # Exercice 12 : ~3,60 €/mois est dans la fourchette AWS réelle
-    assert validate_elastic_ip_cost(3.60, EIP_MONTHLY_COST_EUR) == 3.60
+    assert validate_elastic_ip_cost(3.60, EIP_MONTHLY_COST_USD) == 3.60
     # Un montant à deux chiffres (ex. 40 €/mois) est suspect et rejeté
     with pytest.raises(FinOpsInvariantError):
-        validate_elastic_ip_cost(40.0, EIP_MONTHLY_COST_EUR)
+        validate_elastic_ip_cost(40.0, EIP_MONTHLY_COST_USD)
 
 
 def test_ebs_cost_matches_volume_size_and_type():
     size_gb = 100
-    gp3_cost = size_gb * EBS_PRICING_EUR_PER_GIB["gp3"]
-    assert validate_ebs_cost(size_gb, "gp3", gp3_cost, EBS_PRICING_EUR_PER_GIB) == pytest.approx(
+    gp3_cost = size_gb * EBS_PRICING_USD_PER_GIB["gp3"]
+    assert validate_ebs_cost(size_gb, "gp3", gp3_cost, EBS_PRICING_USD_PER_GIB) == pytest.approx(
         gp3_cost
     )
     # Coût gonflé sans rapport avec la taille/type déclarés
     with pytest.raises(FinOpsInvariantError):
-        validate_ebs_cost(size_gb, "gp3", gp3_cost * 3, EBS_PRICING_EUR_PER_GIB)
+        validate_ebs_cost(size_gb, "gp3", gp3_cost * 3, EBS_PRICING_USD_PER_GIB)
     with pytest.raises(FinOpsInvariantError):
-        validate_ebs_cost(size_gb, "unknown_type", 50.0, EBS_PRICING_EUR_PER_GIB)
+        validate_ebs_cost(size_gb, "unknown_type", 50.0, EBS_PRICING_USD_PER_GIB)
 
 
 def test_ec2_cost_matches_instance_type_region_and_hours():
@@ -112,26 +110,26 @@ def test_nat_gateway_cost_includes_hourly_and_data_processing():
     # Gateway idle sans trafic : coût = composante horaire seule
     assert (
         validate_nat_gateway_cost(
-            NAT_GATEWAY_MONTHLY_COST_EUR,
-            NAT_GATEWAY_MONTHLY_COST_EUR,
+            NAT_GATEWAY_MONTHLY_COST_USD,
+            NAT_GATEWAY_MONTHLY_COST_USD,
             data_processed_gb=0,
-            data_processing_rate_eur_per_gb=NAT_DATA_PROCESSING_EUR_PER_GB,
+            data_processing_rate_eur_per_gb=NAT_DATA_PROCESSING_USD_PER_GB,
         )
-        == NAT_GATEWAY_MONTHLY_COST_EUR
+        == NAT_GATEWAY_MONTHLY_COST_USD
     )
 
     # Gateway avec trafic : le coût affiché doit inclure le data processing
     data_processed_gb = 500
-    expected = NAT_GATEWAY_MONTHLY_COST_EUR + data_processed_gb * NAT_DATA_PROCESSING_EUR_PER_GB
+    expected = NAT_GATEWAY_MONTHLY_COST_USD + data_processed_gb * NAT_DATA_PROCESSING_USD_PER_GB
     with pytest.raises(FinOpsInvariantError):
         validate_nat_gateway_cost(
-            NAT_GATEWAY_MONTHLY_COST_EUR,
-            NAT_GATEWAY_MONTHLY_COST_EUR,
+            NAT_GATEWAY_MONTHLY_COST_USD,
+            NAT_GATEWAY_MONTHLY_COST_USD,
             data_processed_gb,
-            NAT_DATA_PROCESSING_EUR_PER_GB,
+            NAT_DATA_PROCESSING_USD_PER_GB,
         )
     assert validate_nat_gateway_cost(
-        expected, NAT_GATEWAY_MONTHLY_COST_EUR, data_processed_gb, NAT_DATA_PROCESSING_EUR_PER_GB
+        expected, NAT_GATEWAY_MONTHLY_COST_USD, data_processed_gb, NAT_DATA_PROCESSING_USD_PER_GB
     ) == pytest.approx(expected)
 
 

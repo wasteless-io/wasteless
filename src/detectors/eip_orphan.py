@@ -3,13 +3,13 @@
 Elastic IP Orphan Detector for Wasteless
 
 Detects Elastic IPs not associated with any instance or network interface.
-These IPs are billed even when idle (~3.36 EUR/month each).
+These IPs are billed even when idle (~3.65 USD/month each).
 
 Detection criteria:
 - No InstanceId
 - No NetworkInterfaceId
 
-Pricing: $0.005/hour = $3.65/month * 0.92 EUR/USD = ~3.36 EUR/month
+Pricing: $0.005/hour * 730h = $3.65/month
 """
 
 import os
@@ -34,7 +34,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-EIP_MONTHLY_COST_EUR = 3.36  # $0.005/hr * 730h * 0.92 EUR/USD
+EIP_MONTHLY_COST_USD = 3.65  # $0.005/hr * 730h
 REGIONS = ["eu-west-1", "eu-west-2", "eu-west-3", "us-east-1"]
 
 
@@ -54,7 +54,7 @@ def _fetch_unassociated_eips(region: str) -> List[Dict[str, Any]]:
                     "public_ip": addr.get("PublicIp", ""),
                     "domain": addr.get("Domain", "vpc"),
                     "region": region,
-                    "monthly_cost": EIP_MONTHLY_COST_EUR,
+                    "monthly_cost": EIP_MONTHLY_COST_USD,
                 }
             )
         logger.info(f"  {region}: {len(result)} unassociated EIP(s)")
@@ -178,7 +178,7 @@ class EIPOrphanDetector:
                         estimated_monthly_savings_eur = EXCLUDED.estimated_monthly_savings_eur,
                         -- The AI insight quotes generation-time figures: drop
                         -- it when the resynced savings drifts beyond
-                        -- max(10 pct of old, 0.50 EUR) so enrich_recommendations()
+                        -- max(10 pct of old, 0.50 USD) so enrich_recommendations()
                         -- rewrites it with fresh numbers on the next run.
                         ai_insight = CASE
                             WHEN abs(recommendations.estimated_monthly_savings_eur
@@ -226,13 +226,13 @@ class EIPOrphanDetector:
 
         total_waste = sum(e["monthly_cost"] for e in eips)
         print(f"Unassociated EIPs found: {len(eips)}")
-        print(f"Total monthly waste:     {total_waste:.2f} EUR/mo")
-        print(f"Annual waste:            {total_waste * 12:.2f} EUR/year\n")
+        print(f"Total monthly waste:     {total_waste:.2f} USD/mo")
+        print(f"Annual waste:            {total_waste * 12:.2f} USD/year\n")
 
         for e in eips:
             print(
                 f"  - {e['public_ip']} ({e['allocation_id']}) in {e['region']} "
-                f"→ {e['monthly_cost']:.2f} EUR/mo"
+                f"→ {e['monthly_cost']:.2f} USD/mo"
             )
 
         waste_ids = self.save(eips)

@@ -6,7 +6,7 @@
     "period_end": "2026-06-30",
     "region_scope": "eu-west-1"
   },
-  "currency": "EUR",
+  "currency": "USD",
   "cloud_spend_monthly": 12000.0,
   "forecast_end_of_month": 12400.0,
   "budget_monthly": 15000.0,

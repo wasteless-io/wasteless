@@ -49,7 +49,7 @@ def _snapshot(snap_id, age_days, size_gb=100, tags=None, **extra):
 
 class TestSnapshotMonthlyCost:
     def test_cost_per_gib(self):
-        assert _snapshot_monthly_cost(100) == 4.60
+        assert _snapshot_monthly_cost(100) == 5.00
         assert _snapshot_monthly_cost(0) == 0.0
 
 
@@ -90,7 +90,7 @@ class TestFetchOldSnapshots:
         assert len(result) == 1
         assert result[0]["snapshot_id"] == "snap-old"
         assert result[0]["age_days"] == 120
-        assert result[0]["monthly_cost"] == 4.60
+        assert result[0]["monthly_cost"] == 5.00
         assert result[0]["region"] == "eu-west-1"
 
     def test_young_snapshot_is_ignored(self):

@@ -28,7 +28,6 @@ from datetime import date
 from typing import Any, Dict, Optional
 
 
-from constants import USD_TO_EUR
 from core import llm
 
 logger = logging.getLogger(__name__)
@@ -43,7 +42,7 @@ Write today's briefing for the CTO from the data below. The dashboard
 already shows the headline numbers; your job is the reading of them, not
 the recitation.
 
-Briefing data (JSON, amounts in EUR/month unless stated): {data}
+Briefing data (JSON, amounts in USD/month unless stated): {data}
 
 Write 2 short paragraphs of plain text (no markdown, no headings, no
 bullet lists), 80-130 words in total:
@@ -67,7 +66,7 @@ Hard rules:
 - If a value is null, zero, or an empty list, OMIT it entirely. Never
   write that data is unavailable, null, or that there is nothing to
   report — silence is the correct way to report an empty state.
-- Write amounts like "9.57 €" and durations in natural units ("20
+- Write amounts like "$9.57" and durations in natural units ("20
   minutes ago", "3 days"), never decimal hours.
 - Factual and direct, no filler, no greetings."""
 
@@ -152,19 +151,15 @@ def collect_briefing_data(conn) -> Dict[str, Any]:
         """)
 
         # Waste rate needs Cost Explorer data, which may not be collected.
-        # Denominator: last complete calendar month, converted to EUR (the
-        # writers store USD) — the current month would be a partial
+        # Denominator: last complete calendar month, raw amounts as billed
+        # (USD, no conversion) since the current month would be a partial
         # month-to-date against a monthly waste rate.
-        (month_spend,) = one(
-            """
-            SELECT COALESCE(SUM(CASE WHEN currency = 'USD' THEN cost * %s
-                                     ELSE cost END), 0) AS eur
+        (month_spend,) = one("""
+            SELECT COALESCE(SUM(cost), 0) AS spend
             FROM cloud_costs_raw
             WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
               AND usage_date < DATE_TRUNC('month', CURRENT_DATE);
-        """,
-            (USD_TO_EUR,),
-        )
+        """)
 
         (last_scan_hours,) = one("""
             SELECT EXTRACT(EPOCH FROM (NOW() - MAX(updated_at))) / 3600 AS hours
