@@ -1,17 +1,97 @@
 """Live cloud resource inventory (EC2, EBS, EIP, VPC, snapshots, NAT
 gateways, load balancers, AMIs, RDS, S3)."""
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Request, Query, HTTPException
 from fastapi.responses import HTMLResponse
 
-from state import templates, CLOUD_REGIONS
+from fastapi import Depends
+
+from state import templates, CLOUD_REGIONS, get_db
+from schemas import TagRequest
 from utils.logger import get_logger
 
 router = APIRouter()
 
 logger = get_logger("cloud_resources")
+
+
+# Resource-id prefix -> our resource_type label, for the audit log.
+_ID_PREFIX_TYPE = {
+    "i-": "ec2_instance",
+    "vol-": "ebs_volume",
+    "snap-": "ebs_snapshot",
+    "ami-": "ami",
+    "vpc-": "vpc",
+    "nat-": "nat_gateway",
+    "eipalloc-": "elastic_ip",
+}
+
+
+def _infer_type(resource_id: str) -> str:
+    for prefix, label in _ID_PREFIX_TYPE.items():
+        if resource_id.startswith(prefix):
+            return label
+    return "ec2_resource"
+
+
+@router.post("/api/cloud-resources/tag")
+def tag_resources(req: TagRequest, conn=Depends(get_db)):
+    """Apply one tag (key=value) to the selected EC2-family resources.
+
+    Tagging is a write op but non-destructive (metadata only): it goes
+    through the write role, is grouped per region (ec2:CreateTags is a
+    per-region call), and every result is written to actions_log so the
+    change is auditable like any other action.
+    """
+    if req.key.lower().startswith("aws:"):
+        raise HTTPException(
+            status_code=422, detail="Tag keys starting with 'aws:' are reserved by AWS"
+        )
+
+    from collections import defaultdict
+
+    from utils.aws_clients import get_client
+
+    by_region: dict = defaultdict(list)
+    for r in req.resources:
+        by_region[r.region].append(r.id)
+
+    cursor = conn.cursor()
+    results = []
+    for region, ids in by_region.items():
+        try:
+            ec2 = get_client("ec2", region=region, write=True)
+            ec2.create_tags(Resources=ids, Tags=[{"Key": req.key, "Value": req.value}])
+            ok, err = True, None
+        except Exception as e:  # noqa: BLE001 - surfaced per-resource to the UI
+            ok, err = False, str(e)
+            logger.warning("Tagging failed in %s: %s", region, err)
+        for rid in ids:
+            results.append({"id": rid, "success": ok, "error": err})
+            cursor.execute(
+                """
+                INSERT INTO actions_log
+                    (resource_id, resource_type, action_type, action_status,
+                     dry_run, action_date, error_message, executed_by, metadata)
+                VALUES (%s, %s, 'tag', %s, false, NOW(), %s, 'inventory_ui', %s)
+                """,
+                (
+                    rid,
+                    _infer_type(rid),
+                    "success" if ok else "failed",
+                    err,
+                    json.dumps({"key": req.key, "value": req.value, "region": region}),
+                ),
+            )
+    conn.commit()
+    return {
+        "tagged": sum(1 for r in results if r["success"]),
+        "total": len(results),
+        "results": results,
+    }
 
 
 @router.get("/cloud-resources", response_class=HTMLResponse)

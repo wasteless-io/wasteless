@@ -90,9 +90,26 @@
             font-family: var(--font-mono);
         }
 
+        /* Top page-load progress bar: minimalist, signature green. Scales
+           from the left; JS trickles it during navigation, then completes. */
+        #page-progress {
+            position: fixed; top: 0; left: 0; right: 0;
+            height: 4px; z-index: 3000;
+            background: #15803d;
+            transform: scaleX(0); transform-origin: left;
+            opacity: 0; pointer-events: none;
+            box-shadow: 0 0 8px rgba(21,128,61,0.6);
+            transition: transform 0.2s ease, opacity 0.35s ease;
+        }
+
         .layout {
             display: flex;
             min-height: 100vh;
+            /* The page never scrolls sideways: hover tooltips and slab
+               shadows can reach past the right edge, and clip (unlike
+               hidden) prevents that without creating a scroll container,
+               so position:fixed tooltips/dropdowns still escape it. */
+            overflow-x: clip;
         }
 
         /* Sidebar — light, Apple-minimal: warm off-white plane, hairline
@@ -260,6 +277,12 @@
         /* Main content */
         .main {
             flex: 1;
+            /* Flex items default to min-width:auto, so a wide non-wrapping
+               child (a chip row, a table) would force .main past the
+               viewport and the whole page scrolls sideways under the fixed
+               sidebar. min-width:0 lets .main shrink so inner overflow-x
+               containers scroll instead. */
+            min-width: 0;
             margin-left: 240px;
             padding: 2.5rem 3rem;
         }
@@ -334,13 +357,140 @@
         .fin-tiles .kpi + .kpi { border-left: 1px solid var(--hairline); }
         .fin-tiles .kpi-value { font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
         .fin-tiles .kpi-value .unit { font-size: 0.9rem; font-weight: 400; }
-        .fin-tiles .kpi-label { font-size: 0.82rem; font-weight: 500; color: var(--ink-secondary); }
-        .fin-tiles .kpi-sub { font-size: 0.8rem; color: var(--ink-secondary); margin-top: 0.2rem; }
+        /* Landing identity: chrome labels in mono caps, values stay in the
+           grotesque — the bi-register type contract of the brand */
+        .fin-tiles .kpi-label {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            font-weight: 500;
+            color: var(--ink-secondary);
+            margin-top: 0.35rem;
+        }
+        .fin-tiles .kpi-sub { font-family: var(--font-mono); font-size: 0.66rem; color: var(--ink-secondary); margin-top: 0.25rem; }
         .fin-tiles .is-muted { color: var(--gray-500); }
         /* Text-safe status colors (WCAG on white), same values as the
            dashboard's --success-text/--danger-text */
         .fin-tiles .text-success { color: #15803d; }
         .fin-tiles .text-danger { color: #b91c1c; }
+
+        /* Status pill (landing identity): square dot + mono caps. State is
+           carried by color only through the is-* variants; the text always
+           restates it, so color is never the sole signal. */
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-family: var(--font-mono);
+            font-size: 0.64rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            padding: 0.28rem 0.65rem;
+            border: 1px solid var(--hairline);
+            border-radius: 999px;
+            background: var(--white);
+            color: #15803d;
+        }
+        .status-pill::before { content: ""; width: 7px; height: 7px; background: currentColor; flex-shrink: 0; }
+        .status-pill.is-warn { color: #b45309; }
+        .status-pill.is-danger { color: #b91c1c; }
+        .status-pill.is-muted { color: var(--gray-500); }
+
+        /* System bar (landing chrome): replaces the beige title cards.
+           Breadcrumb + page signal on the left, live clock on the right
+           with a heartbeat square carrying the collection state. */
+        .sysbar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.9rem 0.1rem 0.75rem;
+            /* Stays pinned to the top while the page scrolls; a solid page-
+               background so content passes cleanly underneath. */
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: #f5f5f7;
+        }
+        /* The bottom rule draws itself left-to-right on load (same gesture
+           as the Overview card title rules), instead of a static border. */
+        .sysbar::after {
+            content: "";
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 1px;
+            /* Same pronounced gray as the Overview card title rules */
+            background: var(--gray-400);
+            transform-origin: left;
+            animation: rule-draw 0.8s ease-out 0.2s backwards;
+        }
+        @keyframes rule-draw { from { transform: scaleX(0); } }
+        @media (prefers-reduced-motion: reduce) { .sysbar::after { animation: none; } }
+        .sysbar-crumb {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--ink);
+            white-space: nowrap;
+        }
+        .sysbar-crumb .path { color: var(--gray-500); font-weight: 400; }
+        .sysbar-clock {
+            margin-left: auto;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--gray-500);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+        .sysbar-clock .sysbar-time { color: var(--ink); font-weight: 700; }
+        .sysbar-beat { width: 7px; height: 7px; background: #15803d; flex-shrink: 0; }
+        .sysbar-beat.is-warn { background: #b45309; }
+        .sysbar-beat.is-danger { background: #b91c1c; }
+        .sysbar-beat.is-muted { background: var(--gray-400); }
+
+        /* Honesty footnote (landing identity): the circled-i line that
+           states what the figures are and are not */
+        .honest-note {
+            display: flex;
+            gap: 0.5rem;
+            align-items: baseline;
+            font-size: 0.72rem;
+            color: var(--gray-500);
+            text-align: left;
+        }
+        .honest-note::before {
+            content: "i";
+            font-family: var(--font-mono);
+            border: 1px solid var(--hairline);
+            border-radius: 50%;
+            width: 15px;
+            height: 15px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            flex-shrink: 0;
+            transform: translateY(2px);
+        }
+
+        /* Key column of the modal key/value fiches: mono caps chrome, the
+           values keep their prose styling */
+        .kv-key {
+            flex: 0 0 130px;
+            font-family: var(--font-mono);
+            font-size: 0.62rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--gray-500);
+            align-self: baseline;
+            padding-top: 2px;
+        }
 
         @media (max-width: 1024px) {
             .grid-4 { grid-template-columns: repeat(2, 1fr); }
@@ -828,6 +978,9 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {# Top progress bar: a thin green line trickles while the next page is
+       being fetched, so a slow load reads as "loading", never a freeze. #}
+    <div id="page-progress" aria-hidden="true"></div>
     <button type="button" id="mobileNavToggle" class="mobile-nav-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="appSidebar" onclick="toggleMobileNav()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
@@ -958,6 +1111,47 @@
     </div>
 
     <script>
+        // Top page-load progress bar. Full-page navigations mean the wait
+        // happens on the CURRENT page while the browser fetches the next
+        // one, so we start the trickle on link click / form submit (it
+        // keeps animating until the new document commits), then the fresh
+        // page completes it on load. Result: a slow load looks intentional.
+        (function () {
+            const bar = document.getElementById('page-progress');
+            if (!bar) return;
+            let timer = null, p = 0;
+            const set = (w) => { bar.style.transform = 'scaleX(' + w + ')'; };
+            function start() {
+                if (timer) return;              // already running
+                p = 0.08; bar.style.opacity = '1'; set(p);
+                timer = setInterval(() => { p += (0.9 - p) * 0.06; set(p); }, 200);
+            }
+            function done() {
+                if (timer) { clearInterval(timer); timer = null; }
+                bar.style.opacity = '1'; set(1);
+                setTimeout(() => { bar.style.opacity = '0'; }, 250);
+                setTimeout(() => { set(0); }, 600);
+            }
+            // Leaving via an internal link: start the bar for the wait.
+            document.addEventListener('click', (e) => {
+                const a = e.target.closest ? e.target.closest('a[href]') : null;
+                if (!a) return;
+                const href = a.getAttribute('href') || '';
+                if (!href || href[0] === '#' || href.startsWith('javascript:')) return;
+                if (a.target === '_blank' || a.hasAttribute('download')) return;
+                if (a.origin && a.origin !== location.origin) return;   // external
+                if (e.metaKey || e.ctrlKey || e.shiftKey) return;       // new tab
+                start();
+            }, true);
+            document.addEventListener('submit', () => start(), true);
+            // The fresh page has rendered: sweep to 100% and fade.
+            window.addEventListener('load', done);
+            // Back/forward cache restore: make sure the bar isn't left showing.
+            window.addEventListener('pageshow', (e) => { if (e.persisted) { bar.style.opacity = '0'; set(0); } });
+            // Guard: if a navigation is cancelled (Esc, blocked), clear it.
+            window.addEventListener('pagehide', () => { if (timer) { clearInterval(timer); timer = null; } });
+        })();
+
         // Mobile nav: burger toggles the sidebar as an overlay (<= 768px)
         function toggleMobileNav() {
             const sidebar = document.getElementById('appSidebar');

@@ -353,18 +353,23 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
             elif delta_pct < -0.01:
                 aws_spend_vs_avg = "below"
 
-    # Services view of the waste card: top services by real spend, same
-    # source and window as the AWS Spend tile so the card and the KPI agree.
+    # Decision queue: the three pending recommendations with the biggest
+    # savings, shown under the Daily Briefing (prototype validated
+    # 2026-07-19). Same source as Recoverable Now so the two always agree.
     cursor.execute("""
-        SELECT service,
-               SUM(cost) as total_eur
-        FROM cloud_costs_raw
-        WHERE usage_date >= CURRENT_DATE - 30
-        GROUP BY service
-        ORDER BY total_eur DESC
-        LIMIT 8
+        SELECT w.resource_id,
+               r.recommendation_type,
+               r.estimated_monthly_savings_eur AS savings,
+               w.metadata->>'region' AS region,
+               w.metadata->>'instance_type' AS instance_type,
+               (w.metadata->>'cpu_avg_7d')::numeric AS cpu_avg
+        FROM recommendations r
+        JOIN waste_detected w ON w.id = r.waste_id
+        WHERE r.status = 'pending'
+        ORDER BY r.estimated_monthly_savings_eur DESC, r.id
+        LIMIT 3
     """)
-    top_services = cursor.fetchall()
+    decision_queue = cursor.fetchall()
 
     cursor.close()
 
@@ -399,7 +404,7 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
             "aws_spend_prev_month": aws_spend_prev_month,
             "aws_spend_delta_pct": aws_spend_delta_pct,
             "aws_spend_period": aws_spend_period,
-            "top_services": top_services,
+            "decision_queue": decision_queue,
             "waste_exceeds_spend": waste_exceeds_spend,
             "welcome": welcome == "1",
         },

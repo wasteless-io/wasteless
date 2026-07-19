@@ -16,6 +16,25 @@ class ActionRequest(BaseModel):
     dry_run: bool = True
 
 
+class TagResourceRef(BaseModel):
+    """One resource to tag: its id and the region it lives in (tagging is a
+    per-region EC2 call, so the region must travel with each id)."""
+
+    id: str = Field(min_length=3, max_length=200)
+    region: str = Field(min_length=3, max_length=40)
+
+
+class TagRequest(BaseModel):
+    """Apply one tag (key=value) to a set of resources from the inventory."""
+
+    # Bounded like ActionRequest: a single request must not fan out to
+    # thousands of write calls.
+    resources: List[TagResourceRef] = Field(min_length=1, max_length=200)
+    # AWS tag limits: key <=128, value <=256 chars.
+    key: str = Field(min_length=1, max_length=128)
+    value: str = Field(default="", max_length=256)
+
+
 class ConfigUpdate(BaseModel):
     """Configuration update request."""
 

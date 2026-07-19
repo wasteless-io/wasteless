@@ -270,42 +270,6 @@
 </table>
 {% endif %}
 
-<!-- Waste by resource type -->
-<div class="card" style="padding: 0;">
-    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--gray-200); font-weight: 600; font-size: 0.9rem;">Waste detected by resource type</div>
-    <div class="table-container">
-        <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-            <thead>
-                <tr style="text-align: left; color: var(--gray-600);">
-                    <th style="padding: 0.5rem 1rem;">Resource type</th>
-                    <th style="padding: 0.5rem 1rem;">Resources</th>
-                    <th style="padding: 0.5rem 1rem;">Monthly waste</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for resource_type, count, eur in report.new_waste.by_type %}
-                <tr style="border-top: 1px solid var(--gray-200);">
-                    <td style="padding: 0.5rem 1rem;">{{ resource_type }}</td>
-                    <td style="padding: 0.5rem 1rem;">{{ count }}</td>
-                    <td style="padding: 0.5rem 1rem;">${{ "%.2f"|format(eur) }}/mo</td>
-                </tr>
-                {% else %}
-                <tr style="border-top: 1px solid var(--gray-200);">
-                    <td colspan="3" style="padding: 1.5rem 1rem; text-align: center; color: var(--gray-600);">No waste detected in this period.</td>
-                </tr>
-                {% endfor %}
-                {% if report.new_waste.by_type %}
-                <tr class="print-only print-total">
-                    <td style="padding: 0.5rem 1rem;">Total</td>
-                    <td style="padding: 0.5rem 1rem;">{{ report.new_waste.count }}</td>
-                    <td style="padding: 0.5rem 1rem;">${{ "%.2f"|format(report.new_waste.monthly_eur) }}/mo</td>
-                </tr>
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
 <div class="print-only print-footnote">
     Figures above are Wasteless-detected estimates based on current usage patterns; potential savings require technical validation and approval before execution. No production destructive action is recommended without explicit approval. Only "Confirmed savings" are verified via AWS Cost Explorer.
 </div>

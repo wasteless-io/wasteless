@@ -56,7 +56,8 @@ def history(
             a.dry_run,
             a.action_date,
             a.error_message,
-            a.executed_by
+            a.executed_by,
+            a.metadata->>'region' AS region
         FROM actions_log a
         {where_clause}
         ORDER BY a.action_date DESC LIMIT 100

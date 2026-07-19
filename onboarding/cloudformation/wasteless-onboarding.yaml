@@ -191,6 +191,15 @@ Resources:
                 Action:
                   - elasticloadbalancing:DeleteLoadBalancer
                 Resource: '*'
+              # User-driven tagging from the Cloud Resource Inventory page.
+              # Non-destructive (metadata only) but grants tag write on every
+              # EC2-family resource, so it lives in the write role.
+              - Sid: UserTagging
+                Effect: Allow
+                Action:
+                  - ec2:CreateTags
+                  - ec2:DeleteTags
+                Resource: '*'
       Tags:
         - Key: Application
           Value: wasteless

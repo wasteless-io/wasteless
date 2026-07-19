@@ -4,46 +4,137 @@
 
 {% block content %}
 <style>
+/* Tabs: same chrome as /recommendations — mono count badges, a gray fill
+   on the active tab, and a baseline that draws itself in on load. */
+/* One row, never two: the tabs stay on a single line and scroll
+   horizontally if the viewport is too narrow (AWS's own tab pattern).
+   Tighter padding lets all 11 fit without scrolling at desktop width. */
+/* Square corners on every card of this page (terminal identity). */
+.card { border-radius: 0; }
+
+/* Only the active tab is underlined — no baseline under the whole row. */
 .tab-nav {
-    display: flex;
-    gap: 0;
-    border-bottom: 2px solid var(--gray-200);
+    display: flex; flex-wrap: nowrap; gap: 0;
     margin-bottom: 1rem;
+    overflow-x: auto; scrollbar-width: none;
 }
+.tab-nav::-webkit-scrollbar { display: none; }
 .tab-btn {
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    padding: 0.5rem 1.1rem;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--gray-500);
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+    background: none; border: none;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.82rem; font-weight: 600;
+    color: var(--gray-500); cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    position: relative; z-index: 1;
+    white-space: nowrap;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .tab-btn:hover { color: var(--gray-800); }
 .tab-btn.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
+    color: var(--gray-900);
+    background: #f1f1ef;
+    border-bottom-color: var(--gray-800);
 }
 .tab-count {
-    display: inline-block;
-    background: var(--gray-200);
-    border-radius: 10px;
-    padding: 0 6px;
-    font-size: 0.75rem;
-    margin-left: 4px;
-    font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem;
+    background: var(--gray-400); color: #fff;
+    border-radius: 999px;
+    font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
+    margin-left: 5px;
 }
+.tab-btn.active .tab-count { background: var(--gray-800); }
+
+/* Cap every tab table at ~7 rows and scroll the rest, header pinned
+   (row 39px + head 32px; +14 lets the 8th row peek as a scroll hint). */
+.table-container { max-height: 319px; overflow-y: auto; }
+.table-container thead th {
+    position: sticky; top: 0; z-index: 2; background: #f8f8f7;
+    font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em;
+    text-transform: uppercase; font-weight: 500; color: var(--gray-500);
+}
+
+/* Refresh in the system bar: mono-caps outline pill, like Sync AWS. */
+.cr-refresh {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.8rem; border: 1px solid var(--hairline);
+    border-radius: 999px; background: #fff; color: var(--gray-600);
+    font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.12em;
+    text-transform: uppercase; font-weight: 600; cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+}
+.cr-refresh:hover { border-color: var(--ink); color: var(--ink); }
+
+/* Spinner shown while a filter change reloads the page. */
+.cr-spin {
+    display: inline-block; width: 15px; height: 15px;
+    border: 2px solid var(--gray-200); border-top-color: #15803d;
+    border-radius: 50%; animation: cr-spin 0.7s linear infinite;
+}
+@keyframes cr-spin { to { transform: rotate(360deg); } }
+
+/* Per-tab state summary line: flex gap between the total and each state. */
+.tab-counter { gap: 1.25rem; align-items: center; white-space: nowrap; }
+.cr-warn { color: #b45309; }
+
+/* Resource ids link straight to their AWS console page. */
+.res-link {
+    font-family: var(--font-mono); font-size: 0.75rem;
+    color: var(--ink); text-decoration: underline;
+    text-decoration-color: var(--gray-300); text-underline-offset: 3px;
+}
+.res-link:hover { color: var(--primary); text-decoration-color: var(--primary); }
+
+/* Tag selection: signature green square checkbox + selected-row highlight. */
+.tag-check, #tag-select-all {
+    appearance: none; -webkit-appearance: none;
+    width: 15px; height: 15px; border: 1.5px solid var(--gray-300); border-radius: 3px;
+    background: #fff; cursor: pointer; vertical-align: middle;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+.tag-check:hover, #tag-select-all:hover { border-color: var(--gray-500); }
+.tag-check:checked, #tag-select-all:checked { border-color: #15803d; background: #15803d; }
+tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow: inset 3px 0 0 0 #15803d; }
+
+/* Dedicated tag card below the inventory. */
+.tag-card { padding: 1rem 1.25rem; margin-top: 1rem; }
+.tag-card .tag-hd { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.2rem; }
+.tag-card .tag-hd .label { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-600); }
+.tag-card .tag-sel { font-family: var(--font-mono); font-size: 0.66rem; color: var(--gray-500); }
+.tag-card .tag-sel b { color: #15803d; }
+.tag-card .tag-sub { font-size: 0.8rem; color: var(--gray-500); margin: 0.15rem 0 0.9rem; }
+.tag-fields { display: flex; gap: 0.7rem; align-items: flex-end; flex-wrap: wrap; }
+.tag-fields .fg label { display: block; font-family: var(--font-mono); font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-500); margin-bottom: 0.25rem; }
+.tag-fields input[type=text] { padding: 0.45rem 0.6rem; border: 1px solid var(--line); border-radius: 6px; font-size: 0.85rem; background: var(--card); color: var(--ink); min-width: 180px; }
+.tag-fields input:focus { outline: none; border-color: #15803d; box-shadow: 0 0 0 1px rgba(21,128,61,0.35); }
+.tag-apply {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 1rem; border: none; border-radius: 999px;
+    background: #15803d; color: #fff;
+    font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600;
+    cursor: pointer; transition: opacity 0.15s;
+}
+.tag-apply:disabled { opacity: 0.45; cursor: not-allowed; }
+.tag-result { font-family: var(--font-mono); font-size: 0.68rem; margin-top: 0.7rem; }
+.tag-result.ok { color: #15803d; }
+.tag-result.err { color: var(--danger, #b91c1c); }
 </style>
 
-<div class="page-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-    <h1 style="margin-bottom: 0;">Cloud Resources</h1>
-    <button onclick="location.reload()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
-        <span>&#8635;</span> Refresh
-    </button>
-</div>
+<header class="sysbar mb-1">
+    <h1 class="sysbar-crumb" style="margin: 0;">Wasteless <span class="path">/ Cloud Resource Inventory</span></h1>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 1rem;">
+        <button onclick="location.reload()" class="cr-refresh"><span aria-hidden="true">&#8635;</span> Refresh</button>
+        {# Live clock, Europe/Paris — same wall clock as the DB stamps. #}
+        <time id="hero-clock" class="sysbar-clock" style="margin-left: 0;">
+            <span class="sysbar-beat" aria-hidden="true"></span>
+            <span class="sysbar-time" id="hero-clock-time"></span>
+            <span aria-hidden="true">&middot;</span>
+            <span id="hero-clock-date"></span>
+        </time>
+    </div>
+</header>
 
 <!-- Tab navigation -->
 <div class="tab-nav">
@@ -88,7 +179,7 @@
             <!-- State filter: EC2 only -->
             <div class="form-group" id="state-filter-group" style="margin: 0;">
                 <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">State</label>
-                <select name="state_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                <select name="state_filter" class="form-select" style="padding: 0.4rem;" onchange="applyFilter(this)">
                     <option value="all" {% if state_filter == 'all' %}selected{% endif %}>All States</option>
                     <option value="running"    {% if state_filter == 'running'    %}selected{% endif %}>Running</option>
                     <option value="stopped"    {% if state_filter == 'stopped'    %}selected{% endif %}>Stopped</option>
@@ -99,7 +190,7 @@
             <!-- Region filter: all tabs -->
             <div class="form-group" style="margin: 0;">
                 <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Region</label>
-                <select name="region_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                <select name="region_filter" class="form-select" style="padding: 0.4rem;" onchange="applyFilter(this)">
                     <option value="all" {% if region_filter == 'all' %}selected{% endif %}>All Regions</option>
                     {% for region in regions %}
                     <option value="{{ region }}" {% if region_filter == region %}selected{% endif %}>{{ region }}</option>
@@ -107,11 +198,24 @@
                 </select>
             </div>
 
-            <!-- EC2 summary counters -->
-            <div id="ec2-counters" style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
-                <span><strong>{{ ec2_count }}</strong> instances</span>
-                <span class="text-success"><strong>{{ running_count }}</strong> running</span>
-                <span class="text-muted"><strong>{{ stopped_count }}</strong> stopped</span>
+            <!-- Applying-filter spinner (shown while the page reloads) -->
+            <div id="filter-spinner" style="display: none; align-items: center; gap: 0.45rem; font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-500);">
+                <span class="cr-spin" aria-hidden="true"></span> Applying&hellip;
+            </div>
+
+            <!-- Per-tab state summary: totals + a state breakdown, shown for
+                 the active tab only (switchTab toggles them). -->
+            <div style="margin-left: auto; font-size: 0.85rem;">
+                <span class="tab-counter" data-tab="ec2" style="display: inline-flex;"><span><strong>{{ ec2_count }}</strong> instances</span><span class="text-success"><strong>{{ running_count }}</strong> running</span><span class="text-muted"><strong>{{ stopped_count }}</strong> stopped</span></span>
+                <span class="tab-counter" data-tab="volumes" style="display: none;"><span><strong>{{ vol_count }}</strong> volumes</span><span class="text-success"><strong>{{ volumes|selectattr('state','equalto','in-use')|list|length }}</strong> in-use</span><span class="cr-warn"><strong>{{ volumes|selectattr('state','equalto','available')|list|length }}</strong> available</span></span>
+                <span class="tab-counter" data-tab="ips" style="display: none;"><span><strong>{{ ip_count }}</strong> IPs</span><span class="text-success"><strong>{{ ips|selectattr('associated')|list|length }}</strong> associated</span><span class="cr-warn"><strong>{{ ips|rejectattr('associated')|list|length }}</strong> unassociated</span></span>
+                <span class="tab-counter" data-tab="vpcs" style="display: none;"><span><strong>{{ vpc_count }}</strong> VPCs</span><span class="text-muted"><strong>{{ vpcs|selectattr('is_default')|list|length }}</strong> default</span><span><strong>{{ vpcs|rejectattr('is_default')|list|length }}</strong> custom</span></span>
+                <span class="tab-counter" data-tab="snapshots" style="display: none;"><span><strong>{{ snap_count }}</strong> snapshots</span><span class="text-success"><strong>{{ snapshots|selectattr('state','equalto','completed')|list|length }}</strong> completed</span>{% set snap_pending = snapshots|rejectattr('state','equalto','completed')|list|length %}{% if snap_pending %}<span class="cr-warn"><strong>{{ snap_pending }}</strong> other</span>{% endif %}</span>
+                <span class="tab-counter" data-tab="nat" style="display: none;"><span><strong>{{ nat_count }}</strong> gateways</span><span class="text-success"><strong>{{ nat_gateways|selectattr('state','equalto','available')|list|length }}</strong> available</span></span>
+                <span class="tab-counter" data-tab="lb" style="display: none;"><span><strong>{{ lb_count }}</strong> load balancers</span><span class="text-success"><strong>{{ load_balancers|selectattr('state','equalto','active')|list|length }}</strong> active</span></span>
+                <span class="tab-counter" data-tab="amis" style="display: none;"><span><strong>{{ ami_count }}</strong> AMIs</span><span class="text-success"><strong>{{ amis|selectattr('state','equalto','available')|list|length }}</strong> available</span><span class="cr-warn"><strong>{{ amis|selectattr('public')|list|length }}</strong> public</span></span>
+                <span class="tab-counter" data-tab="rds" style="display: none;"><span><strong>{{ databases|length }}</strong> databases</span>{% if databases %}<span class="text-success"><strong>{{ databases|selectattr('status','equalto','available')|list|length }}</strong> available</span><span class="cr-warn"><strong>{{ databases|selectattr('status','equalto','stopped')|list|length }}</strong> stopped</span>{% endif %}<span class="text-muted"><strong>{{ rds_snapshots|length }}</strong> snapshots</span></span>
+                <span class="tab-counter" data-tab="s3" style="display: none;"><span><strong>{{ s3_count }}</strong> buckets</span></span>
             </div>
         </div>
     </form>
@@ -125,6 +229,7 @@
         <table style="font-size: 0.85rem;">
             <thead>
                 <tr>
+                    <th style="padding: 0.5rem; width: 34px;"><input type="checkbox" id="tag-select-all" onclick="toggleAllTag(this)" aria-label="Select all instances to tag"></th>
                     <th style="padding: 0.5rem;">Instance ID</th>
                     <th style="padding: 0.5rem;">Name</th>
                     <th style="padding: 0.5rem;">Type</th>
@@ -138,7 +243,8 @@
             <tbody>
                 {% for inst in instances %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ inst.instance_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" class="tag-check" data-id="{{ inst.instance_id }}" data-region="{{ inst.region }}" onclick="updateTagSelection()"></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/ec2/v2/home?region={{ inst.region }}#InstanceDetails:instanceId={{ inst.instance_id }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ inst.instance_id }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ inst.name }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ inst.type }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;">
@@ -189,7 +295,7 @@
             <tbody>
                 {% for vol in volumes %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ vol.volume_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/ec2/v2/home?region={{ vol.az[:-1] }}#VolumeDetails:volumeId={{ vol.volume_id }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ vol.volume_id }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ vol.name }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ vol.size_gb }} GiB</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ vol.type }}</span></td>
@@ -240,7 +346,7 @@
             <tbody>
                 {% for ip in ips %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ ip.allocation_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/ec2/v2/home?region={{ ip.region }}#ElasticIpDetails:AllocationId={{ ip.allocation_id }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ ip.allocation_id }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ ip.public_ip }}</code></td>
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if ip.private_ip != '-' %}<code style="font-size: 0.75rem;">{{ ip.private_ip }}</code>
@@ -288,7 +394,7 @@
             <tbody>
                 {% for vpc in vpcs %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ vpc.vpc_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/vpcconsole/home?region={{ vpc.region }}#VpcDetails:VpcId={{ vpc.vpc_id }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ vpc.vpc_id }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ vpc.name }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ vpc.cidr }}</code></td>
                     <td style="padding: 0.4rem 0.5rem;">
@@ -334,7 +440,7 @@
             <tbody>
                 {% for snap in snapshots %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ snap.snapshot_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/ec2/v2/home?region={{ snap.region }}#SnapshotDetails:snapshotId={{ snap.snapshot_id }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ snap.snapshot_id }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.description[:40] }}{% if snap.description|length > 40 %}…{% endif %}</span></td>
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if snap.volume_id != '-' %}<code style="font-size: 0.75rem;">{{ snap.volume_id }}</code>
@@ -388,7 +494,7 @@
             <tbody>
                 {% for nat in nat_gateways %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ nat.nat_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/vpcconsole/home?region={{ nat.region }}#NatGatewayDetails:natGatewayId={{ nat.nat_id }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ nat.nat_id }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ nat.name }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if nat.state == 'available' %}<span class="badge badge-success">available</span>
@@ -431,7 +537,7 @@
             <tbody>
                 {% for lb in load_balancers %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ lb.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/ec2/v2/home?region={{ lb.region }}#LoadBalancers:search={{ lb.name }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ lb.name }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span class="badge badge-info">{{ lb.lb_type }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ lb.scheme }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;">
@@ -474,7 +580,7 @@
             <tbody>
                 {% for ami in amis %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ ami.image_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/ec2/v2/home?region={{ ami.region }}#ImageDetails:imageId={{ ami.image_id }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ ami.image_id }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500; word-break: break-all;">{{ ami.name }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if ami.state == 'available' %}<span class="badge badge-success">available</span>
@@ -521,7 +627,7 @@
             <tbody>
                 {% for db in databases %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><span style="font-family: monospace; font-size: 0.8rem;">{{ db.db_id }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/rds/home?region={{ db.region }}#database:id={{ db.db_id }};is-cluster=false" target="_blank" rel="noopener" title="Open in the AWS Console">{{ db.db_id }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ db.engine }} {{ db.engine_version }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ db.class }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; {% if db.status == 'available' %}color: var(--success);{% elif db.status == 'stopped' %}color: var(--warning);{% endif %}">{{ db.status }}</span></td>
@@ -554,7 +660,7 @@
             <tbody>
                 {% for snap in rds_snapshots %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><span style="font-family: monospace; font-size: 0.8rem;">{{ snap.snapshot_id }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://console.aws.amazon.com/rds/home?region={{ snap.region }}#db-snapshot:id={{ snap.snapshot_id }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ snap.snapshot_id }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.db_id }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.engine }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.size_gb }} GiB</span></td>
@@ -591,7 +697,7 @@
             <tbody>
                 {% for bucket in buckets %}
                 <tr>
-                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ bucket.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><a class="res-link" href="https://s3.console.aws.amazon.com/s3/buckets/{{ bucket.name }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ bucket.name }}</a></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ bucket.region }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if bucket.created %}<span style="font-size: 0.8rem;">{{ bucket.created.strftime('%Y-%m-%d') }}</span>
@@ -610,7 +716,113 @@
 {% endif %}
 </div>
 
+<!-- ===== Dedicated tag card (below the inventory) ===== -->
+<div class="card tag-card">
+    <div class="tag-hd">
+        <span class="label">Tag resources</span>
+        <span class="tag-sel"><b id="tag-count">0</b> selected</span>
+    </div>
+    <div class="tag-sub">Select EC2 instances above, then apply a tag (key = value). Tags are written straight to AWS and logged in History. New tags appear in Cost Explorer for future spend only.</div>
+    <div class="tag-fields">
+        <div class="fg">
+            <label for="tag-key">Key</label>
+            <input type="text" id="tag-key" placeholder="e.g. CostCenter" maxlength="128" oninput="updateTagSelection()">
+        </div>
+        <div class="fg">
+            <label for="tag-value">Value</label>
+            <input type="text" id="tag-value" placeholder="e.g. team-platform" maxlength="256">
+        </div>
+        <button type="button" class="tag-apply" id="tag-apply" disabled onclick="applyTags()">Apply tag</button>
+        <span id="tag-spinner" class="cr-spin" style="display: none;" aria-hidden="true"></span>
+    </div>
+    <div id="tag-result" class="tag-result" style="display: none;"></div>
+</div>
+
 <script>
+// Live system-bar clock, Europe/Paris — same wall clock as the DB stamps.
+// Temporal when the browser ships it, Intl otherwise; ticks align to the
+// minute boundary (no seconds, no per-second wakeups).
+(function () {
+    const root = document.getElementById('hero-clock');
+    if (!root) return;
+    const timeEl = document.getElementById('hero-clock-time');
+    const dateEl = document.getElementById('hero-clock-date');
+    const TZ = 'Europe/Paris';
+    const timeFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
+    const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: TZ });
+    function render() {
+        if (typeof Temporal !== 'undefined') {
+            const now = Temporal.Now.zonedDateTimeISO(TZ);
+            root.dateTime = now.toString({ timeZoneName: 'never', smallestUnit: 'minute' });
+            timeEl.textContent = now.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            dateEl.textContent = now.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+        } else {
+            const now = new Date();
+            root.dateTime = now.toISOString();
+            timeEl.textContent = timeFmt.format(now);
+            dateEl.textContent = dateFmt.format(now);
+        }
+        setTimeout(render, 60250 - (Date.now() % 60000));
+    }
+    render();
+})();
+
+// Filter change: show the spinner, then reload. The selects keep their
+// values (never disabled, or they'd drop from the GET query).
+function applyFilter(sel) {
+    const sp = document.getElementById('filter-spinner');
+    if (sp) sp.style.display = 'inline-flex';
+    sel.form.submit();
+}
+
+// ---- Tagging: select instances, apply one key=value tag via AWS ----
+function toggleAllTag(master) {
+    document.querySelectorAll('.tag-check').forEach(cb => { cb.checked = master.checked; });
+    updateTagSelection();
+}
+function updateTagSelection() {
+    const n = document.querySelectorAll('.tag-check:checked').length;
+    document.getElementById('tag-count').textContent = n;
+    const key = document.getElementById('tag-key').value.trim();
+    document.getElementById('tag-apply').disabled = !(n > 0 && key.length > 0);
+    const all = document.querySelectorAll('.tag-check').length;
+    const master = document.getElementById('tag-select-all');
+    if (master) master.checked = all > 0 && n === all;
+}
+async function applyTags() {
+    const key = document.getElementById('tag-key').value.trim();
+    const value = document.getElementById('tag-value').value;
+    const resources = Array.from(document.querySelectorAll('.tag-check:checked'))
+        .map(cb => ({ id: cb.dataset.id, region: cb.dataset.region }));
+    if (!resources.length || !key) return;
+    const btn = document.getElementById('tag-apply');
+    const spin = document.getElementById('tag-spinner');
+    const out = document.getElementById('tag-result');
+    btn.disabled = true; spin.style.display = 'inline-block'; out.style.display = 'none';
+    try {
+        const res = await fetch('/api/cloud-resources/tag', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resources, key, value })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            out.className = 'tag-result err'; out.textContent = '✕ ' + (data.detail || 'Tagging failed');
+        } else if (data.tagged === data.total) {
+            out.className = 'tag-result ok';
+            out.textContent = '✓ Tagged ' + data.tagged + ' resource' + (data.tagged > 1 ? 's' : '') + ' with ' + key + '=' + value + '. Reloading…';
+            setTimeout(() => location.reload(), 1100);
+        } else {
+            out.className = 'tag-result err';
+            out.textContent = '✓ ' + data.tagged + ' tagged · ✕ ' + (data.total - data.tagged) + ' failed (see History).';
+        }
+        out.style.display = 'block';
+    } catch (e) {
+        out.className = 'tag-result err'; out.textContent = '✕ ' + e.message; out.style.display = 'block';
+    } finally {
+        spin.style.display = 'none'; updateTagSelection();
+    }
+}
+
 function switchTab(tab) {
     ['ec2', 'volumes', 'ips', 'vpcs', 'snapshots', 'nat', 'lb', 'amis', 'rds', 's3'].forEach(t => {
         document.getElementById('panel-' + t).style.display = t === tab ? '' : 'none';
@@ -618,7 +830,13 @@ function switchTab(tab) {
     });
     document.getElementById('current-tab').value = tab;
     document.getElementById('state-filter-group').style.display = tab === 'ec2' ? '' : 'none';
-    document.getElementById('ec2-counters').style.display = tab === 'ec2' ? '' : 'none';
+    // Show the active tab's state-summary line, hide the others.
+    document.querySelectorAll('.tab-counter').forEach(c => {
+        c.style.display = c.dataset.tab === tab ? 'inline-flex' : 'none';
+    });
+    // If the row scrolls, bring the active tab into view.
+    const activeBtn = document.getElementById('tab-' + tab);
+    if (activeBtn) activeBtn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 }
 
 switchTab('{{ tab }}');
