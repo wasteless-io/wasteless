@@ -244,16 +244,14 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
 
     # Active waste broken down by resource type (moved here from the report
     # 2026-07-19): current waste, biggest contributor first.
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT resource_type,
                COUNT(*) AS cnt,
                COALESCE(SUM(monthly_waste_eur), 0) AS monthly_eur
         FROM active_waste
         GROUP BY resource_type
         ORDER BY monthly_eur DESC
-        """
-    )
+        """)
     waste_by_type = cursor.fetchall()
 
     # AWS Spend KPI: last full calendar month from Cost Explorer data
