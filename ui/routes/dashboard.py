@@ -242,6 +242,20 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
     )
     inaction_row = cursor.fetchone()
 
+    # Active waste broken down by resource type (moved here from the report
+    # 2026-07-19): current waste, biggest contributor first.
+    cursor.execute(
+        """
+        SELECT resource_type,
+               COUNT(*) AS cnt,
+               COALESCE(SUM(monthly_waste_eur), 0) AS monthly_eur
+        FROM active_waste
+        GROUP BY resource_type
+        ORDER BY monthly_eur DESC
+        """
+    )
+    waste_by_type = cursor.fetchall()
+
     # AWS Spend KPI: last full calendar month from Cost Explorer data
     # (cloud_costs_raw, collected daily by cost_collector_job) — same
     # denominator convention as home's Waste Rate: the current month would
@@ -760,6 +774,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         "dashboard.html",
         context={
             "kpis": kpis,
+            "waste_by_type": waste_by_type,
             "last_scan_hours_ago": last_scan_hours_ago,
             "waste_trend": waste_trend,
             "trend_range": trend,
