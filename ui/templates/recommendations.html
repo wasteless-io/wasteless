@@ -40,9 +40,6 @@
     .card--no-hover:hover { border-color: transparent; }
     /* Live clock at the end of the banner: time first, date under it,
        tabular digits so the minute tick never makes it jitter. */
-    .hero-clock { text-align: right; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .hero-clock .hero-clock-time { display: block; font-size: 1.3rem; font-weight: 700; color: #1d1d1f; letter-spacing: -0.01em; }
-    .hero-clock .hero-clock-date { display: block; font-size: 0.8rem; color: #52514e; }
     /* Blink for the To-do bell while manual work is pending. */
     @keyframes pending-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     .pending-blink { animation: pending-blink 1.6s ease-in-out infinite; }
@@ -50,12 +47,27 @@
 
     /* To-do bell: pill button on the banner's left. Muted when the list is
        empty, amber-accented and blinking while something awaits action. */
-    .todo-bell { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.75rem; border: 1px solid var(--hairline, #d9d6d0); border-radius: 999px; background: white; color: var(--gray-500); font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: border-color 0.2s ease, color 0.2s ease; }
+    .todo-bell { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.3rem 0.75rem; border: 1px solid var(--hairline, #d9d6d0); border-radius: 999px; background: white; color: var(--gray-500); font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; cursor: pointer; transition: border-color 0.2s ease, color 0.2s ease; }
     .todo-bell:hover { border-color: var(--ink, #1d1d1f); color: var(--ink, #1d1d1f); }
     .todo-bell--active { color: var(--primary); border-color: rgba(0,113,227,0.35); }
     .todo-bell--active .todo-count { background: var(--primary); }
-    .todo-count { display: inline-flex; align-items: center; justify-content: center; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--warning); color: white; font-size: 0.72rem; }
+    .todo-count { display: inline-flex; align-items: center; justify-content: center; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--warning); color: white; font-family: var(--font-mono); font-size: 0.68rem; }
     .todo-bell[data-empty] .todo-count { background: var(--gray-400); }
+
+    /* Sync AWS: twin of the To-do bell in the terminal register — mono-caps
+       outline pill, not the generic .btn. The ↻ icon spins while syncing
+       (JS rewrites the label; the uppercase comes from here so it survives). */
+    .sync-btn {
+        display: inline-flex; align-items: center; gap: 0.45rem;
+        padding: 0.32rem 0.8rem;
+        border: 1px solid var(--hairline, #d9d6d0); border-radius: 999px;
+        background: white; color: var(--gray-600);
+        font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.12em;
+        text-transform: uppercase; font-weight: 600; cursor: pointer;
+        transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    .sync-btn:hover { border-color: var(--ink, #1d1d1f); color: var(--ink, #1d1d1f); }
+    .sync-btn:disabled { opacity: 0.6; cursor: default; }
 
     /* Notification-style dropdown anchored under the bell. */
     .todo-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 1500; width: 340px; max-height: 60vh; overflow-y: auto; background: white; border: 1px solid var(--gray-200); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
@@ -81,7 +93,186 @@
        + tooltip. Pushed to the end of the filter row. */
     .summary-rings { display: flex; align-items: center; gap: 2rem; }
     .summary-kpi { text-align: center; }
-    .summary-ring-label { text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-500); font-weight: 600; font-size: 0.6rem; margin-bottom: 0.15rem; }
+    .summary-ring-label { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--gray-500); font-weight: 500; font-size: 0.6rem; margin-bottom: 0.15rem; }
+
+    /* Landing identity: table chrome in mono caps, on every tab table
+       (the data cells keep the grotesque) */
+    table thead th { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500; color: var(--gray-500); }
+
+    /* Only the active tab is underlined — no baseline under the whole row. */
+
+    /* Cap each tab table at ~7 rows and scroll the rest, header pinned
+       (2026-07-19). Row ≈ 48px + 34px head; the extra ~18px lets the 8th
+       row peek so it reads as scrollable. */
+    #actionsForm .table-container {
+        max-height: 388px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--gray-300) transparent;
+    }
+    #actionsForm .table-container::-webkit-scrollbar { width: 7px; }
+    #actionsForm .table-container::-webkit-scrollbar-track { background: transparent; }
+    #actionsForm .table-container::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 999px; }
+    #actionsForm thead th {
+        position: sticky; top: 0; z-index: 2;
+        background: #f8f8f7;  /* solid so scrolled rows don't show through */
+    }
+
+    /* Data grid as an instrument readout (2026-07-19). Row feedback:
+       a hover wash, and a live selected state driven by the checkbox
+       via :has() — a mint left rail marks what will be acted on. */
+    tbody tr { transition: background 0.12s ease; }
+    tbody tr:hover { background: rgba(0,0,0,0.022); }
+    tbody tr:has(.rec-checkbox:checked) {
+        background: rgba(21,128,61,0.06);
+        box-shadow: inset 3px 0 0 0 #15803d;
+    }
+    /* Selection marker = the signature green square (■): a plain filled
+       square when checked, an empty bordered one at rest — no OS checkmark
+       (user request 2026-07-19). Covers row and select-all checkboxes. */
+    #actionsForm input[type="checkbox"] {
+        appearance: none; -webkit-appearance: none;
+        width: 15px; height: 15px;
+        border: 1.5px solid var(--gray-300); border-radius: 3px;
+        background: #fff; cursor: pointer; vertical-align: middle;
+        transition: border-color 0.12s ease, background 0.12s ease;
+    }
+    #actionsForm input[type="checkbox"]:hover { border-color: var(--gray-500); }
+    #actionsForm input[type="checkbox"]:checked { border-color: #15803d; background: #15803d; }
+    #actionsForm input[type="checkbox"]:focus-visible { outline: 2px solid rgba(21,128,61,0.4); outline-offset: 1px; }
+    /* Technical/numeric values in mono so columns scan like a readout */
+    .val-mono { font-family: var(--font-mono); }
+    /* Action as a terminal chip: mono-caps, colour = how mutating it is */
+    .act-chip {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.08em;
+        text-transform: uppercase; font-weight: 600;
+        padding: 0.15rem 0.5rem; border-radius: 4px; white-space: nowrap;
+    }
+    .act-chip::before { content: ""; width: 5px; height: 5px; }
+    .act-chip.act-stop  { color: #b45309; background: rgba(180,83,9,0.09); }
+    .act-chip.act-stop::before { background: #b45309; }
+    .act-chip.act-term  { color: #b91c1c; background: rgba(185,28,28,0.09); }
+    .act-chip.act-term::before { background: #b91c1c; }
+    .act-chip.act-down  { color: #0062c4; background: rgba(0,113,227,0.09); }
+    .act-chip.act-down::before { background: #0062c4; }
+    /* Savings is the payoff column: mono, a touch heavier, faint mint wash
+       behind the cell so the recovered money is what the eye lands on. The
+       :has() selector catches the savings cell on EVERY tab (its <strong
+       class="text-success"> is the tell) so all tabs match without markup. */
+    #actionsForm td:has(> div > strong.text-success) { background: rgba(21,128,61,0.035); }
+    #actionsForm td:has(> div > strong.text-success) strong { font-family: var(--font-mono); font-size: 0.9rem; }
+    /* AVG CPU gauge: actual CPU on a 0–10% scale with the 5% idle
+       threshold marked — the fill sitting far left of the marker is why
+       the instrument is flagged idle, shown not just stated. */
+    .cpu-gauge { position: relative; width: 58px; height: 5px; margin-top: 3px; border-radius: 999px; background: var(--gray-200); overflow: hidden; }
+    .cpu-gauge > i { display: block; height: 100%; border-radius: 999px; }
+    .cpu-gauge::after { content: ""; position: absolute; top: -1px; bottom: -1px; left: 50%; width: 1px; background: var(--gray-500); opacity: 0.5; }
+    /* Confidence as a ring (landing identity: the 94% dial), the % at its
+       centre in mono. r=15.9155 makes the circumference exactly 100, so
+       stroke-dasharray "<pct> 100" draws the arc straight from the value. */
+    .conf-ring { position: relative; width: 34px; height: 34px; }
+    .conf-ring svg { display: block; transform: rotate(-90deg); }
+    .conf-ring-label {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.58rem; font-weight: 600;
+    }
+
+    /* Infrastructure assistant: THE dark panel of this page (landing
+       identity), same material as the Overview's Daily Briefing — the
+       LLM wired to the live estate gets its own console, distinct from
+       the light data around it. */
+    .estate-chat {
+        background-color: #0b0e0c;
+        border-radius: 12px;
+        color: #f2f5f3;
+        background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
+        background-size: 22px 22px;
+        box-shadow: 5px 5px 0 0 rgba(62,213,152,0.22);
+        padding: 0.9rem 1.1rem;
+    }
+    /* Collapsed by default = the band alone (user request 2026-07-19); the
+       whole header is the toggle. Clicking inflates the card and reveals
+       the field + starter chips. */
+    .estate-chat .ec-head {
+        display: flex; align-items: center; gap: 0.6rem;
+        margin-bottom: 0; cursor: pointer; user-select: none;
+    }
+    .estate-chat.open .ec-head { margin-bottom: 0.65rem; }
+    .estate-chat .ec-name {
+        font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.15em;
+        text-transform: uppercase; font-weight: 700;
+        display: inline-flex; align-items: center; gap: 0.5rem;
+    }
+    .estate-chat .ec-name::before { content: ""; width: 7px; height: 7px; background: #3ed598; }
+    .estate-chat .ec-tag { margin-left: auto; font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: #8b948e; }
+    .estate-chat .ec-caret { display: inline-flex; color: #8b948e; transition: transform 0.3s ease; }
+    .estate-chat.open .ec-caret { transform: rotate(180deg); }
+    /* The reveal: body grows from 0, and the card gives a small inflate pop */
+    .estate-chat .ec-body {
+        max-height: 0; opacity: 0; overflow: hidden;
+        transition: max-height 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.28s ease;
+    }
+    .estate-chat.open .ec-body { max-height: 520px; opacity: 1; }
+    .estate-chat.open { animation: ec-inflate 0.34s cubic-bezier(0.34,1.42,0.64,1); }
+    @keyframes ec-inflate { 0% { transform: scale(0.985); } 100% { transform: scale(1); } }
+    @media (prefers-reduced-motion: reduce) {
+        .estate-chat .ec-body, .estate-chat .ec-caret { transition: none; }
+        .estate-chat.open { animation: none; }
+    }
+    .estate-chat input {
+        flex: 1; min-width: 0;
+        padding: 0.55rem 0.75rem;
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 8px;
+        background: rgba(255,255,255,0.04);
+        color: #f2f5f3;
+        font-size: 0.85rem;
+    }
+    .estate-chat input::placeholder { color: #6b746f; }
+    .estate-chat input:focus { outline: none; border-color: #3ed598; box-shadow: 0 0 0 1px rgba(62,213,152,0.4); }
+    .estate-chat .ec-send {
+        flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: none;
+        border-radius: 8px; background: #3ed598; color: #0b0e0c; cursor: pointer;
+        align-items: center; justify-content: center;
+    }
+    .estate-chat .ec-answer {
+        margin-top: 0.7rem; padding-top: 0.6rem;
+        border-top: 1px solid rgba(255,255,255,0.12);
+        font-size: 0.85rem; line-height: 1.55; color: #d7ddd9;
+        white-space: pre-wrap;
+        /* A long answer scrolls inside the panel instead of growing a
+           tower that unbalances the page */
+        max-height: 220px; overflow-y: auto;
+    }
+    .estate-chat .ec-answer::-webkit-scrollbar { width: 5px; }
+    .estate-chat .ec-answer::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 999px; }
+
+    /* Starter questions (AWS "Explorer vos coûts avec l'IA" pattern):
+       clickable prompt chips so the empty state shows what to ask. One
+       horizontally-scrollable row, dark-themed. */
+    .estate-chat .ec-chips {
+        display: flex; gap: 0.5rem; margin-top: 0.6rem;
+        overflow-x: auto; scrollbar-width: none;
+    }
+    .estate-chat .ec-chips::-webkit-scrollbar { display: none; }
+    .estate-chat .ec-chip {
+        flex-shrink: 0;
+        padding: 0.35rem 0.75rem;
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 999px;
+        background: rgba(255,255,255,0.03);
+        color: #d7ddd9;
+        font-family: inherit; font-size: 0.76rem;
+        white-space: nowrap; cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+    .estate-chat .ec-chip:hover,
+    .estate-chat .ec-chip:focus-visible {
+        border-color: #3ed598; color: #f2f5f3;
+        background: rgba(62,213,152,0.1); outline: none;
+    }
     .summary-kpi .ring-value { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
     .summary-kpi .ring-unit { font-size: 0.72rem; font-weight: 400; color: var(--gray-500); margin-left: 0.1rem; }
     .summary-sep { width: 1px; height: 42px; background: var(--gray-400); }
@@ -102,7 +293,7 @@
     /* Read-only policy status banner (dry-run / grace / auto-remediation).
        Editing lives on /settings; this only mirrors the active mode. */
     .policy-banner { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.75rem; font-size: 0.8rem; color: var(--gray-600); }
-    .mode-pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; text-decoration: none; cursor: pointer; transition: filter 0.15s ease, box-shadow 0.15s ease; }
+    .mode-pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.24rem 0.6rem; border-radius: 999px; font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; border: 1px solid transparent; white-space: nowrap; text-decoration: none; cursor: pointer; transition: filter 0.15s ease, box-shadow 0.15s ease; }
     a.mode-pill:hover { filter: brightness(0.95); box-shadow: 0 0 0 1px currentColor inset; }
     .mode-pill--dry  { background: rgba(0,113,227,0.08); color: var(--primary); }
     .mode-pill--live { background: rgba(220,38,38,0.08); color: var(--danger); border-color: rgba(220,38,38,0.28); }
@@ -132,9 +323,12 @@
 {# position/z-index: lift the whole banner's stacking context above the
    cards below, so the To-do dropdown (absolute, inside) isn't painted
    under the summary card that follows it in the DOM. #}
-<header class="card mb-1 card--no-hover" style="padding: 0.9rem 1.5rem; background: #efede8; color: #1d1d1f; overflow: visible; position: relative; z-index: 50;">
-    <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;">
-        <div style="justify-self: start; position: relative;">
+{# System bar (landing chrome, V1), same treatment as Overview and
+   Dashboard: breadcrumb + To-do bell + live clock with a sync heartbeat.
+   overflow/z-index kept so the To-do dropdown clears the cards below. #}
+<header class="sysbar mb-1" style="overflow: visible; position: sticky; top: 0; z-index: 100;">
+    <h1 class="sysbar-crumb" style="margin: 0;">Wasteless <span class="path">/ Recommendations</span></h1>
+        <div style="position: relative;">
             {# Manual-to-do button: blinks only while resources await manual
                execution. Click toggles the notification-style list below. #}
             <button type="button" id="todoBell" onclick="toggleTodoPanel(event)"
@@ -182,28 +376,58 @@
                 </div>
             </div>
         </div>
-        <h1 style="margin: 0; font-size: 1.3rem; font-weight: 700; color: #1d1d1f; text-align: center;">Wasteless Recommendations</h1>
         {# Live clock, Europe/Paris — same wall clock as the DB stamps. #}
-        <time id="hero-clock" class="hero-clock" style="justify-self: end;">
-            <span class="hero-clock-time" id="hero-clock-time"></span>
-            <span class="hero-clock-date" id="hero-clock-date"></span>
+        <time id="hero-clock" class="sysbar-clock">
+            <span class="sysbar-beat{% if not aws_sync_at %} is-muted{% endif %}" aria-hidden="true"></span>
+            <span class="sysbar-time" id="hero-clock-time"></span>
+            <span aria-hidden="true">&middot;</span>
+            <span id="hero-clock-date"></span>
         </time>
-    </div>
 </header>
 
 {# Sync AWS + last-sync stamp, moved out of the old page title row #}
 <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-bottom: 1rem;">
-    <span id="lastSyncStamp" style="font-size: 0.7rem; color: var(--gray-400);{% if not aws_sync_at %} display: none;{% endif %}">Last sync: {% if aws_sync_at %}{{ aws_sync_at.strftime('%d %b, %H:%M') }}{% endif %}</span>
-    <button type="button" onclick="syncWithAWS()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" id="syncBtn">
+    <span id="lastSyncStamp" class="status-pill"{% if not aws_sync_at %} style="display: none;"{% endif %}>Last sync: {% if aws_sync_at %}{{ aws_sync_at.strftime('%d %b, %H:%M') }}{% endif %}</span>
+    <button type="button" onclick="syncWithAWS()" class="sync-btn" id="syncBtn">
         <span id="syncIcon">&#8635;</span> Sync AWS
     </button>
 </div>
 
-<!-- Summary + chat -->
-<div class="card mb-1" style="padding: 0.75rem; border-radius: 0;">
-    <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
-        {# Summary KPIs — bare style, same as the overview dials #}
-        <div class="summary-rings">
+{# Infrastructure assistant — the dark console, on top (2026-07-19, user
+   request): the AI wired to the live estate leads the page, the summary
+   stats sit beneath it. Its own full-width panel so a long answer grows
+   the page evenly; the answer scrolls internally past 220px. #}
+<div class="estate-chat mb-1" id="estateChat">
+    <div class="ec-head" role="button" tabindex="0" aria-expanded="false" aria-controls="ecBody"
+         onclick="toggleEstate()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleEstate();}">
+        <span class="ec-name">How can I help you?</span>
+        <span class="ec-tag">AI · live on your AWS</span>
+        <span class="ec-caret" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+    </div>
+    <div class="ec-body" id="ecBody">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <input id="estateAskInput" type="text" placeholder="Ask about your pending recommendations…" oninput="toggleEstateSendBtn()" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitEstateQuestion();}">
+            {# Send button: hidden until the field has content
+               (toggleEstateSendBtn on input). #}
+            <button type="button" id="estateAskBtn" class="ec-send" onclick="submitEstateQuestion()" aria-label="Send" title="Send" style="display: none;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+        </div>
+        {# Starter questions (AWS pattern): click to ask. Hidden once the
+           assistant has answered, so the conversation takes the space. #}
+        <div id="estateChips" class="ec-chips">
+            <button type="button" class="ec-chip" onclick="askEstate(this)">Which instance should I stop first?</button>
+            <button type="button" class="ec-chip" onclick="askEstate(this)">What would I save if I approve everything?</button>
+            <button type="button" class="ec-chip" onclick="askEstate(this)">Why is the confidence capped at 70%?</button>
+            <button type="button" class="ec-chip" onclick="askEstate(this)">Which recommendations are safest to apply?</button>
+            <button type="button" class="ec-chip" onclick="askEstate(this)">Show my biggest savings opportunities</button>
+        </div>
+        <div id="estateAnswer" class="ec-answer" style="display: none;"></div>
+    </div>
+</div>
+
+<!-- Summary strip (full width): the three pending-set stats spread evenly
+     across the bar, like the Overview tiles — no empty gutter. -->
+<div class="card mb-1" style="padding: 0.55rem 1.25rem; border-radius: 0;">
+        <div class="summary-rings" style="justify-content: space-around;">
             <div class="summary-kpi">
                 <div class="summary-ring-label">Recommendations</div>
                 <div class="ring-value" style="color: var(--gray-800);"><span class="kpi-hover" tabindex="0" data-tip-card="Total pending recommendations"><span class="kpi-zoom"><span id="kpiCount" class="countup{% if (total_count or 0) > 0 %} pending-blink{% endif %}">{{ total_count }}</span></span></span></div>
@@ -229,22 +453,6 @@
                 <div id="kpiConfidenceRing" class="ring-value" style="color: {% if avg_confidence >= 0.8 %}var(--success){% elif avg_confidence >= 0.5 %}var(--warning){% else %}var(--danger){% endif %};"><span class="kpi-hover" tabindex="0" data-tip-card="Average detection confidence across these recommendations"><span class="kpi-zoom"><span id="kpiConfidence" class="countup">{{ "%.0f"|format(avg_confidence * 100) }}</span><span class="ring-unit">%</span></span></span></div>
             </div>
         </div>
-
-        {# AI chat over the whole set of pending recommendations — prompt
-           heading on top, field and send button on one line below, on the
-           right of the tile #}
-        <div style="margin-left: auto; display: flex; flex-direction: column; gap: 0.35rem; flex: 1 1 300px; max-width: 560px;">
-            <div style="font-size: 0.85rem; font-weight: 600; color: var(--gray-700);">How can I help you?</div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input id="estateAskInput" type="text" placeholder="Write a message…" oninput="toggleEstateSendBtn()" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitEstateQuestion();}" style="flex: 1; min-width: 0; padding: 0.5rem 0.7rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.85rem;">
-                {# Send button: square, rounded, up-arrow. Hidden until the field
-                   has content (toggleEstateSendBtn on input), so it only shows
-                   once the user has typed something to send. #}
-                <button type="button" id="estateAskBtn" onclick="submitEstateQuestion()" aria-label="Send" title="Send" style="display: none; flex-shrink: 0; width: 34px; height: 34px; padding: 0; border: none; border-radius: 8px; background: var(--primary); color: white; cursor: pointer; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
-            </div>
-        </div>
-    </div>
-    <div id="estateAnswer" style="display: none; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--gray-100); font-size: 0.85rem; color: var(--gray-700); white-space: pre-wrap; line-height: 1.5;"></div>
 </div>
 
 {% if pr_open_recs %}
@@ -317,8 +525,8 @@
 <!-- The manual-to-do list now lives in the To-do bell dropdown in the hero
      banner (its own panel + count); the standalone card here was redundant. -->
 
-<!-- Tabs -->
-<div class="card" style="padding: 0.75rem;">
+<!-- Tabs (square corners on purpose, 2026-07-19 user request) -->
+<div class="card" style="padding: 0.75rem; border-radius: 0;">
     {% if pending_truncated %}
     <div style="margin: 0.25rem 0.5rem 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--warning); border-radius: 8px; background: rgba(237, 137, 54, 0.06); font-size: 0.8rem; color: var(--gray-700);">
         Showing the <strong>{{ recommendations|length }}</strong> highest-saving recommendations out of <strong>{{ total_count }}</strong>.
@@ -326,45 +534,45 @@
     </div>
     {% endif %}
     <!-- Tab nav -->
-    <div class="tab-nav" style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1rem;">
-        <button id="tab-btn-ec2" onclick="switchTab('ec2')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--gray-800); margin-bottom: -2px;">
+    <div class="tab-nav" style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0; position: relative; margin-bottom: 1rem;">
+        <button id="tab-btn-ec2" onclick="switchTab('ec2')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: #f1f1ef; border-radius: 8px 8px 0 0; cursor: pointer; border-bottom: 2px solid var(--gray-800); margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-800);">EC2 Instances <span style="background: var(--gray-800); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ec2_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-800); opacity: 0.7; margin-top: 2px;">AUTOMATED</span>
+            <span style="font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; color: var(--gray-800); opacity: 0.7; margin-top: 2px;">AUTOMATED</span>
         </button>
         <button id="tab-btn-ebs" onclick="switchTab('ebs')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">EBS Volumes <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ebs_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
+            <span style="font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
         <button id="tab-btn-eip" onclick="switchTab('eip')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Elastic IPs <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ eip_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
+            <span style="font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
         <button id="tab-btn-snap" onclick="switchTab('snap')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Snapshots <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ snap_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
+            <span style="font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
         {% if nat_recs %}
         <button id="tab-btn-nat" onclick="switchTab('nat')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">NAT Gateways <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ nat_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
+            <span style="font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
         {% endif %}
         {% if lb_recs %}
         <button id="tab-btn-lb" onclick="switchTab('lb')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Load Balancers <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ lb_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
+            <span style="font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
         {% endif %}
         {% if ami_recs %}
         <button id="tab-btn-ami" onclick="switchTab('ami')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">AMIs <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ami_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
+            <span style="font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; color: var(--gray-500); margin-top: 2px;">AUTOMATED</span>
         </button>
         {% endif %}
         {% if rds_recs %}
         <button id="tab-btn-rds" onclick="switchTab('rds')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">RDS <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ rds_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
+            <span style="font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; color: var(--gray-500); margin-top: 2px;">MANUAL REVIEW</span>
         </button>
         {% endif %}
         {% if other_recs %}
@@ -376,7 +584,7 @@
                MANUAL REVIEW while the tab sat in AUTOMATED_TABS, which fed
                a real user mixup; the confirmation dialog now spells out
                the per-type behavior. #}
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MIXED</span>
+            <span style="font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; color: var(--gray-500); margin-top: 2px;">MIXED</span>
         </button>
         {% endif %}
 
@@ -447,6 +655,15 @@
         </div>
     </div>
 
+    {# Confidence ring, shared by every tab table (single source of truth):
+       r=15.9155 => circumference 100, so dasharray "<pct> 100" draws the arc
+       from the value. Colour by the same thresholds as the fill it replaced. #}
+    {% macro conf_ring(score, tip='') %}
+    {% set cpct = (score or 0) * 100 %}
+    {% set ccolor = 'var(--success)' if cpct >= 90 else ('var(--primary)' if cpct >= 80 else ('var(--warning)' if cpct >= 70 else 'var(--danger)')) %}
+    <div class="conf-ring"{% if tip %} data-tip-card="{{ tip }}"{% endif %}><svg viewBox="0 0 36 36" width="34" height="34" role="img" aria-label="Confidence {{ "%.0f"|format(cpct) }} percent"><circle cx="18" cy="18" r="15.9155" fill="none" stroke="var(--gray-200)" stroke-width="3.2"></circle><circle cx="18" cy="18" r="15.9155" fill="none" stroke="{{ ccolor }}" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="{{ cpct }} 100"></circle></svg><span class="conf-ring-label val-mono" style="color: {{ ccolor }};">{{ "%.0f"|format(cpct) }}</span></div>
+    {% endmacro %}
+
     <form id="actionsForm">
         <!-- EC2 Tab -->
         <div id="tab-ec2">
@@ -481,33 +698,39 @@
                         <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
                             <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" data-rectype="{{ rec.recommendation_type }}" class="rec-checkbox rec-checkbox-ec2" data-savings="{{ savings }}" data-confidence="{{ rec.confidence_score or 0 }}" data-resource="{{ rec.resource_id }}" data-bucket="{{ rec.bucket_key }}" data-console="https://console.aws.amazon.com/ec2/v2/home?region={{ rec.volume_region or 'eu-west-1' }}#InstanceDetails:instanceId={{ rec.resource_id }}" onclick="event.stopPropagation(); updateSelectedCount();"></td>
                             <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;" class="reason-hover" data-reason-title="Why act?" data-reason="{{ reason }}" data-rec-id="{{ rec.id }}" data-rec-label="{{ rec.resource_id }}" onclick="event.stopPropagation(); openResourceModal(this.dataset.recId, this.dataset.recLabel)">{{ rec.resource_id[:20] }}</code><button type="button" class="copy-id-btn" aria-label="Copy resource id" data-tip-card="Copy id" data-id="{{ rec.resource_id }}" onclick="event.stopPropagation(); copyResourceId(this)"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/></svg></button></td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span class="val-mono" style="font-size: 0.78rem;">{{ rec.instance_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 {% if rec.recommendation_type == 'stop_instance' %}
-                                <span class="badge badge-warning" style="border: none;">Stop</span>
+                                <span class="act-chip act-stop">Stop</span>
                                 {% elif rec.recommendation_type == 'terminate_instance' %}
-                                <span class="badge badge-danger" style="border: none;">Terminate</span>
+                                <span class="act-chip act-term">Terminate</span>
                                 {% else %}
-                                <span class="badge badge-info" style="border: none;">Downsize</span>
+                                <span class="act-chip act-down">Downsize</span>
                                 {% endif %}
                             </td>
-                                                        <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
+                                                        <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span class="val-mono" style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;">
-                                <span style="font-weight: 600; color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
+                                {% set cpu = rec.cpu_avg or 0 %}
+                                {% set cpu_color = 'var(--danger)' if cpu < 5 else ('var(--warning)' if cpu < 20 else 'var(--gray-600)') %}
+                                <span class="val-mono" style="font-weight: 600; color: {{ cpu_color }};">{{ "%.1f"|format(cpu) }}%</span>
+                                <div class="cpu-gauge" data-tip-card="Avg CPU {{ '%.1f'|format(cpu) }}% against the 5% idle threshold (marked). Far below it is why this reads idle."><i style="width: {{ [cpu / 10 * 100, 100] | min }}%; background: {{ cpu_color }};"></i></div>
                             </td>
-                            <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.pricing_fallback %} data-tip-card="Default price: {{ rec.instance_type or 'this type' }} is not in the static pricing table, so this is a placeholder, not a priced estimate"{% elif rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} $/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}{% if rec.pricing_fallback %}<span style="color: var(--warning);" aria-hidden="true">*</span>{% endif %}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">$/mo</span></td>
-                            <td style="padding: 0.4rem 0.5rem;">
-                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                            <td style="padding: 0.4rem 0.5rem;"><span class="val-mono" style="color: var(--gray-700);"{% if rec.pricing_fallback %} data-tip-card="Default price: {{ rec.instance_type or 'this type' }} is not in the static pricing table, so this is a placeholder, not a priced estimate"{% elif rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} $/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}{% if rec.pricing_fallback %}<span style="color: var(--warning);" aria-hidden="true">*</span>{% endif %}</span> <span style="font-size: 0.72rem; color: var(--gray-500);">$/mo</span></td>
+                            <td class="sav-cell" style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: baseline; gap: 0.25rem;">
                                     <strong class="text-success"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.savings_capped) }} $ — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong>
-                                    <span style="font-size: 0.75rem; color: var(--gray-500);">$</span>
+                                    <span style="font-size: 0.72rem; color: var(--gray-500);">$</span>
                                 </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
-                                <div style="display: flex; align-items: center; gap: 0.25rem;"{% if rec.metrics_days and rec.observation_window_days and rec.metrics_days < rec.observation_window_days %} data-tip-card="Capped: only {{ rec.metrics_days }} day{{ 's' if rec.metrics_days > 1 }} of CPU metrics in the {{ rec.observation_window_days }}-day window, fills up as data accrues"{% endif %}>
-                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
-                                    </div>
-                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                {% set cpct = (rec.confidence_score or 0) * 100 %}
+                                {% set ccolor = 'var(--success)' if cpct >= 90 else ('var(--primary)' if cpct >= 80 else ('var(--warning)' if cpct >= 70 else 'var(--danger)')) %}
+                                <div class="conf-ring"{% if rec.metrics_days and rec.observation_window_days and rec.metrics_days < rec.observation_window_days %} data-tip-card="Capped: only {{ rec.metrics_days }} day{{ 's' if rec.metrics_days > 1 }} of CPU metrics in the {{ rec.observation_window_days }}-day window, fills up as data accrues"{% endif %}>
+                                    <svg viewBox="0 0 36 36" width="34" height="34" role="img" aria-label="Confidence {{ "%.0f"|format(cpct) }} percent">
+                                        <circle cx="18" cy="18" r="15.9155" fill="none" stroke="var(--gray-200)" stroke-width="3.2"></circle>
+                                        <circle cx="18" cy="18" r="15.9155" fill="none" stroke="{{ ccolor }}" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="{{ cpct }} 100"></circle>
+                                    </svg>
+                                    <span class="conf-ring-label val-mono" style="color: {{ ccolor }};">{{ "%.0f"|format(cpct) }}</span>
                                 </div>
                             </td>
                         </tr>
@@ -549,17 +772,14 @@
                             <td style="padding: 0.4rem 0.5rem; white-space: nowrap;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span> <span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.pricing_fallback %} data-tip-card="Default price: this resource's type is not in the static pricing table, so this is a placeholder, not a priced estimate"{% elif rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} $/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}{% if rec.pricing_fallback %}<span style="color: var(--warning);" aria-hidden="true">*</span>{% endif %}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">$/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span class="val-mono" style="color: var(--gray-700);"{% if rec.pricing_fallback %} data-tip-card="Default price: this resource's type is not in the static pricing table, so this is a placeholder, not a priced estimate"{% elif rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} $/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}{% if rec.pricing_fallback %}<span style="color: var(--warning);" aria-hidden="true">*</span>{% endif %}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">$/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <strong class="text-success"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.savings_capped) }} $ — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">$</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
-                                    </div>
-                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                    {{ conf_ring(rec.confidence_score) }}
                                 </div>
                             </td>
                         </tr>
@@ -598,13 +818,10 @@
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.pricing_fallback %} data-tip-card="Default price: this resource's type is not in the static pricing table, so this is a placeholder, not a priced estimate"{% elif rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} $/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}{% if rec.pricing_fallback %}<span style="color: var(--warning);" aria-hidden="true">*</span>{% endif %}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">$/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span class="val-mono" style="color: var(--gray-700);"{% if rec.pricing_fallback %} data-tip-card="Default price: this resource's type is not in the static pricing table, so this is a placeholder, not a priced estimate"{% elif rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} $/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}{% if rec.pricing_fallback %}<span style="color: var(--warning);" aria-hidden="true">*</span>{% endif %}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">$/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: var(--success);"></div>
-                                    </div>
-                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                    {{ conf_ring(rec.confidence_score) }}
                                 </div>
                             </td>
                         </tr>
@@ -646,17 +863,14 @@
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
                             <td style="padding: 0.4rem 0.5rem; text-align: center;">{% if rec.age_days is not none %}<span style="font-weight: 600; color: {% if rec.age_days > 365 %}var(--danger){% elif rec.age_days > 90 %}var(--warning){% else %}var(--gray-500){% endif %};">{% if rec.age_days < 1 %}&lt; 24h{% else %}{{ rec.age_days }}d{% endif %}</span>{% else %}<span style="color: var(--gray-400);">-</span>{% endif %}</td>
                             <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
-                                                        <td style="padding: 0.4rem 0.5rem;"><span style="color: var(--gray-700);"{% if rec.pricing_fallback %} data-tip-card="Default price: this resource's type is not in the static pricing table, so this is a placeholder, not a priced estimate"{% elif rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} $/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}{% if rec.pricing_fallback %}<span style="color: var(--warning);" aria-hidden="true">*</span>{% endif %}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">$/mo</span></td>
+                                                        <td style="padding: 0.4rem 0.5rem;"><span class="val-mono" style="color: var(--gray-700);"{% if rec.pricing_fallback %} data-tip-card="Default price: this resource's type is not in the static pricing table, so this is a placeholder, not a priced estimate"{% elif rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.monthly_cost_capped) }} $/mo — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(rec.monthly_cost_raw) }}{% if rec.pricing_fallback %}<span style="color: var(--warning);" aria-hidden="true">*</span>{% endif %}</span> <span style="font-size: 0.75rem; color: var(--gray-500);">$/mo</span></td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
                                     <strong class="text-success"{% if rec.savings_is_capped %} data-tip-card="Realistic: {{ '%.2f'|format(rec.savings_capped) }} $ — capped to this service's real spend"{% endif %}>{{ "%.2f"|format(savings) }}</strong> <span style="font-size: 0.75rem; color: var(--gray-500);">$</span>                                </div>
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
-                                    </div>
-                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                    {{ conf_ring(rec.confidence_score) }}
                                 </div>
                             </td>
                         </tr>
@@ -701,10 +915,7 @@
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
-                                    </div>
-                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                    {{ conf_ring(rec.confidence_score) }}
                                 </div>
                             </td>
                         </tr>
@@ -752,10 +963,7 @@
                             </td>
                             <td style="padding: 0.4rem 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                        <div class="fill-bar" style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
-                                    </div>
-                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                    {{ conf_ring(rec.confidence_score) }}
                                 </div>
                             </td>
                         </tr>
@@ -948,11 +1156,15 @@
             const sublabel   = btn.querySelector(':scope > span:last-child');
             if (t === tab) {
                 btn.style.borderBottom = '2px solid var(--gray-800)';
+                btn.style.background = '#f1f1ef';           // selected tab: light gray fill
+                btn.style.borderRadius = '8px 8px 0 0';
                 if (labelSpan) labelSpan.style.color = 'var(--gray-800)';
                 if (badgeSpan) badgeSpan.style.background = 'var(--gray-800)';
                 if (sublabel)  sublabel.style.color = 'var(--gray-800)';
             } else {
                 btn.style.borderBottom = '2px solid transparent';
+                btn.style.background = 'none';
+                btn.style.borderRadius = '0';
                 if (labelSpan) labelSpan.style.color = 'var(--gray-600)';
                 if (badgeSpan) badgeSpan.style.background = 'var(--gray-400)';
                 if (sublabel)  sublabel.style.color = 'var(--gray-500)';
@@ -1713,12 +1925,36 @@
         btn.style.display = input.value.trim() ? 'flex' : 'none';
     }
 
+    // Collapsed by default (the band), click to inflate and reveal the
+    // field + starter chips. Focus the input once it's on screen.
+    function toggleEstate() {
+        const card = document.getElementById('estateChat');
+        const head = card.querySelector('.ec-head');
+        const open = !card.classList.contains('open');
+        card.classList.toggle('open', open);
+        head.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) setTimeout(() => { const i = document.getElementById('estateAskInput'); if (i) i.focus(); }, 160);
+    }
+
+    // Starter-question chip: drop its text into the field and send it,
+    // just as if the user had typed it (AWS "suggested questions" pattern).
+    function askEstate(chip) {
+        const input = document.getElementById('estateAskInput');
+        input.value = chip.textContent.trim();
+        toggleEstateSendBtn();
+        submitEstateQuestion();
+    }
+
     async function submitEstateQuestion() {
         const input = document.getElementById('estateAskInput');
         const question = input.value.trim();
         if (!question) return;
         const answerEl = document.getElementById('estateAnswer');
         const btn = document.getElementById('estateAskBtn');
+        // Once the assistant is engaged, the starter chips give way to the
+        // conversation.
+        const chips = document.getElementById('estateChips');
+        if (chips) chips.style.display = 'none';
         btn.disabled = true;
         answerEl.style.display = 'block';
         answerEl.textContent = 'Thinking…';
@@ -1817,13 +2053,13 @@
         const dateEl = document.getElementById('hero-clock-date');
         const TZ = 'Europe/Paris';
         const timeFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
-        const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ });
+        const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: TZ });
         function render() {
             if (typeof Temporal !== 'undefined') {
                 const now = Temporal.Now.zonedDateTimeISO(TZ);
                 root.dateTime = now.toString({ timeZoneName: 'never', smallestUnit: 'minute' });
                 timeEl.textContent = now.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                dateEl.textContent = now.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+                dateEl.textContent = now.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
             } else {
                 const now = new Date();
                 root.dateTime = now.toISOString();

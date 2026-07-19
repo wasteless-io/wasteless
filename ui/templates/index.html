@@ -24,9 +24,61 @@
         z-index: 1;
     }
 
-    /* Daily Briefing: the AI reads as always-on — shimmering status
-       line while it writes, prose fades in. The refresh button is a
-       round icon: tooltip via .kpi-hover, icon spins while writing. */
+    /* Daily Briefing: THE dark panel of the page (landing identity) —
+       the AI's voice gets its own material while every data card stays
+       light. Near-black surface, dot grid, mint offset slab: boldness
+       spent in exactly one place. */
+    #briefing-card {
+        background-color: #0b0e0c;
+        border-color: #0b0e0c;
+        color: #f2f5f3;
+        background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
+        background-size: 22px 22px;
+        /* Subtle slab: distinguished, not dominant — the card must read
+           as the page's one dark voice without swallowing the page */
+        box-shadow: 5px 5px 0 0 rgba(62,213,152,0.22);
+        padding: 0.85rem 1.1rem !important;
+    }
+    #briefing-card:hover { border-color: #0b0e0c; }
+    #briefing-card .title-rule::after { background: rgba(255,255,255,0.18); }
+    /* The feature name becomes mono-caps chrome with the mint square
+       (base.html paints h3 in --ink, unreadable on the dark surface) */
+    #briefing-card h3 { color: #f2f5f3; }
+    #briefing-card h3 .kpi-zoom {
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+    }
+    #briefing-card h3::before { content: ""; width: 7px; height: 7px; background: #3ed598; flex-shrink: 0; }
+    #briefing-card .briefing-toggle { color: #3ed598; }
+    #briefing-card .briefing-toggle:hover,
+    #briefing-card .briefing-toggle:focus-visible { color: #8b948e; }
+    #briefing-card .honest-note::before { border-color: rgba(255,255,255,0.22); }
+    #briefing-card .briefing-refresh-btn { background: rgba(62,213,152,0.14); color: #3ed598; }
+    #briefing-card .briefing-refresh-btn:hover { color: #f2f5f3; background: rgba(255,255,255,0.1); }
+    /* Collapsed = the band alone (user request 2026-07-19): body and
+       footnote only exist once .open is set, the head loses its rule
+       and margins so the card is a single strip */
+    #briefing-card #briefing-body, #briefing-card .honest-note { display: none; }
+    #briefing-card.open #briefing-body { display: block; }
+    #briefing-card.open .honest-note { display: flex; }
+    #briefing-card .title-rule { margin-bottom: 0; padding-bottom: 0; }
+    #briefing-card .title-rule::after { display: none; }
+    #briefing-card.open .title-rule { margin-bottom: 0.6rem; padding-bottom: 0.55rem; }
+    #briefing-card.open .title-rule::after { display: block; }
+    #briefing-card .briefing-toggle { margin: 0 0 0 0.75rem; font-size: 0.75rem; }
+    #briefing-card .thinking {
+        background: linear-gradient(90deg, #8b948e 0%, #f2f5f3 50%, #8b948e 100%);
+        background-size: 200% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    /* Shimmering status line while the AI writes, prose fades in. The
+       refresh button is a round icon: tooltip via .kpi-hover, icon
+       spins while writing. */
     {# Same dress as .briefing-toggle: blue on a blue wash, gray on hover #}
     .briefing-refresh-btn {
         display: inline-flex;
@@ -87,17 +139,33 @@
     .pending-pill {
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
-        padding: 0.25rem 0.7rem;
+        gap: 0.45rem;
+        padding: 0.3rem 0.7rem;
         border: 1px solid var(--hairline);
         border-radius: 999px;
         background: white;
-        color: var(--ink);
+        color: #92400e;
+        font-family: var(--font-mono);
+        font-size: 0.64rem;
         font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
         text-decoration: none;
         transition: border-color 0.2s ease;
     }
+    /* Landing identity: square status dot, amber = awaiting a decision */
+    .pending-pill::before { content: ""; width: 7px; height: 7px; background: currentColor; flex-shrink: 0; }
     .pending-pill:hover { border-color: var(--ink); }
+
+    /* Landing identity: table chrome in mono caps */
+    .table-mono-head thead th {
+        font-family: var(--font-mono);
+        font-size: 0.62rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-weight: 500;
+        color: var(--gray-500);
+    }
 
     .kpi-ring .ring-unit {
         font-size: 0.8rem;
@@ -123,72 +191,10 @@
        data cards below. */
     .card--no-hover:hover { border-color: transparent; }
 
-    /* Top Services column chart: thin columns growing from a shared
-       hairline baseline; 4px rounded at the data end, square at the
-       baseline; the value rides each cap (so no y-axis), the service
-       name sits under the slot. One series, one hue — the same amber
-       as the table view of this data. */
-    .col-chart {
-        display: flex;
-        gap: 0.5rem;
-    }
-    .col-slot {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        cursor: default;
-    }
-    .col-track {
-        width: 100%;
-        height: 130px;
-        padding-top: 20px;           /* room for the tallest cap label */
-        display: flex;
-        align-items: flex-end;
-        justify-content: center;
-        border-bottom: 1px solid var(--gray-200);
-    }
-    .col-bar-wrap {
-        position: relative;
-        width: 20px;
-        min-height: 3px;   /* a 0.01 $ service still shows a sliver */
-    }
-    .col-value {
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        margin-bottom: 4px;
-        font-size: 0.72rem;
-        font-weight: 600;
-        color: var(--gray-800);
-        white-space: nowrap;
-    }
-    .col-bar {
-        height: 100%;
-        background: #d97706;
-        border-radius: 4px 4px 0 0;
-    }
-    @keyframes col-fill { from { transform: scaleY(0); } }
-    .fill-col {
-        transform-origin: bottom;
-        animation: col-fill 0.5s ease-out both;
-    }
-    .col-name {
-        font-size: 0.7rem;
-        color: var(--gray-500);
-        margin-top: 0.4rem;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
     /* Hairline under a card's title row, drawn left-to-right on load —
        same cadence as the KPI rings' trace-in. A border can't animate
        its length, so the rule is a scaled pseudo-element. Shared by the
-       briefing, Waste by Type, Recent Activity and Top Services cards. */
+       briefing, Waste by Type and Recent Activity cards. */
     .title-rule { position: relative; }
     .title-rule::after {
         content: '';
@@ -222,24 +228,6 @@
 
     /* Live clock at the end of the Waste Overview line: time first,
        date under it, tabular digits so the tick never makes it jitter. */
-    .hero-clock {
-        text-align: right;
-        line-height: 1.25;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-    }
-    .hero-clock .hero-clock-time {
-        display: block;
-        font-size: 1.3rem;
-        font-weight: 700;
-        color: #1d1d1f;
-        letter-spacing: -0.01em;
-    }
-    .hero-clock .hero-clock-date {
-        display: block;
-        font-size: 0.8rem;
-        color: #52514e;
-    }
 
     {# fade-up / .fade-in / .main cascade / .fill-bar / count-up /
        .kpi-hover tooltips: shared, defined in base.html #}
@@ -272,49 +260,38 @@
     </span>
 </div>
 {% endif %}
-{# Same plane as the sidebar's active pill (#efede8) — the hero belongs
-   to the chrome, not to the data. Three zones: the pending pill on the
-   left (only when something awaits review), the page title dead-center
-   (1fr auto 1fr keeps it centered whatever the sides weigh), the live
-   clock on the right. #}
-<header class="card mb-1 card--no-hover" style="padding: 0.9rem 1.5rem; background: #efede8; color: #1d1d1f;">
-    <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem;">
-        <div style="justify-self: start;">
-            {% if (metrics.pending_count or 0) > 0 %}
-            <a href="/recommendations" class="pending-pill pending-blink">
-                {{ metrics.pending_count }} recommendation{{ 's' if metrics.pending_count > 1 }} pending
-            </a>
-            {% endif %}
-        </div>
-        <h1 style="margin: 0; font-size: 1.3rem; font-weight: 700; color: #1d1d1f; text-align: center;">Wasteless Overview</h1>
-        {# Live clock, Europe/Paris — same wall clock as the DB stamps.
-           Temporal API when the browser ships it, Intl otherwise; the
-           semantic <time> carries the machine-readable datetime. #}
-        <time id="hero-clock" class="hero-clock" style="justify-self: end;">
-            <span class="hero-clock-time" id="hero-clock-time"></span>
-            <span class="hero-clock-date" id="hero-clock-date"></span>
-        </time>
-    </div>
+{# System bar (landing chrome, V1): the beige title card restated what
+   the sidebar already says, so it is gone. The bar only carries signal:
+   breadcrumb, the pending pill, and the live clock (Europe/Paris, same
+   wall clock as the DB stamps) with a heartbeat square reflecting the
+   collection state (green = healthy, amber = stale, gray = never ran). #}
+<header class="sysbar mb-1">
+    <h1 class="sysbar-crumb" style="margin: 0;">Wasteless <span class="path">/ Overview</span></h1>
+    {% if (metrics.pending_count or 0) > 0 %}
+    <a href="/recommendations" class="pending-pill pending-blink">
+        {{ metrics.pending_count }} recommendation{{ 's' if metrics.pending_count > 1 }} pending
+    </a>
+    {% endif %}
+    <time id="hero-clock" class="sysbar-clock">
+        <span class="sysbar-beat{% if not last_sync %} is-muted{% elif collection_stale %} is-warn{% endif %}" aria-hidden="true"></span>
+        <span class="sysbar-time" id="hero-clock-time"></span>
+        <span aria-hidden="true">&middot;</span>
+        <span id="hero-clock-date"></span>
+    </time>
 </header>
 
-{# Coherence banner: total estimated waste exceeds the real cloud bill.
+{# Coherence line: total estimated waste exceeds the real cloud bill.
    Surfaced (not hidden) so the list-price overstatement is honest — see
-   the waste_percentage invariant wired in routes/home.py. #}
+   the waste_percentage invariant wired in routes/home.py. Terminal
+   register (2026-07-18): one quiet line, amber pill states the fact,
+   the pedagogy lives in its tooltip — the old warning card dressed an
+   honesty note as an incident. #}
 {% if waste_exceeds_spend %}
-<div class="card mb-1 card--no-hover" style="padding: 0.7rem 1rem; border-left: 3px solid var(--warning); background: rgba(180,83,9,0.05); display: flex; align-items: flex-start; gap: 0.6rem; font-size: 0.82rem; color: var(--gray-700); line-height: 1.5;">
-    <span aria-hidden="true" style="font-size: 1rem; line-height: 1.2;">&#9888;</span>
-    <span>
-        <strong>Estimated waste exceeds your real spend.</strong>
-        Active waste is estimated at <strong>{{ "%.2f"|format(waste_exceeds_spend.waste) }} $/mo</strong>,
-        more than your actual cloud bill of <strong>{{ "%.2f"|format(waste_exceeds_spend.spend) }} $</strong>
-        over the last 30 days &mdash; you can&rsquo;t save more than you spend. Detector estimates use
-        on-demand list prices (24/7), so treat these as an upper bound, not the bill.
-    </span>
+<div class="mb-1" style="display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; padding: 0.15rem 0.1rem 0.35rem; font-size: 0.78rem; color: var(--gray-600);">
+    <span class="status-pill is-warn kpi-hover" tabindex="0" data-tip="Detector estimates use on-demand list prices (24/7), so treat them as an upper bound, not the bill: you cannot save more than you spend">estimates exceed real spend</span>
+    <span>Active waste is estimated at <strong>{{ "%.2f"|format(waste_exceeds_spend.waste) }} $/mo</strong>, above your 30-day bill of <strong>{{ "%.2f"|format(waste_exceeds_spend.spend) }} $</strong> · upper bound, not the bill</span>
 </div>
 {% endif %}
-
-{# Section title for the dials #}
-<h2 style="margin: 0.5rem 0 0.75rem 0.25rem; font-size: 1.05rem; font-weight: 700; color: #1d1d1f;">Analytics</h2>
 
 <!-- KPI Banner: the same five Financial Overview tiles as the Dashboard
      (shared partial, 2026-07-18 — the old rings row is gone). Standalone
@@ -328,14 +305,17 @@
        only the timestamp; the 5-minute cadence lives in its hover tip,
        and is only claimed while it is actually being honoured: next to
        a stale timestamp it would contradict itself. #}
-    <div style="font-size: 0.72rem; color: var(--gray-400); margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100);">
+    <div style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; font-size: 0.72rem; color: var(--gray-400); margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px solid var(--gray-100);">
         {% if not last_sync %}
-        No collection has run yet &mdash; run <code style="background: rgba(0,0,0,0.06); padding: 0.05rem 0.3rem; border-radius: 3px;">wasteless collect</code> to populate these figures.
+        <span class="status-pill is-muted">No collection yet</span>
+        <span>Run <code style="background: rgba(0,0,0,0.06); padding: 0.05rem 0.3rem; border-radius: 3px;">wasteless collect</code> to populate these figures.</span>
         {% elif collection_stale %}
-        Last collection: {{ last_sync|localtime }}. No successful collection since then: the 5-minute loop is stopped, or it runs but cannot reach AWS (see /logs).
+        <span class="status-pill is-warn">Last collection: {{ last_sync|localtime }}</span>
+        <span>No successful collection since then: the 5-minute loop is stopped, or it runs but cannot reach AWS (see /logs).</span>
         {% else %}
-        <span class="kpi-hover" tabindex="0" data-tip="Waste figures are collected automatically every 5 minutes">Last collection: {{ last_sync|localtime }}</span>
+        <span class="status-pill kpi-hover" tabindex="0" data-tip="Waste figures are collected automatically every 5 minutes">Last collection: {{ last_sync|localtime }}</span>
         {% endif %}
+        <span class="honest-note" style="margin-left: auto;">All figures in USD, as billed by AWS · estimates from on-demand list prices</span>
     </div>
 </div>
 
@@ -348,21 +328,45 @@
        draws itself left-to-right on load (.title-rule), echoing the
        KPI rings' trace-in. #}
     <div class="title-rule" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; padding-bottom: 0.55rem;">
-        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
-            <span class="kpi-hover" tabindex="0" data-tip="The AI comments the numbers. The numbers themselves are always computed from the database"><span class="kpi-zoom">Daily Briefing</span></span>
-        </h3>
+        <div style="display: flex; align-items: center;">
+            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                <span class="kpi-hover" tabindex="0" data-tip="The AI comments the numbers. The numbers themselves are always computed from the database"><span class="kpi-zoom">Daily Briefing</span></span>
+            </h3>
+            <a href="#" id="briefing-toggle" class="briefing-toggle" style="display: none;" aria-expanded="false" aria-controls="briefing-body">Show more</a>
+        </div>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <span id="briefing-meta" class="kpi-hover" tabindex="0" data-tip="When the AI last wrote this briefing from your data" style="font-size: 0.72rem; color: var(--gray-400);"></span>
+            <span id="briefing-meta" class="kpi-hover" tabindex="0" data-tip="When the AI last wrote this briefing from your data" style="font-family: var(--font-mono); font-size: 0.68rem; color: #8b948e;"></span>
             <button id="briefing-refresh" onclick="loadBriefing(true)" class="kpi-hover briefing-refresh-btn" data-tip="Ask the AI to write a fresh briefing from today's data" aria-label="Generate a fresh briefing" style="display: none;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
             </button>
         </div>
     </div>
-    <div id="briefing-body" style="font-size: 0.87rem; line-height: 1.55; color: var(--gray-700);">
+    <div id="briefing-body" style="font-size: 0.85rem; line-height: 1.55; color: #d7ddd9; max-width: 88ch;">
         <span class="thinking">Analyzing your infrastructure…</span>
     </div>
-    <div style="font-size: 0.72rem; color: var(--gray-400); margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100);">
+    <div class="honest-note" style="margin-top: 0.7rem; padding-top: 0.55rem; border-top: 1px solid rgba(255,255,255,0.12); color: #8b948e;">
         AI can make mistakes: double-check any figure before acting on it.
+    </div>
+</div>
+{% endif %}
+
+{% if decision_queue %}
+{# Decision queue: the three biggest pending savings, one line each —
+   what to decide, right under the numbers (prototype 2026-07-19). Same
+   source as Recoverable Now so the total always matches the tile. #}
+<div class="card mb-1" style="padding: 1rem 1.25rem;">
+    <div style="font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gray-500); margin-bottom: 0.45rem;">Decision queue · top {{ decision_queue|length }} by savings</div>
+    {% for d in decision_queue %}
+    <div style="display: flex; align-items: baseline; gap: 0.8rem; padding: 0.5rem 0; border-top: 1px solid var(--gray-100); font-size: 0.82rem;">
+        <span style="font-family: var(--font-mono); font-size: 0.76rem;" title="{{ d.resource_id }}">{{ d.resource_id }}</span>
+        <span style="font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: #92400e; flex-shrink: 0;">{{ (d.recommendation_type or '').replace('_', ' ') }}</span>
+        <span style="color: var(--gray-500); font-size: 0.76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ [d.region, d.instance_type, ('CPU ' + '%.1f'|format(d.cpu_avg) + '%') if d.cpu_avg is not none else None] | select | join(' · ') }}</span>
+        <span style="margin-left: auto; font-weight: 700; color: var(--success); flex-shrink: 0;">${{ "%.2f"|format(d.savings or 0) }}/mo</span>
+    </div>
+    {% endfor %}
+    <div style="display: flex; gap: 0.8rem; align-items: baseline; padding-top: 0.7rem; border-top: 1px solid var(--gray-100); font-size: 0.78rem; color: var(--gray-500);">
+        <span>{{ metrics.pending_count }} pending recommendation{{ 's' if metrics.pending_count != 1 }} · ${{ "%.2f"|format(metrics.pending_eur or 0) }}/mo in total</span>
+        <a href="/recommendations" style="margin-left: auto; color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.8rem;">Review and decide &rarr;</a>
     </div>
 </div>
 {% endif %}
@@ -379,7 +383,7 @@
         {% if waste_by_type %}
         {% set max_eur = waste_by_type[0].total_eur %}
         <div class="scroll-list">
-        <table style="font-size: 0.8rem; width: 100%;">
+        <table class="table-mono-head" style="font-size: 0.8rem; width: 100%;">
             <thead>
                 <tr>
                     <th style="padding: 0.35rem 0.5rem; text-align: left;">Type</th>
@@ -436,7 +440,8 @@
             {% for item in recent_activity %}
             <div style="display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.25rem; border-bottom: 1px solid var(--gray-100); flex-shrink: 0;">
                 {% if item.event_type == 'detection' %}
-                <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--warning); flex-shrink: 0;"></span>
+                {# Square status dots: the landing's marker, round was the old style #}
+                <span style="width: 7px; height: 7px; background: var(--warning); flex-shrink: 0;"></span>
                 <div style="flex: 1; min-width: 0;">
                     <span style="font-size: 0.8rem; color: var(--gray-800);">
                         <strong>{{ item.cnt }}</strong>
@@ -449,23 +454,23 @@
                 </div>
                 <span style="font-size: 0.78rem; color: var(--warning); font-weight: 600; flex-shrink: 0;">+{{ "%.2f"|format(item.amount) }} $/mo</span>
                 {% else %}
-                <span style="width: 8px; height: 8px; border-radius: 50%; background: {% if item.action_status == 'success' %}var(--success){% elif item.action_status == 'pending' %}var(--warning){% else %}var(--danger){% endif %}; flex-shrink: 0;"></span>
+                <span style="width: 7px; height: 7px; background: {% if item.action_status == 'success' %}var(--success){% elif item.action_status == 'pending' %}var(--warning){% else %}var(--danger){% endif %}; flex-shrink: 0;"></span>
                 <div style="flex: 1; min-width: 0; overflow: hidden;">
                     <span style="font-size: 0.8rem; color: var(--gray-800);">{{ item.resource_type | replace('_', ' ') | title }}</span>
                     <code style="font-size: 0.72rem; color: var(--gray-500); margin-left: 0.35rem;">{{ item.resource_id[:18] if item.resource_id else '' }}…</code>
                 </div>
                 {% if item.dry_run %}
-                <span style="font-size: 0.68rem; color: #92400e; background: rgba(180,83,9,0.08); border-radius: 3px; padding: 0.1rem 0.4rem; font-weight: 600; flex-shrink: 0;">DRY-RUN</span>
+                <span style="font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em; color: #92400e; background: rgba(180,83,9,0.08); border-radius: 3px; padding: 0.1rem 0.4rem; font-weight: 600; flex-shrink: 0;">DRY-RUN</span>
                 {% endif %}
                 {% if item.action_status == 'success' %}
-                <span style="font-size: 0.78rem; color: var(--success); font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{% if item.dry_run %}Simulated{% else %}Done{% endif %}</span>
+                <span style="font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--success); font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{% if item.dry_run %}Simulated{% else %}Done{% endif %}</span>
                 {% elif item.action_status == 'pending' %}
-                <span style="font-size: 0.78rem; color: var(--warning); font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Scheduled</span>
+                <span style="font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--warning); font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Scheduled</span>
                 {% else %}
-                <span style="font-size: 0.78rem; color: var(--danger); font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.25rem;" title="{{ item.error_message or '' }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Failed</span>
+                <span style="font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--danger); font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.25rem;" title="{{ item.error_message or '' }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Failed</span>
                 {% endif %}
                 {% endif %}
-                <span style="font-size: 0.72rem; color: var(--gray-400); flex-shrink: 0;">{{ item.event_time|localtime('%d/%m %H:%M') if item.event_time else '' }}</span>
+                <span style="font-family: var(--font-mono); font-size: 0.66rem; color: var(--gray-400); flex-shrink: 0;">{{ item.event_time|localtime('%d/%m %H:%M') if item.event_time else '' }}</span>
             </div>
             {% endfor %}
         </div>
@@ -477,35 +482,6 @@
         {% endif %}
     </div>
 </div>
-
-{% if top_services %}
-{# Top Services — standalone column chart of the real bill (Cost
-   Explorer, last 30 days), independent from the Waste/Services toggle
-   card above (whose Services tab remains the table view of the same
-   data). One series → one hue, no legend; every cap carries its value
-   so the chart needs no y-axis. #}
-<div class="card" id="top-services-card" style="padding: 1rem 1.25rem;">
-    <div class="title-rule" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.1rem; padding-bottom: 0.55rem; gap: 0.75rem;">
-        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Top Services</h3>
-        <span style="font-size: 0.72rem; color: var(--gray-400);">Real spend, last 30 days &mdash; Cost Explorer</span>
-    </div>
-    {% set smax = top_services[0].total_eur %}
-    <div class="col-chart" role="img" aria-label="Column chart of AWS spend by service over the last 30 days">
-        {% for item in top_services %}
-        {% set spct = ((item.total_eur / smax) * 100) if smax > 0 else 0 %}
-        <div class="col-slot kpi-hover" tabindex="0" data-tip="{{ item.service }} — {{ '%.2f'|format(item.total_eur) }} $ over the last 30 days">
-            <div class="col-track">
-                <div class="col-bar-wrap" style="height: {{ spct }}%;">
-                    <span class="col-value">{{ "%.2f"|format(item.total_eur) }} $</span>
-                    <div class="col-bar fill-col" style="animation-delay: {{ loop.index0 * 90 }}ms;"></div>
-                </div>
-            </div>
-            <span class="col-name">{{ item.service | replace('Amazon ', '') | replace('AWS ', '') }}</span>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
 
 {% endblock %}
 
@@ -558,9 +534,10 @@ async function loadBriefing(refresh) {
         }
         stopThinking();
         body.textContent = '';
-        // Plain text from the model: blank-line-separated paragraphs.
-        // Only the first shows by default — the numbers above lead, the
-        // prose is one glance away.
+        // Plain text from the model: blank-line-separated paragraphs, all
+        // rendered — the card itself is collapsed to its band by default
+        // (user request 2026-07-19), the single Show more in the band
+        // reveals everything at once.
         const paras = data.briefing.split(/\n\s*\n/).map(t => t.trim()).filter(Boolean);
         paras.forEach((para, i) => {
             const p = document.createElement('p');
@@ -568,27 +545,18 @@ async function loadBriefing(refresh) {
             p.style.margin = i === 0 ? '0' : '0.5rem 0 0';
             p.classList.add('fade-in');
             p.style.animationDelay = (i * 70) + 'ms';
-            if (i > 0) {
-                p.dataset.briefingExtra = '1';
-                p.style.display = 'none';
-            }
             body.appendChild(p);
         });
-        if (paras.length > 1) {
-            const toggle = document.createElement('a');
-            toggle.href = '#';
-            toggle.textContent = 'Show more';
-            toggle.className = 'briefing-toggle';
-            toggle.onclick = (e) => {
-                e.preventDefault();
-                const expand = toggle.textContent === 'Show more';
-                body.querySelectorAll('[data-briefing-extra]').forEach(el => {
-                    el.style.display = expand ? '' : 'none';
-                });
-                toggle.textContent = expand ? 'Show less' : 'Show more';
-            };
-            body.appendChild(toggle);
-        }
+        const toggle = document.getElementById('briefing-toggle');
+        const card = document.getElementById('briefing-card');
+        toggle.style.display = 'inline-block';
+        toggle.onclick = (e) => {
+            e.preventDefault();
+            const expand = !card.classList.contains('open');
+            card.classList.toggle('open', expand);
+            toggle.textContent = expand ? 'Show less' : 'Show more';
+            toggle.setAttribute('aria-expanded', expand ? 'true' : 'false');
+        };
         if (data.generated_at) {
             const d = new Date(data.generated_at);
             meta.textContent = 'Generated ' + d.toLocaleDateString([], { day: 'numeric', month: 'short' })
@@ -620,13 +588,13 @@ loadBriefing(false);
     const dateEl = document.getElementById('hero-clock-date');
     const TZ = 'Europe/Paris';
     const timeFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
-    const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ });
+    const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: TZ });
     function render() {
         if (typeof Temporal !== 'undefined') {
             const now = Temporal.Now.zonedDateTimeISO(TZ);
             root.dateTime = now.toString({ timeZoneName: 'never', smallestUnit: 'minute' });
             timeEl.textContent = now.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' });
-            dateEl.textContent = now.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+            dateEl.textContent = now.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
         } else {
             const now = new Date();
             root.dateTime = now.toISOString();

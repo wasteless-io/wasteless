@@ -38,6 +38,15 @@
         "elasticloadbalancing:DeleteLoadBalancer"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "UserTagging",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
+      ],
+      "Resource": "*"
     }
   ]
 }

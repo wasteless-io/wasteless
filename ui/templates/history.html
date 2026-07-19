@@ -3,9 +3,68 @@
 {% block title %}History - Wasteless.io{% endblock %}
 
 {% block content %}
-<div class="page-header" style="margin-bottom: 1rem;">
-    <h1 style="margin-bottom: 0.25rem;">Action History</h1>
-</div>
+<style>
+/* Square corners on every card of this page (terminal identity). */
+.card { border-radius: 0; }
+/* Cap the table at ~14 rows + scroll, header pinned & mono-caps (row 37px
+   + head 32px; +12 lets the 15th row peek as a scroll hint). */
+.table-container { max-height: 562px; overflow-y: auto; }
+.table-container thead th {
+    position: sticky; top: 0; z-index: 2; background: #f8f8f7;
+    font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em;
+    text-transform: uppercase; font-weight: 500; color: var(--gray-500);
+}
+/* Apply = mono-caps outline pill, like Sync AWS. */
+.hist-apply {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.34rem 0.9rem; border: 1px solid var(--hairline);
+    border-radius: 999px; background: #fff; color: var(--gray-600);
+    font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.12em;
+    text-transform: uppercase; font-weight: 600; cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+}
+.hist-apply:hover { border-color: var(--ink); color: var(--ink); }
+/* Status / Mode as terminal chips: mono-caps + square marker. */
+.hist-chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.08em;
+    text-transform: uppercase; font-weight: 600;
+    padding: 0.15rem 0.5rem; border-radius: 4px; white-space: nowrap;
+}
+.hist-chip::before { content: ""; width: 5px; height: 5px; }
+.hist-chip.ok    { color: #15803d; background: rgba(21,128,61,0.09); }
+.hist-chip.ok::before { background: #15803d; }
+.hist-chip.fail  { color: #b91c1c; background: rgba(185,28,28,0.09); }
+.hist-chip.fail::before { background: #b91c1c; }
+.hist-chip.neutral { color: var(--gray-600); background: var(--gray-100); }
+.hist-chip.neutral::before { background: var(--gray-400); }
+.hist-chip.prod  { color: #b45309; background: rgba(180,83,9,0.09); }
+.hist-chip.prod::before { background: #b45309; }
+.hist-chip.dry   { color: #0062c4; background: rgba(0,113,227,0.09); }
+.hist-chip.dry::before { background: #0062c4; }
+.res-link {
+    font-family: var(--font-mono); color: var(--ink);
+    text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 3px;
+}
+.res-link:hover { color: var(--primary); text-decoration-color: var(--primary); }
+.val-mono { font-family: var(--font-mono); }
+.cr-spin {
+    display: inline-block; width: 15px; height: 15px;
+    border: 2px solid var(--gray-200); border-top-color: #15803d;
+    border-radius: 50%; animation: cr-spin 0.7s linear infinite;
+}
+@keyframes cr-spin { to { transform: rotate(360deg); } }
+</style>
+
+<header class="sysbar mb-1">
+    <h1 class="sysbar-crumb" style="margin: 0;">Wasteless <span class="path">/ Action History</span></h1>
+    <time id="hero-clock" class="sysbar-clock">
+        <span class="sysbar-beat" aria-hidden="true"></span>
+        <span class="sysbar-time" id="hero-clock-time"></span>
+        <span aria-hidden="true">&middot;</span>
+        <span id="hero-clock-date"></span>
+    </time>
+</header>
 
 <!-- Filters + Summary in one row -->
 <div class="card mb-1" style="padding: 0.75rem;">
@@ -13,7 +72,7 @@
         <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
             <div class="form-group" style="margin: 0;">
                 <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Status</label>
-                <select name="status_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                <select name="status_filter" class="form-select" style="padding: 0.4rem;" onchange="applyFilter(this)">
                     <option value="All" {% if status_filter == 'All' %}selected{% endif %}>All</option>
                     <option value="success" {% if status_filter == 'success' %}selected{% endif %}>Success</option>
                     <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
@@ -21,7 +80,7 @@
             </div>
             <div class="form-group" style="margin: 0;">
                 <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Type</label>
-                <select name="action_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                <select name="action_filter" class="form-select" style="padding: 0.4rem;" onchange="applyFilter(this)">
                     <option value="All" {% if action_filter == 'All' %}selected{% endif %}>All</option>
                     <option value="stop" {% if action_filter == 'stop' %}selected{% endif %}>Stop</option>
                     <option value="terminate" {% if action_filter == 'terminate' %}selected{% endif %}>Terminate</option>
@@ -31,7 +90,10 @@
                 <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Days</label>
                 <input type="number" name="days_back" class="form-input" style="padding: 0.4rem; width: 60px;" value="{{ days_back }}" min="1" max="90">
             </div>
-            <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
+            <button type="submit" class="hist-apply" onclick="document.getElementById('filter-spinner').style.display='inline-flex'">Apply</button>
+            <div id="filter-spinner" style="display: none; align-items: center; gap: 0.45rem; font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-500);">
+                <span class="cr-spin" aria-hidden="true"></span> Applying&hellip;
+            </div>
             <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem;">
                 <span><strong>{% if total_count > actions|length %}{{ actions|length }} of {{ total_count }}{% else %}{{ actions|length }}{% endif %}</strong> actions</span>
                 <span class="text-success"><strong>{{ success_count }}</strong> success</span>
@@ -66,24 +128,28 @@
                 <tr>
                     <td style="padding: 0.4rem 0.5rem;">{{ action.id }}</td>
                     <td style="padding: 0.4rem 0.5rem; max-width: 260px;" title="{{ action.resource_id }}">
+                        {% if action.resource_id and action.resource_id.startswith('i-') %}
+                        <a class="res-link" style="display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;" href="https://console.aws.amazon.com/ec2/v2/home{% if action.region %}?region={{ action.region }}{% endif %}#InstanceDetails:instanceId={{ action.resource_id }}" target="_blank" rel="noopener" title="Open in the AWS Console">{{ action.resource_id }}</a>
+                        {% else %}
                         <code style="display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;">{{ action.resource_id }}</code>
+                        {% endif %}
                     </td>
-                    <td style="padding: 0.4rem 0.5rem;" class="text-muted">{{ action.resource_type or '-' }}</td>
+                    <td style="padding: 0.4rem 0.5rem;" class="text-muted"><span class="val-mono" style="font-size: 0.78rem;">{{ action.resource_type or '-' }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;">{{ action.action_type }}</td>
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if action.action_status == 'success' %}
-                        <span class="badge badge-success">Success</span>
+                        <span class="hist-chip ok">Success</span>
                         {% elif action.action_status == 'failed' %}
-                        <span class="badge badge-danger" {% if action.error_message %}title="{{ action.error_message }}"{% endif %}>Failed</span>
+                        <span class="hist-chip fail" {% if action.error_message %}title="{{ action.error_message }}"{% endif %}>Failed</span>
                         {% else %}
-                        <span class="badge badge-info">{{ action.action_status }}</span>
+                        <span class="hist-chip neutral">{{ action.action_status }}</span>
                         {% endif %}
                     </td>
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if action.dry_run %}
-                        <span class="badge badge-info">Dry-Run</span>
+                        <span class="hist-chip dry">Dry-Run</span>
                         {% else %}
-                        <span class="badge badge-warning">Prod</span>
+                        <span class="hist-chip prod">Prod</span>
                         {% endif %}
                     </td>
                     <td style="padding: 0.4rem 0.5rem;" class="text-muted">{{ action.executed_by or '-' }}</td>
@@ -99,4 +165,39 @@
     <p class="text-muted text-center">No actions found</p>
 </div>
 {% endif %}
+
+<script>
+// Filter change: show the spinner, then reload (selects keep their values).
+function applyFilter(sel) {
+    const sp = document.getElementById('filter-spinner');
+    if (sp) sp.style.display = 'inline-flex';
+    sel.form.submit();
+}
+
+// Live system-bar clock, Europe/Paris — same wall clock as the DB stamps.
+(function () {
+    const root = document.getElementById('hero-clock');
+    if (!root) return;
+    const timeEl = document.getElementById('hero-clock-time');
+    const dateEl = document.getElementById('hero-clock-date');
+    const TZ = 'Europe/Paris';
+    const timeFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
+    const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: TZ });
+    function render() {
+        if (typeof Temporal !== 'undefined') {
+            const now = Temporal.Now.zonedDateTimeISO(TZ);
+            root.dateTime = now.toString({ timeZoneName: 'never', smallestUnit: 'minute' });
+            timeEl.textContent = now.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            dateEl.textContent = now.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+        } else {
+            const now = new Date();
+            root.dateTime = now.toISOString();
+            timeEl.textContent = timeFmt.format(now);
+            dateEl.textContent = dateFmt.format(now);
+        }
+        setTimeout(render, 60250 - (Date.now() % 60000));
+    }
+    render();
+})();
+</script>
 {% endblock %}
