@@ -12,6 +12,10 @@
 /* Square corners on every card of this page (terminal identity). */
 .card { border-radius: 0; }
 
+/* State badges (running / stopped / available / …) as plain colored labels —
+   no frame, across every tab. */
+.badge { border: none; padding-left: 0; padding-right: 0; }
+
 /* Only the active tab is underlined — no baseline under the whole row. */
 .tab-nav {
     display: flex; flex-wrap: nowrap; gap: 0;
@@ -97,17 +101,26 @@
 .tag-check:hover, #tag-select-all:hover { border-color: var(--gray-500); }
 .tag-check:checked, #tag-select-all:checked { border-color: #15803d; background: #15803d; }
 tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow: inset 3px 0 0 0 #15803d; }
+.tag-chip { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; line-height: 1.4; padding: 1px 5px; margin: 1px 2px 1px 0; border: 1px solid var(--gray-300); border-radius: 0; color: var(--gray-700); white-space: nowrap; }
+.tag-chip b { font-weight: 600; color: var(--gray-900); }
 
 /* Dedicated tag card below the inventory. */
 .tag-card { padding: 1rem 1.25rem; margin-top: 1rem; }
 .tag-card .tag-hd { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.2rem; }
-.tag-card .tag-hd .label { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-600); }
+.tag-card .tag-hd .label { position: relative; padding-bottom: 0.3rem; font-family: var(--font-mono); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); }
+/* Animated underline under the card title — same rule-draw gesture as Overview. */
+.tag-card .tag-hd .label::after {
+    content: ''; position: absolute; left: 0; bottom: 0;
+    width: 100%; height: 2px; background: var(--gray-400);
+    transform-origin: left; animation: rule-draw 0.8s ease-out 0.3s backwards;
+}
+@media (prefers-reduced-motion: reduce) { .tag-card .tag-hd .label::after { animation: none; } }
 .tag-card .tag-sel { font-family: var(--font-mono); font-size: 0.66rem; color: var(--gray-500); }
 .tag-card .tag-sel b { color: #15803d; }
 .tag-card .tag-sub { font-size: 0.8rem; color: var(--gray-500); margin: 0.15rem 0 0.9rem; }
 .tag-fields { display: flex; gap: 0.7rem; align-items: flex-end; flex-wrap: wrap; }
 .tag-fields .fg label { display: block; font-family: var(--font-mono); font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-500); margin-bottom: 0.25rem; }
-.tag-fields input[type=text] { padding: 0.45rem 0.6rem; border: 1px solid var(--line); border-radius: 6px; font-size: 0.85rem; background: var(--card); color: var(--ink); min-width: 180px; }
+.tag-fields input[type=text] { padding: 0.45rem 0.6rem; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 0.85rem; background: #fff; color: var(--ink); min-width: 180px; }
 .tag-fields input:focus { outline: none; border-color: #15803d; box-shadow: 0 0 0 1px rgba(21,128,61,0.35); }
 .tag-apply {
     display: inline-flex; align-items: center; gap: 0.4rem;
@@ -238,6 +251,7 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <th style="padding: 0.5rem;">Public IP</th>
                     <th style="padding: 0.5rem;">Private IP</th>
                     <th style="padding: 0.5rem;">Launch Time</th>
+                    <th style="padding: 0.5rem;">Tags</th>
                 </tr>
             </thead>
             <tbody>
@@ -260,6 +274,9 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if inst.launch_time %}<span style="font-size: 0.8rem;">{{ inst.launch_time.strftime('%Y-%m-%d %H:%M') }}</span>
                         {% else %}<span class="text-muted">-</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem; max-width: 260px;">
+                        {% for t in inst.tags %}<span class="tag-chip"><b>{{ t.key }}</b>{% if t.value %}={{ t.value }}{% endif %}</span>{% else %}<span class="text-muted">-</span>{% endfor %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -290,6 +307,7 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <th style="padding: 0.5rem;">Attached to</th>
                     <th style="padding: 0.5rem;">Region / AZ</th>
                     <th style="padding: 0.5rem;">Encrypted</th>
+                    <th style="padding: 0.5rem;">Tags</th>
                 </tr>
             </thead>
             <tbody>
@@ -312,6 +330,9 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <td style="padding: 0.4rem 0.5rem;">
                         {% if vol.encrypted %}<span class="badge badge-success">yes</span>
                         {% else %}<span class="badge badge-danger">no</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem; max-width: 260px;">
+                        {% for t in vol.tags %}<span class="tag-chip"><b>{{ t.key }}</b>{% if t.value %}={{ t.value }}{% endif %}</span>{% else %}<span class="text-muted">-</span>{% endfor %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -341,6 +362,7 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <th style="padding: 0.5rem;">Status</th>
                     <th style="padding: 0.5rem;">Domain</th>
                     <th style="padding: 0.5rem;">Region</th>
+                    <th style="padding: 0.5rem;">Tags</th>
                 </tr>
             </thead>
             <tbody>
@@ -362,6 +384,9 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     </td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ ip.domain }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ ip.region }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem; max-width: 260px;">
+                        {% for t in ip.tags %}<span class="tag-chip"><b>{{ t.key }}</b>{% if t.value %}={{ t.value }}{% endif %}</span>{% else %}<span class="text-muted">-</span>{% endfor %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -389,6 +414,7 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <th style="padding: 0.5rem;">State</th>
                     <th style="padding: 0.5rem;">Default</th>
                     <th style="padding: 0.5rem;">Region</th>
+                    <th style="padding: 0.5rem;">Tags</th>
                 </tr>
             </thead>
             <tbody>
@@ -406,6 +432,9 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                         {% else %}<span class="text-muted" style="font-size:0.8rem;">—</span>{% endif %}
                     </td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ vpc.region }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem; max-width: 260px;">
+                        {% for t in vpc.tags %}<span class="tag-chip"><b>{{ t.key }}</b>{% if t.value %}={{ t.value }}{% endif %}</span>{% else %}<span class="text-muted">-</span>{% endfor %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -435,6 +464,7 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <th style="padding: 0.5rem;">Date</th>
                     <th style="padding: 0.5rem;">Encrypted</th>
                     <th style="padding: 0.5rem;">Region</th>
+                    <th style="padding: 0.5rem;">Tags</th>
                 </tr>
             </thead>
             <tbody>
@@ -461,6 +491,9 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                         {% else %}<span class="badge badge-danger">no</span>{% endif %}
                     </td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.region }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem; max-width: 260px;">
+                        {% for t in snap.tags %}<span class="tag-chip"><b>{{ t.key }}</b>{% if t.value %}={{ t.value }}{% endif %}</span>{% else %}<span class="text-muted">-</span>{% endfor %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -489,6 +522,7 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <th style="padding: 0.5rem;">VPC</th>
                     <th style="padding: 0.5rem;">Created</th>
                     <th style="padding: 0.5rem;">Region</th>
+                    <th style="padding: 0.5rem;">Tags</th>
                 </tr>
             </thead>
             <tbody>
@@ -504,6 +538,9 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ nat.vpc_id }}</code></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ nat.created.strftime('%d %b %Y') if nat.created else '-' }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ nat.region }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem; max-width: 260px;">
+                        {% for t in nat.tags %}<span class="tag-chip"><b>{{ t.key }}</b>{% if t.value %}={{ t.value }}{% endif %}</span>{% else %}<span class="text-muted">-</span>{% endfor %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -575,6 +612,7 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     <th style="padding: 0.5rem;">Visibility</th>
                     <th style="padding: 0.5rem;">Created</th>
                     <th style="padding: 0.5rem;">Region</th>
+                    <th style="padding: 0.5rem;">Tags</th>
                 </tr>
             </thead>
             <tbody>
@@ -593,6 +631,9 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
                     </td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ ami.created[:10] if ami.created and ami.created != '-' else '-' }}</span></td>
                     <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ ami.region }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem; max-width: 260px;">
+                        {% for t in ami.tags %}<span class="tag-chip"><b>{{ t.key }}</b>{% if t.value %}={{ t.value }}{% endif %}</span>{% else %}<span class="text-muted">-</span>{% endfor %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -730,9 +771,9 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
         </div>
         <div class="fg">
             <label for="tag-value">Value</label>
-            <input type="text" id="tag-value" placeholder="e.g. team-platform" maxlength="256">
+            <input type="text" id="tag-value" placeholder="e.g. team-platform" maxlength="256" oninput="updateTagSelection()">
         </div>
-        <button type="button" class="tag-apply" id="tag-apply" disabled onclick="applyTags()">Apply tag</button>
+        <button type="button" class="tag-apply" id="tag-apply" disabled style="display: none;" onclick="applyTags()">Apply tag</button>
         <span id="tag-spinner" class="cr-spin" style="display: none;" aria-hidden="true"></span>
     </div>
     <div id="tag-result" class="tag-result" style="display: none;"></div>
@@ -784,7 +825,13 @@ function updateTagSelection() {
     const n = document.querySelectorAll('.tag-check:checked').length;
     document.getElementById('tag-count').textContent = n;
     const key = document.getElementById('tag-key').value.trim();
-    document.getElementById('tag-apply').disabled = !(n > 0 && key.length > 0);
+    const value = document.getElementById('tag-value').value.trim();
+    const btn = document.getElementById('tag-apply');
+    // The Apply button only appears once BOTH fields are filled; it then
+    // enables only when at least one resource is also selected.
+    const bothFilled = key.length > 0 && value.length > 0;
+    btn.style.display = bothFilled ? '' : 'none';
+    btn.disabled = !(bothFilled && n > 0);
     const all = document.querySelectorAll('.tag-check').length;
     const master = document.getElementById('tag-select-all');
     if (master) master.checked = all > 0 && n === all;

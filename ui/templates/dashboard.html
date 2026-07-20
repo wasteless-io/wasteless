@@ -319,6 +319,53 @@
         }
     }
 
+    /* Cost Analyst console: EXACTLY the Recommendations "How can I help you?"
+       estate-chat, scoped to cost questions (same style + features). */
+    .estate-chat { background-color: #0b0e0c; border-radius: 12px; color: #f2f5f3; background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px); background-size: 22px 22px; box-shadow: 5px 5px 0 0 rgba(62,213,152,0.22); padding: 0.9rem 1.1rem; position: relative; z-index: 1; }
+    .estate-chat .ec-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0; cursor: pointer; user-select: none; }
+    .estate-chat.open .ec-head { margin-bottom: 0.65rem; }
+    .estate-chat .ec-name { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; font-weight: 700; display: inline-flex; align-items: center; gap: 0.5rem; }
+    .estate-chat .ec-name::before { content: ""; width: 7px; height: 7px; background: #3ed598; }
+    .estate-chat .ec-tag { margin-left: auto; font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: #8b948e; }
+    .estate-chat .ec-caret { display: inline-flex; color: #8b948e; transition: transform 0.3s ease; }
+    .estate-chat.open .ec-caret { transform: rotate(180deg); }
+    .estate-chat .ec-body { max-height: 0; opacity: 0; overflow: hidden; transition: max-height 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.28s ease; }
+    .estate-chat.open .ec-body { max-height: 520px; opacity: 1; }
+    .estate-chat.open { animation: ec-inflate 0.34s cubic-bezier(0.34,1.42,0.64,1); }
+    @keyframes ec-inflate { 0% { transform: scale(0.985); } 100% { transform: scale(1); } }
+    @media (prefers-reduced-motion: reduce) { .estate-chat .ec-body, .estate-chat .ec-caret { transition: none; } .estate-chat.open { animation: none; } }
+    .estate-chat .ec-input-wrap { position: relative; flex: 1; min-width: 0; }
+    .estate-chat input { width: 100%; display: block; padding: 0.55rem 0.75rem; border: 1px solid rgba(255,255,255,0.16); border-radius: 8px; background: rgba(255,255,255,0.04); color: #f2f5f3; font-size: 0.85rem; }
+    .estate-chat input::placeholder { color: #6b746f; }
+    .estate-chat input:focus { outline: none; }
+    .estate-chat .ec-draw { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    .estate-chat .ec-draw rect { x: 1px; y: 1px; width: calc(100% - 2px); height: calc(100% - 2px); rx: 8px; ry: 8px; fill: none; stroke: #3ed598; stroke-width: 1.5; stroke-dasharray: 100; stroke-dashoffset: 100; }
+    .estate-chat .ec-input-wrap:focus-within .ec-draw rect { animation: ec-border-draw 0.8s ease-out forwards; }
+    @keyframes ec-border-draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+    @media (prefers-reduced-motion: reduce) { .estate-chat .ec-input-wrap:focus-within .ec-draw rect { animation: none; stroke-dashoffset: 0; } }
+    .estate-chat .ec-send { flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: none; border-radius: 8px; background: #3ed598; color: #0b0e0c; cursor: pointer; align-items: center; justify-content: center; }
+    .estate-chat .ec-answer { margin-top: 0.7rem; padding-top: 0.6rem; border-top: 1px solid rgba(255,255,255,0.12); font-size: 0.85rem; line-height: 1.55; color: #d7ddd9; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
+    .estate-chat .ec-answer::-webkit-scrollbar { width: 5px; }
+    .estate-chat .ec-answer::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 999px; }
+    .estate-chat .ec-chips { display: flex; gap: 0.5rem; margin-top: 0.6rem; overflow-x: auto; scrollbar-width: none; }
+    .estate-chat .ec-chips::-webkit-scrollbar { display: none; }
+    .estate-chat .ec-chip { flex-shrink: 0; padding: 0.35rem 0.75rem; border: 1px solid rgba(255,255,255,0.18); border-radius: 999px; background: rgba(255,255,255,0.03); color: #d7ddd9; font-family: inherit; font-size: 0.76rem; white-space: nowrap; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease; }
+    .estate-chat .ec-chip:hover, .estate-chat .ec-chip:focus-visible { border-color: #3ed598; color: #f2f5f3; background: rgba(62,213,152,0.1); outline: none; }
+    /* Same three signals as the Recommendations console: a mint line sweeps
+       the top edge right-to-left on the collapsed band (stops when .open); the
+       title swells on hover and reveals a description tooltip. */
+    .estate-chat::before {
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+        background-image: linear-gradient(90deg, transparent 44%, #3ed598 50%, transparent 56%);
+        background-size: 220% 100%; background-repeat: no-repeat;
+        animation: estate-sweep 3.4s linear infinite; pointer-events: none; z-index: 5;
+    }
+    .estate-chat.open::before { animation: none; opacity: 0; }
+    @keyframes estate-sweep { from { background-position: 160% 0; } to { background-position: -60% 0; } }
+    @media (prefers-reduced-motion: reduce) { .estate-chat::before { display: none; } }
+    .estate-chat .ec-name { position: relative; transition: transform 0.18s ease; transform-origin: left center; }
+    .estate-chat .ec-head:hover .ec-name { transform: scale(1.06); }
+
 </style>
 {% endblock %}
 
@@ -401,6 +448,35 @@
     <span>Last collection was partial: steampipe CLI not found, skipped {{ last_run.skipped_steps | join(', ') }}</span>
 </div>
 {% endif %}
+
+<!-- Cost Analyst console: the Recommendations "How can I help you?" console,
+     scoped to cost questions. Same style + features (collapsible, animated
+     border-draw, starter chips, one-shot answer). Q&A grounded in cloud_costs_raw. -->
+<div class="estate-chat mb-1" id="costChat">
+    <div class="ec-head" role="button" tabindex="0" aria-expanded="false" aria-controls="ccBody"
+         onclick="toggleCostChat()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleCostChat();}">
+        <span class="ec-name">Cost analyst</span>
+        <span class="ec-tag">AI &middot; reads your Cost Explorer data</span>
+        <span class="ec-caret" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+    </div>
+    <div class="ec-body" id="ccBody">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="ec-input-wrap">
+                <input id="costAskInput" type="text" placeholder="Ask about your cloud costs…" oninput="toggleCostSendBtn()" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitCostQuestion();}">
+                <svg class="ec-draw" preserveAspectRatio="none" aria-hidden="true"><rect pathLength="100"/></svg>
+            </span>
+            <button type="button" id="costAskBtn" class="ec-send" onclick="submitCostQuestion()" aria-label="Send" title="Send" style="display: none;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+        </div>
+        <div id="costChips" class="ec-chips">
+            <button type="button" class="ec-chip" onclick="askCost(this)">Summarize this month's spend</button>
+            <button type="button" class="ec-chip" onclick="askCost(this)">What's my biggest cost driver?</button>
+            <button type="button" class="ec-chip" onclick="askCost(this)">How is my spend trending?</button>
+            <button type="button" class="ec-chip" onclick="askCost(this)">Why did the peak month cost more?</button>
+            <button type="button" class="ec-chip" onclick="askCost(this)">Project my annual bill</button>
+        </div>
+        <div id="costAnswer" class="ec-answer" style="display: none;"></div>
+    </div>
+</div>
 
 <!-- Top row: Financial Overview + Saved so far -->
 <div class="top-grid">
@@ -827,6 +903,60 @@
 {% block extra_js %}
 <script src="/static/chart.umd.min.js"></script>
 <script src="/static/trend_forecast.js"></script>
+<script>
+// Cost Analyst console — the Recommendations estate-chat, scoped to costs.
+function toggleCostSendBtn() {
+    const input = document.getElementById('costAskInput');
+    document.getElementById('costAskBtn').style.display = input.value.trim() ? 'flex' : 'none';
+}
+function toggleCostChat() {
+    const card = document.getElementById('costChat');
+    const head = card.querySelector('.ec-head');
+    const open = !card.classList.contains('open');
+    card.classList.toggle('open', open);
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) setTimeout(() => { const i = document.getElementById('costAskInput'); if (i) i.focus(); }, 160);
+}
+function askCost(chip) {
+    const input = document.getElementById('costAskInput');
+    input.value = chip.textContent.trim();
+    toggleCostSendBtn();
+    submitCostQuestion();
+}
+async function submitCostQuestion() {
+    const input = document.getElementById('costAskInput');
+    const question = input.value.trim();
+    if (!question) return;
+    const answerEl = document.getElementById('costAnswer');
+    const btn = document.getElementById('costAskBtn');
+    const chips = document.getElementById('costChips');
+    if (chips) chips.style.display = 'none';
+    btn.disabled = true;
+    answerEl.style.display = 'block';
+    answerEl.textContent = 'Thinking…';
+    try {
+        const response = await fetch('/api/dashboard/cost-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question })
+        });
+        const data = await response.json();
+        if (data.answer) {
+            answerEl.textContent = data.answer;
+            const note = document.createElement('div');
+            note.textContent = 'AI can make mistakes. Please verify its responses.';
+            note.style.cssText = 'margin-top: 0.5rem; font-size: 0.72rem; color: var(--gray-400);';
+            answerEl.appendChild(note);
+        } else {
+            answerEl.textContent = data.error || 'No answer available.';
+        }
+    } catch (error) {
+        answerEl.textContent = 'Error: ' + error.message;
+    } finally {
+        btn.disabled = false;
+    }
+}
+</script>
 <script>
 
 {% if cost_chart %}

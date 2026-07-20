@@ -4,301 +4,103 @@
 
 {% block extra_css %}
 <style>
-    .print-only { display: none; }
+    /* /reports is the on-screen draft of the exportable cost statement: the
+       same sheet you print, framed by the controls that shape it. The PDF
+       (standalone at /reports/print) is the deliverable; this is its preview. */
+    .gran { display: inline-flex; border: 1px solid var(--gray-300); background: var(--gray-100); padding: 2px; font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
+    .gran a { border: none; background: none; color: var(--gray-500); padding: 0.3rem 0.7rem; text-decoration: none; }
+    .gran a.on { background: var(--ink); color: #fff; }
 
-    .narrative-box {
-        background: var(--gray-100);
-        border-left: 3px solid var(--success);
-        border-radius: 6px;
-        padding: 0.875rem 1rem;
-        font-size: 0.9rem;
-        line-height: 1.55;
-        white-space: pre-wrap;
-    }
-    .card-delta-neutral {
-        font-size: 0.875rem;
-        color: var(--gray-600);
-        margin-top: 0.25rem;
-    }
+    .rep-controls { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; padding: 0.65rem 0.75rem; }
+    .rep-sep { width: 1px; background: var(--gray-300); align-self: stretch; }
+    .nav-period { display: inline-flex; align-items: center; gap: 0.5rem; }
+    .nav-period a { text-decoration: none; color: var(--gray-600); border: 1px solid var(--gray-300); width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; }
+    .nav-period a:hover { border-color: var(--ink); color: var(--ink); }
+    .nav-period .lbl { font-weight: 600; font-size: 0.9rem; min-width: 140px; text-align: center; }
+    .budget-form { display: flex; gap: 0.4rem; align-items: center; }
+    .budget-form input { width: 110px; }
 
-    /* --- Print / PDF export: a financial audit document, not a dashboard --- */
+    .doc-stage { background: var(--gray-100); border: 1px solid var(--gray-200); padding: 1.4rem clamp(0.5rem, 3vw, 2rem); display: flex; justify-content: center; }
+    .doc-sheet { background: #fff; color: #1a1a1a; width: 100%; max-width: 900px; padding: 2.4rem 2.6rem; box-shadow: 0 1px 12px rgba(0,0,0,0.10); font-variant-numeric: tabular-nums; }
+    @media (max-width: 700px) { .doc-sheet { padding: 1.4rem 1.2rem; } }
+
+    .draft-hint { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gray-500); display: inline-flex; align-items: center; gap: 0.4rem; }
+    .draft-hint::before { content: ""; width: 6px; height: 6px; background: var(--gray-400); }
+
+{% include "_report_document_css.html" %}
+
     @media print {
-        @page { margin: 16mm 14mm; }
-
-        .sidebar, .no-print { display: none !important; }
-        .main { padding: 0 !important; }
-        body { background: white; color: #111; }
-
-        /* revert (not "block"): .print-only is applied to <table>/<tr>/<div>
-           alike, and forcing block would break table/row layout in print. */
-        .print-only { display: revert; }
-
-        .print-letterhead {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            border-bottom: 2px solid #111;
-            padding-bottom: 0.6rem;
-            margin-bottom: 1rem;
-        }
-        .print-letterhead .brand {
-            font-size: 1rem;
-            font-weight: 700;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-        }
-        .print-letterhead .doc-title {
-            font-size: 0.8rem;
-            color: #444;
-            margin-top: 0.15rem;
-        }
-        .print-letterhead .meta {
-            text-align: right;
-            font-size: 0.75rem;
-            color: #444;
-            line-height: 1.5;
-        }
-
-        .print-summary-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 1.25rem;
-            font-size: 0.85rem;
-        }
-        .print-summary-table caption {
-            text-align: left;
-            font-size: 0.75rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: #444;
-            margin-bottom: 0.4rem;
-            caption-side: top;
-        }
-        .print-summary-table td {
-            padding: 0.4rem 0.6rem;
-            border-bottom: 1px solid #ddd;
-        }
-        .print-summary-table td.label { color: #333; }
-        .print-summary-table td.value {
-            text-align: right;
-            font-variant-numeric: tabular-nums;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-        .print-summary-table td.note {
-            text-align: right;
-            color: #666;
-            font-size: 0.75rem;
-        }
-
-        .card { box-shadow: none !important; border: 1px solid #ccc !important; border-radius: 2px !important; }
-
-        table { font-variant-numeric: tabular-nums; }
-        table th { border-bottom: 2px solid #111 !important; color: #333 !important; font-weight: 700 !important; }
-        table td, table th { padding: 0.4rem 0.6rem !important; }
-        table td:nth-child(2), table td:nth-child(3),
-        table th:nth-child(2), table th:nth-child(3) { text-align: right; }
-        tr.print-total td { border-top: 2px solid #111 !important; font-weight: 700; }
-
-        .badge { border: 1px solid #999 !important; background: none !important; color: #333 !important; border-radius: 2px !important; }
-
-        .narrative-box { border-left: 3px solid #111; background: #f7f7f7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-        /* No AI summary was generated: drop the now-empty narrative card
-           instead of printing a blank bordered box. */
-        #narrative-card:has(#narrative-text[style*="display: none"]) { display: none !important; }
-
-        .print-footnote {
-            margin-top: 1.5rem;
-            padding-top: 0.6rem;
-            border-top: 1px solid #ccc;
-            font-size: 0.7rem;
-            color: #666;
-            line-height: 1.5;
-        }
+        .sidebar, .mobile-nav-toggle, #mobileNavBackdrop, .no-print, .sysbar { display: none !important; }
+        .layout { display: block !important; min-height: 0 !important; overflow: visible !important; }
+        .main { margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+        .doc-stage { background: #fff !important; border: none !important; padding: 0 !important; }
+        .doc-sheet { box-shadow: none !important; max-width: none !important; padding: 0 !important; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Print-only letterhead: the browser's own print header/footer cannot be styled,
-     so the document identifies itself in-page for a professional, finance-oriented PDF. -->
-<div class="print-only print-letterhead">
-    <div>
-        <div class="brand">Wasteless.io</div>
-        <div class="doc-title">AWS FinOps Activity Report</div>
-    </div>
-    <div class="meta">
-        Period: {{ report.period.start }} &rarr; {{ report.period.end }} ({{ report.period.days }} day{{ 's' if report.period.days > 1 }})<br>
-        Generated: {{ generated_at.strftime('%Y-%m-%d %H:%M') }}<br>
-        Confidential
-    </div>
-</div>
+{% set g = report.granularity %}
 
-<div class="page-header no-print" style="margin-bottom: 1rem;">
-    <h1 style="margin-bottom: 0.25rem;">Reports</h1>
-    <p style="color: var(--gray-600); font-size: 0.85rem;">{{ report.period.start }} → {{ report.period.end }} &nbsp;·&nbsp; {{ report.period.days }} day{{ 's' if report.period.days > 1 }}</p>
-</div>
-
-<!-- Period filters -->
-<div class="card mb-1 no-print" style="padding: 0.75rem;">
-    <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
-
-        <!-- Quick links -->
-        <div style="display: flex; gap: 0.5rem;">
-            <a href="/reports?days=7"
-               class="btn {% if report.period.days == 7 %}btn-primary{% else %}btn-outline{% endif %}"
-               style="padding: 0.4rem 0.75rem;">Last 7 days</a>
-            <a href="/reports?days=30"
-               class="btn {% if report.period.days == 30 %}btn-primary{% else %}btn-outline{% endif %}"
-               style="padding: 0.4rem 0.75rem;">Last 30 days</a>
+<header class="sysbar mb-1 no-print" style="position: sticky; top: 0; z-index: 100; background: var(--bg, #f5f5f7);">
+    <h1 class="sysbar-crumb" style="margin: 0;">Wasteless <span class="path">/ Reports</span></h1>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <span class="draft-hint">Draft preview</span>
+        <div class="gran" role="group" aria-label="Granularity">
+            {% for gg in ['day', 'week', 'month', 'year'] %}
+            <a href="/reports?g={{ gg }}&at={{ report.anchor }}" class="{% if g == gg %}on{% endif %}">{{ gg }}</a>
+            {% endfor %}
         </div>
-
-        <!-- Separator -->
-        <div style="width: 1px; background: var(--gray-300); align-self: stretch;"></div>
-
-        <!-- Month picker -->
-        <form method="get" action="/reports" style="margin: 0;">
-            <div style="display: flex; gap: 0.5rem; align-items: end;">
-                <div class="form-group" style="margin: 0;">
-                    <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Month</label>
-                    <input type="month" name="month" class="form-input" style="padding: 0.4rem;" value="{{ month }}">
-                </div>
-                <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
-            </div>
-        </form>
-
-        <!-- Custom range -->
-        <form method="get" action="/reports" style="margin: 0;">
-            <div style="display: flex; gap: 0.5rem; align-items: end;">
-                <div class="form-group" style="margin: 0;">
-                    <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">From</label>
-                    <input type="date" name="start" class="form-input" style="padding: 0.4rem;" value="{{ start }}" required>
-                </div>
-                <div class="form-group" style="margin: 0;">
-                    <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">To</label>
-                    <input type="date" name="end" class="form-input" style="padding: 0.4rem;" value="{{ end }}" required>
-                </div>
-                <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
-            </div>
-        </form>
-
-        <!-- Export actions -->
-        <div style="margin-left: auto; display: flex; gap: 0.5rem; border-left: 1px solid var(--gray-300); padding-left: 1rem;">
-            <a href="/api/reports/download?start={{ start }}&end={{ end }}" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Download .md</a>
-            <button onclick="window.print()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Print / PDF</button>
-        </div>
+        <a href="/api/reports/download?g={{ g }}&at={{ report.anchor }}" class="btn" style="padding: 0.35rem 0.7rem; background: transparent; border: 1px solid #15803d; color: #15803d; text-decoration: none;">&darr; .md</a>
+        <a href="/reports/print?g={{ g }}&at={{ report.anchor }}&auto=1" target="_blank" rel="noopener" class="btn" style="padding: 0.35rem 0.85rem; background: #15803d; border-color: #15803d; color: #fff; text-decoration: none;">Export PDF &rarr;</a>
     </div>
+</header>
+
+<div class="card mb-1 no-print rep-controls">
+    <div class="nav-period">
+        <a href="/reports?g={{ g }}&at={{ report.prev_anchor }}" aria-label="Previous period">&lsaquo;</a>
+        <span class="lbl">{{ report.period.label }}</span>
+        <a href="/reports?g={{ g }}&at={{ report.next_anchor }}" aria-label="Next period">&rsaquo;</a>
+    </div>
+    <div class="rep-sep"></div>
+    <form method="get" action="/reports" style="margin: 0; display: flex; gap: 0.5rem; align-items: center;">
+        <input type="hidden" name="g" value="{{ g }}">
+        <label class="form-label" style="font-size: 0.75rem; margin: 0;">Jump to</label>
+        <input type="date" name="at" class="form-input" style="padding: 0.35rem;" value="{{ report.anchor }}">
+        <button type="submit" class="btn btn-outline" style="padding: 0.35rem 0.7rem;">Go</button>
+    </form>
+    <div class="rep-sep"></div>
+    <form class="budget-form" onsubmit="saveBudget(event)" title="Tracks actual monthly spend against target (month view)">
+        <label class="form-label" style="font-size: 0.75rem; margin: 0;">Budget&nbsp;$</label>
+        <input type="number" min="0" step="100" class="form-input" id="budget-input" style="padding: 0.35rem;" value="{{ '%.0f'|format(budget.amount) if budget and budget.amount else '' }}" placeholder="45000">
+        <button type="submit" class="btn btn-outline" style="padding: 0.35rem 0.6rem;">Save</button>
+        <span id="budget-msg" style="font-size: 0.72rem; color: var(--success);"></span>
+    </form>
 </div>
 
-<!-- AI narrative -->
-{% if llm_enabled %}
-<div id="narrative-card" class="card mb-1" style="padding: 0.875rem;">
-    <div id="narrative-idle" class="no-print" style="display: flex; align-items: center; gap: 0.75rem;">
-        <button id="narrative-btn" class="btn btn-primary" style="padding: 0.4rem 0.75rem;"
-                aria-describedby="narrative-hint" onclick="generateNarrative()">Generate AI summary</button>
-        <span id="narrative-hint" style="font-size: 0.75rem; color: var(--gray-600);">Comments the numbers below — the numbers themselves are always computed from the database.</span>
+<div class="doc-stage">
+    <div class="doc-sheet">
+        {% include "_report_document.html" %}
     </div>
-    <div id="narrative-text" class="narrative-box" style="display: none;"></div>
-</div>
-{% endif %}
-
-<!-- Summary cards -->
-{% set has_data = report.new_waste.count > 0 or report.pending.count > 0 or report.actions.succeeded > 0 or report.verified_savings_eur > 0 %}
-{% if not has_data %}
-<div class="card mb-1" style="padding: 2rem; text-align: center;">
-    <p style="font-weight: 600; margin-bottom: 0.25rem;">No activity in this period</p>
-    <p class="text-muted" style="font-size: 0.85rem;">Try a wider date range, or run the collectors to gather AWS metrics.</p>
-</div>
-{% else %}
-<div class="grid grid-3 mb-1 no-print">
-    <div class="card">
-        <div class="card-title">Waste detected (period)</div>
-        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="All waste detected between {{ report.period.start }} and {{ report.period.end }}, at its detection-time monthly rate — including items since remediated, declined or gone (obsolete). A historical detection total across every status, not the current active figure (see the Overview's 'Monthly Waste')."><span class="kpi-zoom"><span class="countup">${{ "%.2f"|format(report.new_waste.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
-        <div class="card-delta">{{ report.new_waste.count }} resource(s) · all statuses</div>
-    </div>
-    <div class="card">
-        {% if report.pending.scope == 'snapshot' %}
-        <div class="card-title">Recommendations <span class="badge badge-info">live</span></div>
-        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Live view — what is pending approval right now, not a period total · recoverable every month if approved"><span class="kpi-zoom"><span class="countup">${{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
-        <div class="card-delta">{{ report.pending.count }} pending{% if report.pending.oldest_days is not none and report.pending.count > 0 %} · oldest {{ report.pending.oldest_days }}d{% endif %}</div>
-        {% else %}
-        <div class="card-title">Recommendations created</div>
-        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Recommendations created during this period, at their estimated monthly savings"><span class="kpi-zoom"><span class="countup">${{ "%.2f"|format(report.pending.monthly_eur) }}</span><span style="font-size: 0.8rem; font-weight: 400;">/mo</span></span></span></div>
-        <div class="card-delta-neutral">{{ report.pending.count }} in the period</div>
-        {% endif %}
-    </div>
-    <div class="card">
-        <div class="card-title">Savings verified</div>
-        <div class="card-value"><span class="kpi-hover" tabindex="0" data-tip="Verified via AWS Cost Explorer after applied actions — measured, not estimated"><span class="kpi-zoom"><span class="countup">${{ "%.2f"|format(report.verified_savings_eur) }}</span></span></span></div>
-        <div class="card-delta">via <a href="https://console.aws.amazon.com/costmanagement/home#/cost-explorer" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Cost Explorer</a></div>
-    </div>
-</div>
-
-<!-- Print-only equivalent: a financial summary table, not dashboard tiles -->
-<table class="print-only print-summary-table">
-    <caption>Financial Summary</caption>
-    <tbody>
-        <tr>
-            <td class="label">Detected waste (period)</td>
-            <td class="value">${{ "%.2f"|format(report.new_waste.monthly_eur) }}/mo</td>
-            <td class="note">{{ report.new_waste.count }} resource(s)</td>
-        </tr>
-        <tr>
-            {% if report.pending.scope == 'snapshot' %}
-            <td class="label">Potential savings (pending recommendations, live)</td>
-            <td class="value">${{ "%.2f"|format(report.pending.monthly_eur) }}/mo</td>
-            <td class="note">{{ report.pending.count }} pending{% if report.pending.oldest_days is not none and report.pending.count > 0 %} &middot; oldest {{ report.pending.oldest_days }}d{% endif %}</td>
-            {% else %}
-            <td class="label">Potential savings (recommendations created)</td>
-            <td class="value">${{ "%.2f"|format(report.pending.monthly_eur) }}/mo</td>
-            <td class="note">{{ report.pending.count }} in the period</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td class="label">Actions executed</td>
-            <td class="value">{{ report.actions.succeeded }}</td>
-            <td class="note">{% if report.actions.failed > 0 %}{{ report.actions.failed }} failed &middot; {% endif %}{{ report.actions.dry_run }} dry-run</td>
-        </tr>
-        <tr>
-            <td class="label">Confirmed savings (verified via Cost Explorer)</td>
-            <td class="value">${{ "%.2f"|format(report.verified_savings_eur) }}</td>
-            <td class="note">requires completed actions</td>
-        </tr>
-    </tbody>
-</table>
-{% endif %}
-
-<div class="print-only print-footnote">
-    Figures above are Wasteless-detected estimates based on current usage patterns; potential savings require technical validation and approval before execution. No production destructive action is recommended without explicit approval. Only "Confirmed savings" are verified via AWS Cost Explorer.
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    async function generateNarrative() {
-        const btn = document.getElementById('narrative-btn');
-        const box = document.getElementById('narrative-text');
-        btn.disabled = true;
-        btn.textContent = 'Generating…';
+    async function saveBudget(e) {
+        e.preventDefault();
+        const input = document.getElementById('budget-input');
+        const msg = document.getElementById('budget-msg');
+        const val = parseFloat(input.value);
+        if (isNaN(val) || val < 0) { msg.style.color = 'var(--danger)'; msg.textContent = 'invalid'; return; }
         try {
-            const resp = await fetch('/api/reports/narrative?start={{ start }}&end={{ end }}', { method: 'POST' });
-            const data = await resp.json();
-            if (data.narrative) {
-                box.textContent = data.narrative;
-                box.style.display = 'block';
-                document.getElementById('narrative-idle').style.display = 'none';
-            } else {
-                btn.disabled = false;
-                btn.textContent = 'Generate AI summary';
-                alert('AI summary unavailable (provider error or not configured). The report numbers are unaffected.');
-            }
-        } catch (e) {
-            btn.disabled = false;
-            btn.textContent = 'Generate AI summary';
-            alert('AI summary request failed: ' + e);
-        }
+            const resp = await fetch('/api/reports/budget', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ monthly_usd: val })
+            });
+            if (resp.ok) { msg.style.color = 'var(--success)'; msg.textContent = 'saved'; setTimeout(() => location.reload(), 500); }
+            else { msg.style.color = 'var(--danger)'; msg.textContent = 'failed'; }
+        } catch (err) { msg.style.color = 'var(--danger)'; msg.textContent = 'failed'; }
     }
 </script>
 {% endblock %}

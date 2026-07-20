@@ -153,6 +153,27 @@ def collect_digest_data(conn, start_date: date, end_date: date) -> Dict[str, Any
         )
         (verified_eur,) = _values(cursor.fetchone())
 
+        # Cloud spend actually billed in the period (AWS invoice via Cost
+        # Explorer, cloud_costs_raw). Lets the CTO lens express identified
+        # waste as a % of the bill, and backs the CFO budget variance.
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(cost), 0) AS usd
+            FROM cloud_costs_raw
+            WHERE usage_date >= %s AND usage_date < %s;
+        """,
+            (start_date, end_exclusive),
+        )
+        (spend_usd,) = _values(cursor.fetchone())
+
+        # Cumulative verified savings to date (all-time), independent of the
+        # period: the run-rate figure a CTO/CFO actually books.
+        cursor.execute("""
+            SELECT COALESCE(SUM(actual_savings_eur), 0) AS eur, COUNT(*) AS n
+            FROM savings_realized;
+        """)
+        verified_total_eur, verified_count = _values(cursor.fetchone())
+
         return {
             "period": {
                 "start": start_date.isoformat(),
@@ -176,6 +197,12 @@ def collect_digest_data(conn, start_date: date, end_date: date) -> Dict[str, Any
                 "dry_run": int(dry_run),
             },
             "verified_savings_eur": float(verified_eur),
+            "verified_total_eur": float(verified_total_eur),
+            "verified_count": int(verified_count),
+            "spend": {
+                "period_usd": float(spend_usd),
+                "has_data": float(spend_usd) > 0,
+            },
         }
     finally:
         cursor.close()
@@ -218,6 +245,15 @@ def format_digest(data: Dict[str, Any]) -> str:
         f"{actions['failed']} failed ({actions['dry_run']} dry-run)",
         f"Savings verified this period: {data['verified_savings_eur']:.2f} USD",
     ]
+    if data.get("verified_count"):
+        lines.append(
+            f"Total verified savings to date: {data['verified_total_eur']:.2f} USD "
+            f"({data['verified_count']} action(s))"
+        )
+    if data.get("spend", {}).get("has_data"):
+        lines.append(
+            f"Cloud spend (period, via Cost Explorer): {data['spend']['period_usd']:.2f} USD"
+        )
     return "\n".join(lines)
 
 
