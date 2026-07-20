@@ -108,6 +108,13 @@ def _sync_ec2_instance_states(cursor: Any, instance_ids: List[str]) -> Tuple[int
     from utils.aws_clients import get_client
 
     aws_states: Dict[str, Dict[str, str]] = {}
+    # Track whether every region was actually checked. A failed describe
+    # (network cut, throttling, AccessDenied) must NOT be read as "the
+    # instance vanished": during an AWS outage every region errors, and
+    # obsoleting every EC2 recommendation would erase live waste (the
+    # snapshot then records $0 and the trend chart drops to zero). Mirrors
+    # the region-failure guard in find_vanished_resources.
+    region_failed = False
     # CLOUD_REGIONS, never a local list: an instance living in an unswept
     # region reads as vanished and its recommendation flips to obsolete
     # (which the next detector tick revives - a silent oscillation).
@@ -125,6 +132,7 @@ def _sync_ec2_instance_states(cursor: Any, instance_ids: List[str]) -> Tuple[int
                     }
         except Exception as e:
             print(f"Error checking region {region}: {e}")
+            region_failed = True
             continue
 
     synced_count = 0
@@ -134,6 +142,12 @@ def _sync_ec2_instance_states(cursor: Any, instance_ids: List[str]) -> Tuple[int
         aws_info = aws_states.get(instance_id)
 
         if aws_info is None:
+            # Not found — but only obsolete it if we could check everywhere.
+            # If any region's describe failed, the instance could live in
+            # that unchecked region, so leave the recommendation untouched
+            # rather than erase it during a transient AWS failure.
+            if region_failed:
+                continue
             cursor.execute(
                 """
                 UPDATE recommendations r

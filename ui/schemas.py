@@ -35,6 +35,14 @@ class TagRequest(BaseModel):
     value: str = Field(default="", max_length=256)
 
 
+class BudgetRequest(BaseModel):
+    """Set the monthly cloud budget (USD) for the Reports CFO lens."""
+
+    # Bounded so a stray paste can't store an absurd figure; 0 clears the
+    # over/under framing to "no budget set" territory but is still valid.
+    monthly_usd: float = Field(ge=0, le=1_000_000_000)
+
+
 class ConfigUpdate(BaseModel):
     """Configuration update request."""
 

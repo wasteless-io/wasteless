@@ -71,6 +71,18 @@ def _fake_get_client(states_by_id):
     return factory
 
 
+def _fake_get_client_all_regions_fail():
+    """A get_client stand-in whose describe_instances raises everywhere,
+    simulating an AWS/network outage (no region can be checked)."""
+
+    def factory(service, region=None):
+        client = MagicMock()
+        client.describe_instances.side_effect = Exception("network is unreachable")
+        return client
+
+    return factory
+
+
 @unittest.skipUnless(PSYCOPG2_AVAILABLE, "psycopg2 not installed")
 class TestSyncEc2InstanceStates(unittest.TestCase):
 
@@ -171,6 +183,21 @@ class TestSyncEc2InstanceStates(unittest.TestCase):
 
         self.assertEqual(obsolete, 1)
         self.assertEqual(self._rec_status(rec_id), "obsolete")
+
+    def test_region_failure_does_not_obsolete_live_recommendation(self):
+        """AWS unreachable (every region's describe errors) must NOT be read
+        as 'the instance vanished'. A network cut would otherwise obsolete
+        every EC2 recommendation, drop active_waste to ~0, and the daily
+        snapshot would record $0 — the trend chart then plunges to zero for
+        a resource that is still very much alive."""
+        rec_id = self._insert_ec2_waste("i-live-but-unreachable", status="pending")
+
+        with patch("utils.aws_clients.get_client", _fake_get_client_all_regions_fail()):
+            synced, obsolete = _sync_ec2_instance_states(self.cur, ["i-live-but-unreachable"])
+
+        self.assertEqual(obsolete, 0)
+        self.assertEqual(synced, 0)
+        self.assertEqual(self._rec_status(rec_id), "pending")
 
     def test_dismissed_instance_is_never_touched(self):
         """dismissed is a terminal decision: sync must not overwrite it."""
