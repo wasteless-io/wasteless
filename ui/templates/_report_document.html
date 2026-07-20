@@ -1,0 +1,102 @@
+{# Shared cloud cost statement. Rendered both as the on-screen preview
+   (reports.html) and the standalone PDF (reports_print.html). Every figure is
+   deterministic from `report` (cloud_costs_raw via Cost Explorer); `budget` is
+   the monthly budget context. Accounting view of infra cost -- no waste. #}
+{% set g = report.granularity %}
+{% set trend_scale = report.trend_scale or 0 %}
+{% set step = ((report.trend | length / 12) | round(0, 'ceil') | int) if (report.trend | length > 12) else 1 %}
+{% set is_month = budget and budget.is_month %}
+
+<header class="pd-head">
+    <div>
+        <div class="brand">Wasteless</div>
+        <div class="doc-title">Cloud Cost Statement</div>
+        <div class="tagline">What the infrastructure costs, by AWS service</div>
+    </div>
+    <div class="meta">
+        {{ g | capitalize }} &middot; <b>{{ report.period.label }}</b><br>
+        {{ report.period.start }} &rarr; {{ report.period.end }}<br>
+        Generated {{ generated_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        <span class="conf">Confidential</span>
+    </div>
+</header>
+
+<section class="pd-section">
+    <div class="pd-h">Summary</div>
+    {% if report.has_data %}
+    <p class="pd-lead">Infrastructure cost for {{ report.period.label }} was <b>${{ "%.2f"|format(report.total_usd) }}</b>{% if report.delta_pct is not none %}, <b>{% if report.delta_usd >= 0 %}+{% endif %}{{ report.delta_pct }}%</b> vs the previous {{ g }} (${{ "%.2f"|format(report.prev_total_usd) }}){% endif %}. {% if report.top_service %}The largest line was <b>{{ report.top_service.service }}</b> at <b>${{ "%.2f"|format(report.top_service.usd) }}</b> ({{ report.top_service.pct | round(0) | int }}%). {% endif %}{{ report.service_count }} service(s) billed. At this run-rate, annual spend projects to <b>${{ "%.0f"|format(report.annual_run_rate_usd) }}</b>.{% if not report.complete %} <span style="color:#a65a00;">This {{ g }} is not yet fully reported by Cost Explorer (24&ndash;48h lag).</span>{% endif %}</p>
+    {% else %}
+    <p class="pd-lead">No cost recorded for {{ report.period.label }}. Cost data is collected daily from AWS Cost Explorer and lags 24&ndash;48h{% if report.last_data_date %}; the latest reported day is {{ report.last_data_date }}{% endif %}.</p>
+    {% endif %}
+</section>
+
+<section class="pd-section">
+    <div class="pd-h">Key figures</div>
+    <div class="pd-metrics">
+        <div class="m"><div class="k">Total cost</div><div class="v">${{ "%.2f"|format(report.total_usd) }}</div><div class="s">{{ report.period.label }}</div></div>
+        <div class="m"><div class="k">vs previous {{ g }}</div><div class="v{% if report.delta_usd > 0 %} a{% elif report.delta_usd < 0 %} g{% endif %}">{% if report.delta_pct is not none %}{% if report.delta_usd >= 0 %}+{% endif %}{{ report.delta_pct }}%{% else %}&mdash;{% endif %}</div><div class="s">was ${{ "%.2f"|format(report.prev_total_usd) }}</div></div>
+        <div class="m"><div class="k">Daily average</div><div class="v">${{ "%.2f"|format(report.daily_avg_usd) }}</div><div class="s">per day{% if not report.complete %} · so far{% endif %}</div></div>
+        <div class="m"><div class="k">Annual run-rate</div><div class="v">${{ "%.0f"|format(report.annual_run_rate_usd) }}</div><div class="s">projected /yr</div></div>
+    </div>
+</section>
+
+<section class="pd-section">
+    <div class="pd-h">Cost trend</div>
+    {% if report.trend and trend_scale > 0 %}
+    <div class="pd-trend">
+        {% for lbl, usd in report.trend %}
+        <div class="col{% if usd > trend_scale %} clip{% endif %}" title="{{ lbl }}: ${{ '%.2f'|format(usd) }}">
+            <div class="bar" style="height: {{ ([usd / trend_scale * 100, 100] | min) | round(1) }}%;"></div>
+            <div class="bl">{% if loop.index0 % step == 0 or loop.last %}{{ lbl }}{% endif %}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% if report.trend_clipped %}
+    <div style="font-size: 0.6rem; color: #888; margin-top: 0.35rem;">&#9650; bar exceeds the chart scale (a periodic charge, e.g. tax or a monthly fee) &mdash; exact value on hover.</div>
+    {% endif %}
+    {% else %}
+    <div class="pd-trend-empty">No cost data to chart for this period.</div>
+    {% endif %}
+</section>
+
+{% if is_month %}
+<section class="pd-section">
+    <div class="pd-h">Budget</div>
+    {% if budget.amount %}
+    {% set variance = report.total_usd - budget.amount %}
+    <table class="pd-kv">
+        <tr><td>Monthly budget</td><td class="r">${{ "%.2f"|format(budget.amount) }}</td></tr>
+        <tr><td>Actual ({{ report.period.label }}){% if not report.complete %} · so far{% endif %}</td><td class="r{% if variance > 0 %} a{% endif %}">${{ "%.2f"|format(report.total_usd) }}</td></tr>
+        <tr><td>{% if variance >= 0 %}Over{% else %}Under{% endif %} budget</td><td class="r{% if variance > 0 %} a{% else %} g{% endif %}">{% if variance >= 0 %}+{% endif %}${{ "%.2f"|format(variance) }} ({{ (variance / budget.amount * 100) | round(1) }}%)</td></tr>
+    </table>
+    {% else %}
+    <div class="pd-note"><b>No monthly budget set.</b> Set one in the application to track actual spend against target for {{ report.period.label }}.</div>
+    {% endif %}
+</section>
+{% endif %}
+
+<section class="pd-section">
+    <div class="pd-h">Cost by service</div>
+    <table class="pd-tbl">
+        <thead><tr><th>Service</th><th class="r">Cost</th><th class="r">Share</th><th class="r">vs prev {{ g }}</th></tr></thead>
+        <tbody>
+            {% for s in report.services %}
+            <tr>
+                <td>{{ s.service }}</td>
+                <td class="r val">${{ "%.2f"|format(s.usd) }}</td>
+                <td class="r">{{ s.pct | round(0) | int }}%</td>
+                <td class="r{% if s.delta_pct is not none and s.delta_pct > 0 %} a{% elif s.delta_pct is not none and s.delta_pct < 0 %} g{% endif %}">{% if s.delta_pct is not none %}{% if s.delta_pct >= 0 %}+{% endif %}{{ s.delta_pct | round(0) | int }}%{% else %}new{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" style="text-align:center; color:#777;">No cost data for this period.</td></tr>
+            {% endfor %}
+            {% if report.services %}
+            <tr class="total"><td>Total</td><td class="r val">${{ "%.2f"|format(report.total_usd) }}</td><td class="r">100%</td><td class="r">{% if report.delta_pct is not none %}{% if report.delta_usd >= 0 %}+{% endif %}{{ report.delta_pct | round(0) | int }}%{% else %}&mdash;{% endif %}</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+
+<footer class="pd-foot">
+    <b>Source.</b> Amounts are AWS Cost Explorer <b>UnblendedCost</b> (what was billed), collected daily{% if report.last_data_date %}, last updated {{ report.last_data_date }}{% endif %}. Cost Explorer lags 24&ndash;48h, so the most recent day(s) and the current period may be partial. Figures are at <b>service</b> granularity; per-resource detail requires enabling AWS resource-level cost data (a paid opt-in) and is not shown here. All amounts USD. Prepared by Wasteless.io &middot; Confidential.
+</footer>

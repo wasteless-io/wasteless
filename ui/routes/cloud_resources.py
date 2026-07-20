@@ -111,6 +111,15 @@ def cloud_resources(
     def _tag_name(tags):
         return next((t["Value"] for t in (tags or []) if t["Key"] == "Name"), "-")
 
+    def _user_tags(tags):
+        # Tags worth showing in the inventory: drop the Name tag (it has its
+        # own column) and AWS-managed 'aws:' tags (noise, not user-set).
+        return [
+            {"key": t["Key"], "value": t.get("Value", "")}
+            for t in (tags or [])
+            if t["Key"] != "Name" and not t["Key"].startswith("aws:")
+        ]
+
     def _fetch_ec2(region):
         try:
             ec2 = get_client("ec2", region=region)
@@ -127,6 +136,7 @@ def cloud_resources(
                             {
                                 "instance_id": inst["InstanceId"],
                                 "name": _tag_name(inst.get("Tags")),
+                                "tags": _user_tags(inst.get("Tags")),
                                 "type": inst["InstanceType"],
                                 "state": inst["State"]["Name"],
                                 "region": region,
@@ -154,6 +164,7 @@ def cloud_resources(
                         {
                             "volume_id": vol["VolumeId"],
                             "name": _tag_name(vol.get("Tags")),
+                            "tags": _user_tags(vol.get("Tags")),
                             "size_gb": vol["Size"],
                             "state": vol["State"],
                             "type": vol["VolumeType"],
@@ -176,6 +187,7 @@ def cloud_resources(
                 result.append(
                     {
                         "allocation_id": addr.get("AllocationId", "-"),
+                        "tags": _user_tags(addr.get("Tags")),
                         "public_ip": addr.get("PublicIp", "-"),
                         "private_ip": addr.get("PrivateIpAddress", "-"),
                         "instance_id": addr.get("InstanceId", "-"),
@@ -200,6 +212,7 @@ def cloud_resources(
                     {
                         "vpc_id": vpc["VpcId"],
                         "name": _tag_name(vpc.get("Tags")),
+                        "tags": _user_tags(vpc.get("Tags")),
                         "cidr": vpc["CidrBlock"],
                         "state": vpc["State"],
                         "is_default": vpc.get("IsDefault", False),
@@ -225,6 +238,7 @@ def cloud_resources(
                     result.append(
                         {
                             "snapshot_id": snap["SnapshotId"],
+                            "tags": _user_tags(snap.get("Tags")),
                             "description": snap.get("Description") or "-",
                             "volume_id": snap.get("VolumeId") or "-",
                             "size_gb": snap.get("VolumeSize", 0),
@@ -298,6 +312,7 @@ def cloud_resources(
                     {
                         "nat_id": nat["NatGatewayId"],
                         "name": _tag_name(nat.get("Tags")),
+                        "tags": _user_tags(nat.get("Tags")),
                         "state": nat.get("State", "-"),
                         "vpc_id": nat.get("VpcId", "-"),
                         "subnet_id": nat.get("SubnetId", "-"),
@@ -368,6 +383,7 @@ def cloud_resources(
                         {
                             "image_id": image["ImageId"],
                             "name": image.get("Name") or _tag_name(image.get("Tags")),
+                            "tags": _user_tags(image.get("Tags")),
                             "state": image.get("State", "-"),
                             "created": image.get("CreationDate", "-"),
                             "snapshot_count": len(snapshot_ids),

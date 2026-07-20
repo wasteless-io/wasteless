@@ -32,10 +32,14 @@ def _mock_conn(
     pending=(8, 312.0, 12),
     actions=(3, 1, 2),
     verified=(45.2,),
+    spend=(9500.0,),
+    verified_cum=(128.4, 5),
 ):
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [new_waste, pending, actions, verified]
+    # Order matches the fetchone() calls in collect_digest_data: new_waste,
+    # pending, actions, verified(period), spend, verified(cumulative).
+    cursor.fetchone.side_effect = [new_waste, pending, actions, verified, spend, verified_cum]
     cursor.fetchall.return_value = list(by_type)
     return conn
 
@@ -50,6 +54,9 @@ SAMPLE_DATA = {
     "pending": {"count": 8, "monthly_eur": 312.0, "oldest_days": 12, "scope": "snapshot"},
     "actions": {"succeeded": 3, "failed": 1, "dry_run": 2},
     "verified_savings_eur": 45.2,
+    "verified_total_eur": 128.4,
+    "verified_count": 5,
+    "spend": {"period_usd": 9500.0, "has_data": True},
 }
 
 
@@ -73,6 +80,9 @@ class TestCollectDigestData:
         }
         assert data["actions"] == {"succeeded": 3, "failed": 1, "dry_run": 2}
         assert data["verified_savings_eur"] == 45.2
+        assert data["verified_total_eur"] == 128.4
+        assert data["verified_count"] == 5
+        assert data["spend"] == {"period_usd": 9500.0, "has_data": True}
 
     def test_dict_rows_supported(self):
         """The UI connects with RealDictCursor: rows are dicts, not tuples."""
@@ -91,12 +101,20 @@ class TestCollectDigestData:
 
     def test_empty_database(self):
         conn = _mock_conn(
-            new_waste=(0, 0), by_type=(), pending=(0, 0, None), actions=(0, 0, 0), verified=(0,)
+            new_waste=(0, 0),
+            by_type=(),
+            pending=(0, 0, None),
+            actions=(0, 0, 0),
+            verified=(0,),
+            spend=(0,),
+            verified_cum=(0, 0),
         )
         data = collect_digest_data(conn, WEEK_AGO, TODAY)
         assert data["new_waste"]["count"] == 0
         assert data["pending"]["oldest_days"] is None
         assert data["verified_savings_eur"] == 0.0
+        assert data["spend"] == {"period_usd": 0.0, "has_data": False}
+        assert data["verified_count"] == 0
 
     def test_period_including_today_uses_pending_snapshot(self):
         conn = _mock_conn()
@@ -150,6 +168,8 @@ class TestFormatDigest:
         assert "waiting 12 day(s)" in text
         assert "3 succeeded, 1 failed (2 dry-run)" in text
         assert "45.20 USD" in text
+        assert "Total verified savings to date: 128.40 USD (5 action(s))" in text
+        assert "Cloud spend (period, via Cost Explorer): 9500.00 USD" in text
 
     def test_no_oldest_line_when_no_pending(self):
         data = dict(

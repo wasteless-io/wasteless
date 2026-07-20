@@ -1,0 +1,55 @@
+/* Shared FinOps document styles — used by the on-screen preview (reports.html)
+   and the standalone print page (reports_print.html). Literal colors (no
+   design tokens) so the document looks identical on white paper and in the
+   preview sheet, regardless of app theme. Included inside a <style> block. */
+.pd-head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5px solid #111; padding-bottom: 0.55rem; margin-bottom: 1.1rem; }
+.pd-head .brand { font-size: 1.2rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #111; }
+.pd-head .doc-title { font-size: 0.85rem; color: #333; margin-top: 0.15rem; font-weight: 600; }
+.pd-head .tagline { font-size: 0.68rem; color: #777; margin-top: 0.1rem; }
+.pd-head .meta { text-align: right; font-size: 0.72rem; color: #444; line-height: 1.55; }
+.pd-head .meta .conf { display: inline-block; margin-top: 0.2rem; border: 1px solid #999; padding: 0.05rem 0.35rem; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.6rem; color: #333; }
+
+.pd-section { margin-bottom: 1.15rem; break-inside: avoid; }
+.pd-h { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: #111; border-bottom: 1px solid #bbb; padding-bottom: 0.25rem; margin-bottom: 0.55rem; }
+.pd-lead { font-size: 0.94rem; line-height: 1.6; color: #222; }
+.pd-lead b { font-weight: 700; }
+
+.pd-metrics { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #111; }
+.pd-metrics .m { padding: 0.55rem 0.7rem; border-right: 1px solid #ccc; }
+.pd-metrics .m:last-child { border-right: none; }
+.pd-metrics .m .k { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }
+.pd-metrics .m .v { font-size: 1.2rem; font-weight: 800; margin-top: 0.15rem; color: #111; }
+.pd-metrics .m .v.g { color: #157a3a; }
+.pd-metrics .m .s { font-size: 0.62rem; color: #555; margin-top: 0.1rem; }
+
+table.pd-tbl { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+table.pd-tbl th { text-align: left; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; color: #555; border-bottom: 1.5px solid #111; padding: 0.3rem 0.5rem; }
+table.pd-tbl th.r, table.pd-tbl td.r { text-align: right; }
+table.pd-tbl td { padding: 0.34rem 0.5rem; border-bottom: 1px solid #e2e2e2; color: #222; }
+table.pd-tbl td.val { font-weight: 600; white-space: nowrap; }
+table.pd-tbl tr.total td { border-top: 1.5px solid #111; border-bottom: none; font-weight: 700; }
+
+.pd-note { font-size: 0.78rem; color: #555; line-height: 1.5; padding: 0.5rem 0.6rem; border: 1px dashed #bbb; }
+.pd-note b { color: #222; }
+
+.pd-kv { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+.pd-kv td { padding: 0.32rem 0.5rem; border-bottom: 1px solid #e2e2e2; color: #222; }
+.pd-kv td.r { text-align: right; font-weight: 600; white-space: nowrap; }
+.pd-kv td.g { color: #157a3a; }
+.pd-kv td.a { color: #a65a00; }
+
+.pd-two { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+@media (max-width: 620px) { .pd-two { grid-template-columns: 1fr; } .pd-metrics { grid-template-columns: repeat(2, 1fr); } }
+
+/* cost trend bars */
+.pd-trend { display: flex; align-items: flex-end; gap: 3px; height: 130px; padding-top: 16px; }
+.pd-trend .col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; position: relative; }
+.pd-trend .bar { width: 100%; max-width: 28px; background: #2a6df0; border-radius: 2px 2px 0 0; min-height: 1px; }
+.pd-trend .bl { font-size: 0.5rem; color: #888; margin-top: 3px; white-space: nowrap; }
+.pd-trend .cap { position: absolute; top: -14px; font-size: 0.5rem; color: #555; white-space: nowrap; }
+.pd-trend .col.clip .bar { position: relative; }
+.pd-trend .col.clip .bar::before { content: "\25B2"; position: absolute; top: -11px; left: 50%; transform: translateX(-50%); font-size: 0.5rem; color: #a65a00; }
+.pd-trend-empty { font-size: 0.8rem; color: #888; padding: 1rem 0; }
+
+.pd-foot { margin-top: 1.3rem; padding-top: 0.55rem; border-top: 1px solid #ccc; font-size: 0.68rem; color: #666; line-height: 1.55; }
+.pd-foot b { color: #333; }

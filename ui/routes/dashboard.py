@@ -4,9 +4,10 @@ import os
 from datetime import date, timedelta
 from typing import Any, Dict
 
-from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
 
+from schemas import AskQuestionRequest
 from state import get_db, templates, CLOUD_REGIONS, DAYS_PER_MONTH, TREND_RANGES
 
 router = APIRouter()
@@ -804,6 +805,36 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             "next_verification": next_verification,
         },
     )
+
+
+@router.post("/api/dashboard/cost-chat")
+def chat_about_costs(body: AskQuestionRequest, conn=Depends(get_db)):
+    """One-shot AI answer to a question about the customer's AWS cloud costs.
+
+    Powers the Cost Analyst console on the dashboard (same contract as the
+    Recommendations chat). Stateless; sync route because the LLM call blocks
+    and must run in the threadpool.
+    """
+    from core.llm import LLMUnavailableError, answer_cost_question, is_enabled
+    from utils.cost_report import format_cost_context
+
+    question = (body.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question must not be empty")
+    if not is_enabled():
+        return JSONResponse(
+            {
+                "answer": None,
+                "error": "AI insights are not configured. Set a model and API key "
+                "in Settings → AI Insights (LLM)",
+            },
+            status_code=503,
+        )
+    try:
+        answer = answer_cost_question(question, format_cost_context(conn), conn=conn)
+    except LLMUnavailableError as e:
+        return JSONResponse({"answer": None, "error": str(e)}, status_code=502)
+    return JSONResponse({"answer": answer})
 
 
 @router.get("/api/dashboard/trend")

@@ -38,9 +38,17 @@
            as the page's one dark voice without swallowing the page */
         box-shadow: 5px 5px 0 0 rgba(62,213,152,0.22);
         padding: 0.85rem 1.1rem !important;
+        position: relative;
+        overflow: hidden;
     }
     #briefing-card:hover { border-color: #0b0e0c; }
-    #briefing-card .title-rule::after { background: rgba(255,255,255,0.18); }
+    /* A single mint line sweeps the top edge right-to-left, on a loop — the
+       AI's "alive" signal. Runs while collapsed; expanding (.open) stops it. */
+    #briefing-card::before { content: ""; position: absolute; top: 0; left: 0; height: 2px; width: 32%; background: linear-gradient(90deg, transparent, #3ed598, transparent); transform: translateX(-140%); animation: briefing-sweep 3.4s linear infinite; pointer-events: none; z-index: 5; }
+    #briefing-card.open::before { animation: none; opacity: 0; }
+    @keyframes briefing-sweep { from { transform: translateX(340%); } to { transform: translateX(-140%); } }
+    @media (prefers-reduced-motion: reduce) { #briefing-card::before { display: none; } }
+    #briefing-card .title-rule::after { background: #3ed598; }
     /* The feature name becomes mono-caps chrome with the mint square
        (base.html paints h3 in --ink, unreadable on the dark surface) */
     #briefing-card h3 { color: #f2f5f3; }
@@ -322,7 +330,7 @@
 {% if llm_enabled %}
 <!-- AI Daily Briefing: the numbers first, the narrative right under
      them. Collapsed to its first paragraph by default. -->
-<div class="card mb-1" id="briefing-card" style="padding: 1rem 1.25rem;">
+<div class="card mb-1" id="briefing-card" style="padding: 1rem 1.25rem; border-radius: 0;">
     {# Hairline under the title row — same treatment as the card's own
        footer rule, so header and footer frame the narrative. The rule
        draws itself left-to-right on load (.title-rule), echoing the
@@ -354,8 +362,8 @@
 {# Decision queue: the three biggest pending savings, one line each —
    what to decide, right under the numbers (prototype 2026-07-19). Same
    source as Recoverable Now so the total always matches the tile. #}
-<div class="card mb-1" style="padding: 1rem 1.25rem;">
-    <div style="font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gray-500); margin-bottom: 0.45rem;">Decision queue · top {{ decision_queue|length }} by savings</div>
+<div class="card mb-1" style="padding: 1rem 1.25rem; border-radius: 0;">
+    <div class="title-rule" style="display: block; font-family: var(--font-mono); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); padding-bottom: 0.5rem; margin-bottom: 0.55rem;">Decision queue · top {{ decision_queue|length }} by savings</div>
     {% for d in decision_queue %}
     <div style="display: flex; align-items: baseline; gap: 0.8rem; padding: 0.5rem 0; border-top: 1px solid var(--gray-100); font-size: 0.82rem;">
         <span style="font-family: var(--font-mono); font-size: 0.76rem;" title="{{ d.resource_id }}">{{ d.resource_id }}</span>
@@ -374,7 +382,7 @@
 <!-- Recent Activity -->
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
     <!-- Waste by Type -->
-    <div class="card" style="padding: 1rem;">
+    <div class="card" style="padding: 1rem; border-radius: 0;">
         <div class="title-rule" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.55rem; gap: 0.75rem;">
             <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Waste by Type</h3>
             <a href="/recommendations" aria-label="View all recommendations" style="font-size: 1rem; line-height: 1; color: var(--primary); text-decoration: none;">&rarr;</a>
@@ -430,7 +438,7 @@
     </div>
 
     <!-- Recent Activity -->
-    <div class="card" style="padding: 1rem;">
+    <div class="card" style="padding: 1rem; border-radius: 0;">
         <div class="title-rule" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.55rem;">
             <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Recent Activity</h3>
             <a href="/history" aria-label="View full history" style="font-size: 1rem; line-height: 1; color: var(--primary); text-decoration: none;">&rarr;</a>

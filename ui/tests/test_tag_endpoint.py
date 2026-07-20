@@ -104,6 +104,9 @@ class TestTagCardMarkup(unittest.TestCase):
         self.assertIn('class="tag-check"', tpl)
         self.assertIn("applyTags()", tpl)
         self.assertIn("/api/cloud-resources/tag", tpl)
+        # Existing tags are surfaced back in a dedicated column.
+        self.assertIn(">Tags</th>", tpl)
+        self.assertIn('class="tag-chip"', tpl)
 
 
 if __name__ == "__main__":

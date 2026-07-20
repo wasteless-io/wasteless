@@ -191,7 +191,25 @@
         background-size: 22px 22px;
         box-shadow: 5px 5px 0 0 rgba(62,213,152,0.22);
         padding: 0.9rem 1.1rem;
+        position: relative;
+        z-index: 1;
     }
+    /* A single mint line sweeps the top edge right-to-left on the collapsed
+       band (the "alive" signal); expanding (.open) stops it. Uses a sliding
+       gradient (not a translated element) so no overflow clip is needed and
+       the hover description below can escape the card. */
+    .estate-chat::before {
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+        background-image: linear-gradient(90deg, transparent 44%, #3ed598 50%, transparent 56%);
+        background-size: 220% 100%; background-repeat: no-repeat;
+        animation: estate-sweep 3.4s linear infinite; pointer-events: none; z-index: 5;
+    }
+    .estate-chat.open::before { animation: none; opacity: 0; }
+    @keyframes estate-sweep { from { background-position: 160% 0; } to { background-position: -60% 0; } }
+    @media (prefers-reduced-motion: reduce) { .estate-chat::before { display: none; } }
+    /* Hover the title: it swells, and a description tooltip appears. */
+    .estate-chat .ec-name { position: relative; transition: transform 0.18s ease; transform-origin: left center; }
+    .estate-chat .ec-head:hover .ec-name { transform: scale(1.06); }
     /* Collapsed by default = the band alone (user request 2026-07-19); the
        whole header is the toggle. Clicking inflates the card and reveals
        the field + starter chips. */
@@ -221,8 +239,9 @@
         .estate-chat .ec-body, .estate-chat .ec-caret { transition: none; }
         .estate-chat.open { animation: none; }
     }
+    .estate-chat .ec-input-wrap { position: relative; flex: 1; min-width: 0; }
     .estate-chat input {
-        flex: 1; min-width: 0;
+        width: 100%; display: block;
         padding: 0.55rem 0.75rem;
         border: 1px solid rgba(255,255,255,0.16);
         border-radius: 8px;
@@ -231,7 +250,17 @@
         font-size: 0.85rem;
     }
     .estate-chat input::placeholder { color: #6b746f; }
-    .estate-chat input:focus { outline: none; border-color: #3ed598; box-shadow: 0 0 0 1px rgba(62,213,152,0.4); }
+    .estate-chat input:focus { outline: none; }
+    /* Signature: on focus the mint border draws itself around the field — the
+       same left-to-right "rule-draw" gesture the card rules use, traced around
+       the input via an SVG stroke (pathLength=100, dashoffset 100 -> 0). */
+    .estate-chat .ec-draw { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    .estate-chat .ec-draw rect { x: 1px; y: 1px; width: calc(100% - 2px); height: calc(100% - 2px); rx: 8px; ry: 8px; fill: none; stroke: #3ed598; stroke-width: 1.5; stroke-dasharray: 100; stroke-dashoffset: 100; }
+    .estate-chat .ec-input-wrap:focus-within .ec-draw rect { animation: ec-border-draw 0.8s ease-out forwards; }
+    @keyframes ec-border-draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+    @media (prefers-reduced-motion: reduce) {
+        .estate-chat .ec-input-wrap:focus-within .ec-draw rect { animation: none; stroke-dashoffset: 0; }
+    }
     .estate-chat .ec-send {
         flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: none;
         border-radius: 8px; background: #3ed598; color: #0b0e0c; cursor: pointer;
@@ -406,7 +435,10 @@
     </div>
     <div class="ec-body" id="ecBody">
         <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <input id="estateAskInput" type="text" placeholder="Ask about your pending recommendations…" oninput="toggleEstateSendBtn()" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitEstateQuestion();}">
+            <span class="ec-input-wrap">
+                <input id="estateAskInput" type="text" placeholder="Ask about your pending recommendations…" oninput="toggleEstateSendBtn()" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitEstateQuestion();}">
+                <svg class="ec-draw" preserveAspectRatio="none" aria-hidden="true"><rect pathLength="100"/></svg>
+            </span>
             {# Send button: hidden until the field has content
                (toggleEstateSendBtn on input). #}
             <button type="button" id="estateAskBtn" class="ec-send" onclick="submitEstateQuestion()" aria-label="Send" title="Send" style="display: none;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
