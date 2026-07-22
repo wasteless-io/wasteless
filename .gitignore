@@ -31,6 +31,10 @@ config/*.backup
 # Logs
 *.log
 
+# Cost Explorer CSV exports (aws_collector.py --export): local artifacts
+# holding real AWS spend — never publish
+data/
+
 # OS
 .DS_Store
 Thumbs.db
