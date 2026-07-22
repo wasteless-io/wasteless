@@ -42,3 +42,23 @@ def apply_to_env(values: dict) -> None:
     for key, value in values.items():
         if value:
             os.environ[key] = value
+
+
+def clear_env_keys(keys: list, files: list | None = None) -> None:
+    """Remove KEY=... lines from every env file and unset them in this
+    process. This is the disconnect path: write_env_files() only ever adds
+    or updates (empty values are ignored), so unsetting needs its own call.
+    Both files stay in sync for the same reason saving does."""
+    keyset = set(keys)
+    for path in files if files is not None else ENV_FILES:
+        if not path.exists():
+            continue
+        out = [
+            line
+            for line in path.read_text().splitlines()
+            if (line.split("=", 1)[0] if "=" in line else None) not in keyset
+        ]
+        path.write_text("\n".join(out) + ("\n" if out else ""))
+        os.chmod(path, 0o600)
+    for key in keyset:
+        os.environ.pop(key, None)
