@@ -14,7 +14,23 @@
         border-bottom: 1px dotted var(--gray-400);
         cursor: help;
         margin-left: 0.3rem;
+        text-transform: none;   /* stays lowercase next to a terminal label */
     }
+
+    /* Close the gap with the Overview (source of truth): its cards are
+       square-cornered and its section labels use a mono-uppercase, letter-
+       spaced "terminal" treatment (same recipe as .fin-tiles .kpi-label and
+       the decision-queue rows). Reused here so /setup reads like the rest. */
+    .setup-card { border-radius: 0; }
+    .setup-eyebrow {
+        font-family: var(--font-mono);
+        font-size: 0.62rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--gray-500);
+        margin-bottom: 0.35rem;
+    }
+    .setup-card h3 { font-size: 0.95rem; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -39,8 +55,9 @@
 </p>
 
 <!-- Step 1 -->
-<div class="card mb-2">
-    <h3 style="margin-bottom: 0.5rem;">1 &mdash; Create the wasteless roles in your AWS account</h3>
+<div class="card mb-2 setup-card">
+    <div class="setup-eyebrow">Step 1</div>
+    <h3 style="margin: 0 0 0.5rem;">Create the wasteless roles in your AWS account</h3>
     <p class="text-muted" style="margin-bottom: 0.75rem;">
         One CloudFormation stack creates <code>wasteless-readonly</code>
         &mdash; Describe/Get/List permissions only. This is the only part that
@@ -75,8 +92,9 @@
 </div>
 
 <!-- Step 2: the form -->
-<div class="card mb-2">
-    <h3 style="margin-bottom: 0.5rem;">2 &mdash; Test and save</h3>
+<div class="card mb-2 setup-card">
+    <div class="setup-eyebrow">Step 2</div>
+    <h3 style="margin: 0 0 0.5rem;">Test and save</h3>
     {% if account_id and not current_role_arn %}
     <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
         Pre-filled from your account ID ({{ account_id }}) and the template's default
@@ -122,8 +140,9 @@
 </div>
 
 <!-- Step 3 -->
-<div class="card mb-2">
-    <h3 style="margin-bottom: 0.5rem;">3 &mdash; Watch the dashboard fill</h3>
+<div class="card mb-2 setup-card">
+    <div class="setup-eyebrow">Step 3</div>
+    <h3 style="margin: 0 0 0.5rem;">Watch the dashboard fill</h3>
     <p class="text-muted" style="font-size: 0.875rem;">
         A first collection starts automatically the moment you save, and the dashboard
         fills up within a couple of minutes; collection then re-runs on schedule.
