@@ -4,60 +4,116 @@
 
 {% block extra_css %}
 <style>
-    /* Field hints: the long parenthetical explanations moved into the
-       shared dark tooltip (kpi-hover/data-tip, base.html). Only a small
-       dotted "optional" marker stays visible next to the label. */
-    .setup-hint {
-        font-size: 0.75rem;
-        font-weight: 400;
-        color: var(--gray-400);
-        border-bottom: 1px dotted var(--gray-400);
-        cursor: help;
-        margin-left: 0.3rem;
-    }
+    /* Setup = the product's first impression: the terminal identity of the
+       rest of the app (sysbar, mono-caps chrome, square cards, status pills). */
+    .setup-eyebrow { font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gray-500); display: inline-flex; align-items: center; gap: 0.5rem; }
+    .setup-eyebrow::before { content: ""; width: 7px; height: 7px; background: #15803d; }
+    .setup-hero { margin: 0.85rem 0 1.5rem; }
+    .setup-hero h1 { font-size: clamp(1.7rem, 3.6vw, 2.3rem); font-weight: 800; letter-spacing: -0.03em; margin: 0.55rem 0 0.4rem; }
+    .setup-hero .lead { color: var(--gray-600); font-size: 0.95rem; max-width: 74ch; margin: 0; line-height: 1.55; }
+    .setup-hero .reassure { margin-top: 0.9rem; }
+
+    .setup-card { border-radius: 0; padding: 1.3rem 1.45rem; margin-bottom: 1rem; }
+    .setup-step { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.7rem; }
+    .setup-num { width: 24px; height: 24px; flex-shrink: 0; background: var(--ink); color: #fff; font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+    .setup-step h3 { margin: 0; font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.11em; text-transform: uppercase; font-weight: 700; color: var(--ink); }
+    .setup-card p, .setup-card li { line-height: 1.55; }
+    .setup-card code { font-family: var(--font-mono); font-size: 0.82em; background: rgba(0,0,0,0.05); padding: 0.05rem 0.3rem; border-radius: 3px; }
+
+    .setup-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.9rem; margin-bottom: 0.85rem; }
+    .setup-field { display: block; }
+    .setup-field .lbl { display: block; font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-500); margin-bottom: 0.3rem; }
+
+    /* Field hints: the long explanations live in the shared dark tooltip
+       (kpi-hover/data-tip); only a small dotted "optional" marker shows. */
+    .setup-hint { font-family: var(--font-mono); font-size: 0.56rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 400; color: var(--gray-400); border-bottom: 1px dotted var(--gray-400); cursor: help; margin-left: 0.3rem; }
+
+    .setup-actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+
+    /* Trust panel: verifiable claims about the read-only role. Not marketing
+       reassurance, every line maps to a permission (or its absence) in the
+       CloudFormation template. */
+    .setup-trust { border: 1px solid var(--gray-200); border-left: 3px solid #15803d; padding: 1.1rem 1.3rem; margin-bottom: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem 1.6rem; }
+    .trust-item { }
+    .trust-item .t { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.11em; text-transform: uppercase; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 0.45rem; margin-bottom: 0.28rem; }
+    .trust-item .t::before { content: ""; width: 6px; height: 6px; background: #15803d; flex-shrink: 0; }
+    .trust-item p { margin: 0; font-size: 0.82rem; color: var(--gray-600); line-height: 1.5; }
+
+    /* Repair hint: the plain next step paired with a raw AWS error. */
+    .setup-hint-line { margin-top: 0.7rem; font-size: 0.82rem; line-height: 1.5; color: #92400e; background: #fffbeb; border-left: 3px solid #d97706; padding: 0.55rem 0.75rem; display: none; }
+
+    /* Disconnect zone: destructive, so it reads as a distinct danger band
+       rather than another step. */
+    .setup-danger { border: 1px solid #e5c9c9; border-left: 3px solid #b91c1c; padding: 1.2rem 1.4rem; margin-bottom: 1rem; }
+    .setup-danger h3 { margin: 0 0 0.35rem; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.11em; text-transform: uppercase; font-weight: 700; color: #991b1b; }
+    .setup-danger .wipe-opt { display: flex; align-items: flex-start; gap: 0.5rem; margin: 0.85rem 0; font-size: 0.85rem; color: var(--gray-700); line-height: 1.45; }
+    .setup-danger .wipe-opt input { margin-top: 0.2rem; }
+    .btn-danger { background: #b91c1c; color: #fff; border: none; font-weight: 600; }
+    .btn-danger:hover { background: #991b1b; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
+<header class="sysbar mb-1" style="position: sticky; top: 0; z-index: 100; background: var(--bg, #f5f5f7);">
+    <h1 class="sysbar-crumb" style="margin: 0;">Wasteless <span class="path">/ Connect AWS</span></h1>
+    <div style="margin-left: auto;">
+        {% if aws_status %}<span class="status-pill">Connected</span>
+        {% elif aws_status is sameas false %}<span class="status-pill is-danger">Not connected</span>
+        {% else %}<span class="status-pill is-muted">Unknown</span>{% endif %}
+    </div>
+</header>
+
+<!-- Hero: the welcoming first impression -->
+<div class="setup-hero">
+    <span class="setup-eyebrow">AWS onboarding</span>
     <h1>Connect your AWS account</h1>
-    <p>About 10 minutes, read-only by default — wasteless cannot modify anything unless you later create the optional remediation role.</p>
+    <p class="lead">About 10 minutes, read-only by default. Wasteless cannot modify anything unless you later create the optional remediation role.</p>
+    <div class="reassure setup-actions">
+        <span class="status-pill">Read-only by default</span>
+        {% if current_role_arn %}<span class="status-pill is-muted">Role: {{ current_role_arn }}</span>
+        {% elif has_access_keys %}<span class="status-pill is-muted">Using direct access keys</span>{% endif %}
+    </div>
 </div>
 
-<!-- Current status -->
-<div class="card mb-2" style="padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.5rem 1.5rem; flex-wrap: wrap; font-size: 0.85rem;">
-    <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
-        <span class="text-muted">AWS connection:</span>
-        {% if aws_status %}<span class="badge badge-success">Connected</span>
-        {% elif aws_status is sameas false %}<span class="badge badge-danger">Not connected</span>
-        {% else %}<span class="badge badge-info">Unknown</span>{% endif %}
-    </span>
-    {% if current_role_arn %}
-    <span class="text-muted">Role: {{ current_role_arn }}</span>
-    {% elif has_access_keys %}
-    <span class="text-muted">Using direct access keys</span>
-    {% endif %}
+<!-- Trust panel: every claim maps to a permission in the read-only role. -->
+<div class="setup-trust">
+    <div class="trust-item">
+        <div class="t">Read-only by default</div>
+        <p>The role grants Describe / Get / List only. No permission to create, change, or delete anything in your account.</p>
+    </div>
+    <div class="trust-item">
+        <div class="t">Your resources stay private</div>
+        <p>It reads configuration and metrics, never the data inside your resources, no S3 object contents, database rows, or secret values.</p>
+    </div>
+    <div class="trust-item">
+        <div class="t">Temporary access</div>
+        <p>Credentials are assumed in short-lived sessions each run, not a long-lived key sitting in your account.</p>
+    </div>
+    <div class="trust-item">
+        <div class="t">Revoke anytime</div>
+        <p>Delete the CloudFormation stack and every permission wasteless has is gone instantly, nothing to clean up by hand.</p>
+    </div>
 </div>
 
 <!-- Step 1 -->
-<div class="card mb-2">
-    <h3 style="margin-bottom: 0.5rem;">1 &mdash; Create the wasteless roles in your AWS account</h3>
-    <p class="text-muted" style="margin-bottom: 0.75rem;">
+<div class="card setup-card">
+    <div class="setup-step"><span class="setup-num">1</span><h3>Create the wasteless roles in your AWS account</h3></div>
+    <p class="text-muted" style="margin-bottom: 0.85rem;">
         One CloudFormation stack creates <code>wasteless-readonly</code>
-        &mdash; Describe/Get/List permissions only. This is the only part that
+       , Describe/Get/List permissions only. This is the only part that
         happens inside your AWS account, and the button below pre-fills it all.
     </p>
-    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem;">
+    <div class="setup-actions" style="margin-bottom: 0.6rem;">
         <button class="btn btn-primary" onclick="openQuickCreate()">Create the roles in AWS &rarr;</button>
         <button class="btn btn-outline" onclick="copyQuickCreate()">Copy link</button>
         <span id="quickcreate-copied" class="text-muted" style="font-size: 0.8rem;"></span>
     </div>
-    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.5rem;">
+    <p class="text-muted" style="font-size: 0.82rem; margin-bottom: 0.6rem;">
         Opens your AWS console on a pre-filled <em>Create stack</em> review page:
         sign in as an administrator, tick <em>"I acknowledge that AWS CloudFormation
         might create IAM resources with custom names"</em>, click <strong>Create stack</strong>,
         wait for <code>CREATE_COMPLETE</code> (~1 min), then come back here and hit
-        <strong>Test connection</strong> &mdash; the fields in step&nbsp;2 are already filled in.
+        <strong>Test connection</strong>, the fields in step&nbsp;2 are already filled in.
         If someone else manages AWS, send them the link with <em>Copy link</em>.
         Type an External&nbsp;ID in step&nbsp;2 <em>before</em> opening the link to bake it in.
     </p>
@@ -70,62 +126,63 @@
             <li><strong>Terraform</strong> (only if your team already uses it): apply <code>onboarding/terraform/</code></li>
         </ul>
     </details>
-    <p class="text-muted" style="font-size: 0.8rem;">
+    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0;">
         Full walkthrough: <code>docs/CTO_QUICKSTART.md</code> (short) or <code>docs/AWS_SETUP.md</code> (detailed, per-permission).
     </p>
 </div>
 
 <!-- Step 2: the form -->
-<div class="card mb-2">
-    <h3 style="margin-bottom: 0.5rem;">2 &mdash; Test and save</h3>
+<div class="card setup-card">
+    <div class="setup-step"><span class="setup-num">2</span><h3>Test and save</h3></div>
     {% if account_id and not current_role_arn %}
-    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
+    <p class="text-muted" style="font-size: 0.82rem; margin-bottom: 0.85rem;">
         Pre-filled from your account ID ({{ account_id }}) and the template's default
-        role names &mdash; once the stack shows <code>CREATE_COMPLETE</code>, just click
+        role names, once the stack shows <code>CREATE_COMPLETE</code>, just click
         <strong>Test connection</strong>.
     </p>
     {% endif %}
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
-        <label style="font-size: 0.85rem;">AWS region
+    <div class="setup-form-grid">
+        <label class="setup-field"><span class="lbl">AWS region</span>
             <input class="form-input" id="setup-region" value="{{ current_region }}" placeholder="eu-west-1">
         </label>
-        <label style="font-size: 0.85rem;">Read-only role ARN
+        <label class="setup-field"><span class="lbl">Read-only role ARN</span>
             <input class="form-input" id="setup-role-arn" value="{{ current_role_arn or suggested_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-readonly">
         </label>
-        <label style="font-size: 0.85rem;">Remediation role ARN
-            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Lets wasteless execute the actions you approve in the UI. Clear this field if you created the stack with CreateRemediationRole=false (detection only).">optional</span>
+        <label class="setup-field"><span class="lbl">Remediation role ARN
+            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Lets wasteless execute the actions you approve in the UI. Clear this field if you created the stack with CreateRemediationRole=false (detection only).">optional</span></span>
             <input class="form-input" id="setup-write-role-arn" value="{{ current_write_role_arn or suggested_write_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-remediation">
         </label>
-        <label style="font-size: 0.85rem;">External ID
-            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional shared secret checked at AssumeRole time, recommended for cross-account setups. Type it before opening the Create stack link so it is baked into the role trust.">optional</span>
+        <label class="setup-field"><span class="lbl">External ID
+            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional shared secret checked at AssumeRole time, recommended for cross-account setups. Type it before opening the Create stack link so it is baked into the role trust.">optional</span></span>
             <input class="form-input" id="setup-external-id" placeholder="">
         </label>
-        <label style="font-size: 0.85rem;">Access key ID
-            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Leave empty if this machine already has AWS credentials (aws configure, instance profile). Fill it only if Test connection reports 'Unable to locate credentials'.">optional</span>
+        <label class="setup-field"><span class="lbl">Access key ID
+            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Leave empty if this machine already has AWS credentials (aws configure, instance profile). Fill it only if Test connection reports 'Unable to locate credentials'.">optional</span></span>
             <input class="form-input" id="setup-access-key" autocomplete="off" placeholder="AKIA...">
         </label>
-        <label style="font-size: 0.85rem;">Secret access key
-            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Goes with the access key ID: both are only the source identity used to assume the wasteless roles.">optional</span>
-            <input class="form-input" id="setup-secret-key" type="password" autocomplete="off" placeholder="{{ 'saved — leave empty to keep' if has_access_keys else '' }}">
+        <label class="setup-field"><span class="lbl">Secret access key
+            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Goes with the access key ID: both are only the source identity used to assume the wasteless roles.">optional</span></span>
+            <input class="form-input" id="setup-secret-key" type="password" autocomplete="off" placeholder="{{ 'saved, leave empty to keep' if has_access_keys else '' }}">
         </label>
     </div>
-    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
+    <p class="text-muted" style="font-size: 0.82rem; margin-bottom: 0.85rem;">
         With role ARNs set, the access keys are only the <em>source</em> identity used to
-        assume the wasteless roles &mdash; the permissions come from the roles, not the keys.
+        assume the wasteless roles, the permissions come from the roles, not the keys.
         Fill them only if <strong>Test connection</strong> reports
         <code>Unable to locate credentials</code>.
     </p>
-    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+    <div class="setup-actions">
         <button class="btn btn-outline" onclick="setupTest()">Test connection</button>
         <button class="btn btn-primary" onclick="setupSave()">Test &amp; save</button>
-        <span id="setup-result" style="font-size: 0.85rem;"></span>
+        <span id="setup-result" style="font-size: 0.85rem; font-family: var(--font-mono);"></span>
     </div>
+    <div id="setup-hint" class="setup-hint-line"></div>
 </div>
 
 <!-- Step 3 -->
-<div class="card mb-2">
-    <h3 style="margin-bottom: 0.5rem;">3 &mdash; Watch the dashboard fill</h3>
-    <p class="text-muted" style="font-size: 0.875rem;">
+<div class="card setup-card">
+    <div class="setup-step"><span class="setup-num">3</span><h3>Watch the dashboard fill</h3></div>
+    <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 0;">
         A first collection starts automatically the moment you save, and the dashboard
         fills up within a couple of minutes; collection then re-runs on schedule.
         Nothing in your account is ever modified without an
@@ -133,22 +190,55 @@
     </p>
 </div>
 
-<!-- Success overlay: shown by Test & save on success. This is the formal
-     conclusion of the onboarding: an unmissable confirmation, then an
-     automatic hand-off to the Overview (which greets with ?welcome=1). -->
-<div id="setup-success" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 1rem;">
-    <div style="background: white; border-radius: 16px; max-width: 480px; width: 100%; padding: 2rem; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.25);">
-        <div style="width: 56px; height: 56px; border-radius: 50%; background: #dcfce7; color: #166534; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+{% if aws_status or current_role_arn or has_access_keys %}
+<!-- Disconnect / switch account: shown once an account is connected. Copy
+     branches on whether wasteless holds the credentials (env files, which it
+     can clear) or they come from the ambient chain (which it cannot). -->
+<div class="setup-danger">
+    <h3>Disconnect this account</h3>
+    {% if creds_managed %}
+    <p class="text-muted" style="font-size: 0.86rem; margin: 0;">
+        Removes the AWS credentials from wasteless (both env files and this running
+        process). Access on AWS's side is only fully revoked by deleting the
+        CloudFormation stack. To move to a different account, tick the box below so the
+        previous account's data does not blend into the new one.
+    </p>
+    {% else %}
+    <p class="text-muted" style="font-size: 0.86rem; margin: 0;">
+        This connection uses credentials from the environment (<code>~/.aws</code>,
+        an instance profile or SSO), which wasteless did not set and cannot remove from
+        here, change or revoke those where they live. What you can do below is erase the
+        data collected from this account before pointing wasteless at a different one.
+    </p>
+    {% endif %}
+    <label class="wipe-opt">
+        <input type="checkbox" id="setup-wipe">
+        <span>Also erase all data collected from this account, metrics, detected waste,
+            recommendations, cost history and snapshots. <strong>Required for a clean
+            account switch.</strong> This cannot be undone.</span>
+    </label>
+    <div class="setup-actions">
+        <button class="btn btn-danger" onclick="setupDisconnect()">Disconnect</button>
+        <span id="setup-disconnect-result" style="font-size: 0.85rem; font-family: var(--font-mono);"></span>
+    </div>
+</div>
+{% endif %}
+
+<!-- Success overlay: the formal conclusion of onboarding, then an automatic
+     hand-off to the Overview (which greets with ?welcome=1). -->
+<div id="setup-success" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 200; align-items: center; justify-content: center; padding: 1rem;">
+    <div style="background: #0b0e0c; color: #f2f5f3; max-width: 480px; width: 100%; padding: 2rem; text-align: center; background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px); background-size: 22px 22px; box-shadow: 8px 8px 0 0 rgba(62,213,152,0.28);">
+        <div style="width: 52px; height: 52px; background: #3ed598; color: #0b0e0c; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
-        <h2 style="margin: 0 0 0.5rem 0;">Connection verified</h2>
-        <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">
-            AWS account <strong id="setup-success-account"></strong> is connected
+        <div style="font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; color: #3ed598; margin-bottom: 0.5rem;">Connection verified</div>
+        <p style="margin: 0 0 0.5rem 0; font-size: 0.92rem; color: #d7ddd9;">
+            AWS account <strong id="setup-success-account" style="color: #f2f5f3;"></strong> is connected
             with the permissions wasteless needs.
         </p>
-        <p class="text-muted" id="setup-success-collection" style="margin: 0 0 1.25rem 0; font-size: 0.85rem;"></p>
-        <a href="/?welcome=1" class="btn btn-primary" style="margin-bottom: 0.75rem;">Go to Overview &rarr;</a>
-        <p class="text-muted" style="margin: 0; font-size: 0.75rem;">Taking you to the Overview in a few seconds…</p>
+        <p id="setup-success-collection" style="margin: 0 0 1.25rem 0; font-size: 0.85rem; color: #8b948e;"></p>
+        <a href="/?welcome=1" class="btn" style="background: #3ed598; color: #0b0e0c; border: none; font-weight: 600; margin-bottom: 0.75rem;">Go to Overview &rarr;</a>
+        <p style="margin: 0; font-size: 0.75rem; color: #8b948e;">Taking you to the Overview in a few seconds…</p>
     </div>
 </div>
 
@@ -177,7 +267,7 @@ async function copyQuickCreate() {
     const note = document.getElementById('quickcreate-copied');
     try {
         await navigator.clipboard.writeText(quickCreateUrl());
-        note.textContent = 'Link copied — send it to whoever manages your AWS account.';
+        note.textContent = 'Link copied, send it to whoever manages your AWS account.';
     } catch (e) {
         note.textContent = quickCreateUrl();
     }
@@ -196,6 +286,9 @@ function setupPayload() {
 
 async function setupCall(url, pendingLabel) {
     const out = document.getElementById('setup-result');
+    const hint = document.getElementById('setup-hint');
+    hint.style.display = 'none';
+    hint.textContent = '';
     out.style.color = '';
     out.textContent = pendingLabel;
     try {
@@ -211,6 +304,11 @@ async function setupCall(url, pendingLabel) {
         }
         out.style.color = '#991b1b';
         out.textContent = data.error || 'Unexpected error';
+        // The plain repair step, when the route could map the AWS error.
+        if (data.hint) {
+            hint.textContent = 'Next step: ' + data.hint;
+            hint.style.display = 'block';
+        }
         return null;
     } catch (e) {
         out.style.color = '#991b1b';
@@ -219,11 +317,43 @@ async function setupCall(url, pendingLabel) {
     }
 }
 
+async function setupDisconnect() {
+    const wipe = document.getElementById('setup-wipe').checked;
+    const out = document.getElementById('setup-disconnect-result');
+    const msg = wipe
+        ? 'Disconnect AWS and permanently erase all data collected from this account?'
+        : 'Disconnect this AWS account? (Collected data is kept.)';
+    if (!confirm(msg)) return;
+    out.style.color = '';
+    out.textContent = 'Disconnecting…';
+    try {
+        const resp = await fetch('/api/aws-setup/disconnect', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({wipe_data: wipe})
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+            out.style.color = '#166534';
+            out.textContent = data.data_wiped
+                ? ('Disconnected, ' + data.wiped_rows + ' rows erased. Reloading…')
+                : 'Disconnected. Reloading…';
+            setTimeout(() => { window.location.reload(); }, 1200);
+        } else {
+            out.style.color = '#991b1b';
+            out.textContent = (data && data.error) || 'Disconnect failed';
+        }
+    } catch (e) {
+        out.style.color = '#991b1b';
+        out.textContent = 'Request failed: ' + e;
+    }
+}
+
 async function setupTest() {
     const data = await setupCall('/api/aws-setup/test', 'Testing…');
     if (data) {
         document.getElementById('setup-result').textContent =
-            'Connected as ' + data.identity + (data.role_assumed ? ' — role assumed' : '');
+            'Connected as ' + data.identity + (data.role_assumed ? ', role assumed' : '');
     }
 }
 

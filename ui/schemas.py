@@ -10,7 +10,7 @@ class ActionRequest(BaseModel):
     # Bounded: an unbounded list would let a single request queue thousands
     # of AWS actions. 500 is far above any legitimate bulk approval.
     recommendation_ids: List[int] = Field(min_length=1, max_length=500)
-    # Closed set — the route dispatches on these exact values; anything else
+    # Closed set, the route dispatches on these exact values; anything else
     # must be rejected at validation time (422), not silently fall through.
     action: Literal["approve", "reject", "dismiss", "cancel", "execute", "restore"]
     dry_run: bool = True
@@ -80,7 +80,7 @@ class AwsSetupRequest(BaseModel):
 
     Everything optional except the region: the route validates the two
     accepted combinations (role ARNs, or direct access keys) and their
-    formats — Pydantic only bounds the sizes so a stray paste can't stuff
+    formats, Pydantic only bounds the sizes so a stray paste can't stuff
     megabytes into the process environment.
     """
 
@@ -90,3 +90,15 @@ class AwsSetupRequest(BaseModel):
     external_id: str = Field(default="", max_length=1224)
     access_key_id: str = Field(default="", max_length=128)
     secret_access_key: str = Field(default="", max_length=128)
+
+
+class AwsDisconnectRequest(BaseModel):
+    """Disconnect the current AWS account from /setup.
+
+    `wipe_data` also erases the data collected from that account (metrics,
+    detected waste, recommendations, cost history, ...): required for a
+    clean account switch, since this single-account tool does not isolate
+    data per account and leftover rows would read as the new account's.
+    """
+
+    wipe_data: bool = False

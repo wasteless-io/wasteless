@@ -97,7 +97,7 @@
     }
     .waste-type-card .wt-bar i { display: block; height: 100%; border-radius: 4px; }
 
-    /* KPI tiles: hierarchy through size and weight — the colored icon
+    /* KPI tiles: hierarchy through size and weight, the colored icon
        medallions are hidden, the numbers carry the tile. */
     .kpi { text-align: center; }
     .kpi + .kpi { border-left: 1px solid var(--hairline); }
@@ -160,6 +160,32 @@
         gap: 1rem;
     }
     .chart-card { padding: 1rem; display: flex; flex-direction: column; }
+
+    /* GitHub-style daily-waste calendar under the trend curve, same
+       waste_snapshots data, a per-day intensity view. */
+    .hm { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--hairline); }
+    .hm-title { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gray-500); margin-bottom: 0.55rem; }
+    .hm-scroll { overflow-x: auto; scrollbar-width: thin; }
+    .hm-months { display: flex; margin-left: 30px; }
+    .hm-mo { width: 14px; flex-shrink: 0; font-size: 0.6rem; color: var(--gray-500); white-space: nowrap; }
+    .hm-rows { display: flex; }
+    .hm-days { display: flex; flex-direction: column; gap: 3px; width: 30px; flex-shrink: 0; }
+    .hm-days span { height: 11px; line-height: 11px; font-size: 0.58rem; color: var(--gray-500); }
+    .hm-grid { display: flex; gap: 3px; }
+    .hm-week { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+    .hm-cell { width: 11px; height: 11px; border-radius: 2px; background: #ebedf0; }
+    .hm-cell.l1 { background: #9be9a8; }
+    .hm-cell.l2 { background: #40c463; }
+    .hm-cell.l3 { background: #30a14e; }
+    .hm-cell.l4 { background: #216e39; }
+    /* Reconstructed (age-based estimate, pre-first-detection): hollow, so it
+       reads as "estimated", never a measured day. */
+    .hm-cell.hm-recon { background: transparent; box-shadow: inset 0 0 0 1px #cfe9d2; }
+    .hm-cell.hm-fut { background: transparent; box-shadow: none; }
+    .hm-legend { display: flex; align-items: center; justify-content: flex-end; gap: 3px; font-size: 0.6rem; color: var(--gray-500); margin-top: 0.5rem; }
+    .hm-legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; background: #ebedf0; }
+    .hm-legend i.l1 { background: #9be9a8; } .hm-legend i.l2 { background: #40c463; }
+    .hm-legend i.l3 { background: #30a14e; } .hm-legend i.l4 { background: #216e39; }
     .chart-head {
         display: flex;
         justify-content: space-between;
@@ -223,7 +249,7 @@
         white-space: nowrap;
     }
 
-    /* Trend card — range pickers styled as a segmented control (both
+    /* Trend card, range pickers styled as a segmented control (both
        charts share .trend-ranges) */
     .trend-controls { display: flex; align-items: center; gap: 1.25rem; }
     .trend-ranges {
@@ -532,7 +558,7 @@
         <!-- Cumulative counter, flanked by its run-rate equivalents at
              today's pace (sum of the still-counting monthly rates) -->
         <div style="display: flex; align-items: center; justify-content: center; gap: 1.25rem; flex-wrap: wrap;">
-            <div class="stat-value">
+            <div class="stat-value" style="color: var(--success);">
                 <span class="kpi-hover" tabindex="0" role="button" style="cursor: pointer;" data-tip="Estimated savings accumulated by your {{ saved_actions }} applied action{{ 's' if saved_actions != 1 }} since {{ saved_since.strftime('%b %Y') }}, at on-demand list prices. A resource started again stops counting · click for the breakdown" onclick="openCostModal('savedModal')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCostModal('savedModal');}"><span class="kpi-zoom">{{ eur(saved_total) }}</span></span>{% if saved_monthly > 0 %}<span class="text-success stat-arrow" aria-hidden="true">&#8593;</span><span class="sr-only">(money saved, growing)</span>{% else %}<span class="sr-only">(money saved, counter currently frozen)</span>{% endif %}
             </div>
             <!-- The two run-rate equivalents stay side by side even when
@@ -599,6 +625,31 @@
         <p class="text-muted hint">The trend and forecast appear once enough history is collected for this range.</p>
         <div class="trend-progress" id="forecastProgress" aria-hidden="true"></div>
     </div>
+    {% if waste_heatmap and waste_heatmap.days_with_data > 0 %}
+    <!-- Same waste_snapshots data as the curve above, as a per-day calendar
+         (which days carried waste, and how much). -->
+    <div class="hm">
+        <div class="hm-title">Daily waste · last 12 months{% if waste_heatmap.reconstructed_days %} · hollow = reconstructed{% endif %}</div>
+        <div class="hm-scroll">
+            <div class="hm-months">
+                {% for wk in waste_heatmap.weeks %}<span class="hm-mo">{{ wk.month or '' }}</span>{% endfor %}
+            </div>
+            <div class="hm-rows">
+                <div class="hm-days"><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span></div>
+                <div class="hm-grid">
+                    {% for wk in waste_heatmap.weeks %}
+                    <div class="hm-week">
+                        {% for d in wk.days %}
+                        <div class="hm-cell{% if d %} l{{ d.level }}{% if d.recon %} hm-recon{% endif %}{% else %} hm-fut{% endif %}"{% if d %} title="{{ d.date }} · ${{ '%.2f'|format(d.value) }} waste{% if d.recon %} (reconstructed estimate){% endif %}"{% endif %}></div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="hm-legend">Less <i></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i> More</div>
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -616,7 +667,7 @@
         {% if ai_usage %}
         {% set feature_labels = {'insight': 'Insights', 'narrative': 'Report narratives'} %}
         <div class="stat-block">
-            <div class="stat-value"><span class="kpi-hover" tabindex="0" data-tip="LLM cost, {{ ai_usage.period }} (30-day window) — {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }}, {{ "{:,}".format(ai_usage.tokens) }} tokens"><span class="kpi-zoom">{{ eur(ai_usage.cost_eur) }}</span></span></div>
+            <div class="stat-value"><span class="kpi-hover" tabindex="0" data-tip="LLM cost, {{ ai_usage.period }} (30-day window), {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }}, {{ "{:,}".format(ai_usage.tokens) }} tokens"><span class="kpi-zoom">{{ eur(ai_usage.cost_eur) }}</span></span></div>
             <div class="stat-sub">
                 {{ ai_usage.calls }} call{{ 's' if ai_usage.calls > 1 }} · {{ "{:,}".format(ai_usage.tokens) }} tokens
             </div>
@@ -904,7 +955,7 @@
 <script src="/static/chart.umd.min.js"></script>
 <script src="/static/trend_forecast.js"></script>
 <script>
-// Cost Analyst console — the Recommendations estate-chat, scoped to costs.
+// Cost Analyst console, the Recommendations estate-chat, scoped to costs.
 function toggleCostSendBtn() {
     const input = document.getElementById('costAskInput');
     document.getElementById('costAskBtn').style.display = input.value.trim() ? 'flex' : 'none';
@@ -1063,7 +1114,7 @@ async function submitCostQuestion() {
 // Resources by Region: async fill from the cached inventory endpoint.
 // The world SVG is inlined so the hosting countries can be colored and
 // carry the shared card tooltip (country + region title, resource list).
-// Rows are built via createElement/textContent — resource and region
+// Rows are built via createElement/textContent, resource and region
 // strings come from AWS APIs, never interpolate them into HTML.
 (async function () {
     const barsEl = document.getElementById('regionBars');
@@ -1310,7 +1361,7 @@ const trendCrosshair = {
 
 let trendChart = null;
 
-// (Re)draw the trend chart in place — called at load and on range change.
+// (Re)draw the trend chart in place, called at load and on range change.
 // The forecast math (weighted regression, anchoring, clamping) lives in
 // /static/trend_forecast.js, unit-tested with node --test.
 function renderTrendChart(labels, raw, granularity) {
@@ -1466,7 +1517,7 @@ renderTrendChart(
     '{{ trend_granularity }}'
 );
 
-// Range buttons: fetch and redraw in place — no page reload, no scroll jump
+// Range buttons: fetch and redraw in place, no page reload, no scroll jump
 document.querySelectorAll('.trend-range-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
         e.preventDefault();
