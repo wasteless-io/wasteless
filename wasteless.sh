@@ -364,6 +364,24 @@ _collect() {
         _SKIPPED_STEPS="elb_unused,nat_gateway_unused,vpc_unused,ebs_gp2_migration,ami_orphan,rds_stopped,rds_idle,rds_snapshot_orphan"
     fi
 
+    # Daily cost collection (Cost Explorer -> cloud_costs_raw). Runs on every
+    # tick like the detectors, but aws_collector.py --daily self-guards: it
+    # skips once today's rows exist, so the billable GetCostAndUsage call fires
+    # at most once per day (data refreshes ~1x/day anyway). Kept OUT of the
+    # numbered detector sweep and out of _FAILED_STEPS on purpose: a Cost
+    # Explorer hiccup must not mark the whole run "failed" and so drop it from
+    # the last_sync freshness query (see routes/home.py). Without this step
+    # cloud_costs_raw stays empty forever and the TOTAL COST / AWS SPEND /
+    # AWS SERVICES tiles never leave their "appears after the first collection"
+    # placeholder.
+    echo -e "${CYAN}[costs]${NC} Collecting AWS costs (Cost Explorer, once/day)..."
+    if python3 src/aws_collector.py --daily; then
+        echo -e "${GREEN}[OK]${NC} Done"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Cost collection failed — will retry next tick"
+    fi
+    echo ""
+
     # Record the run so the UI can flag a partial collection instead of
     # silently under-reporting waste — the steampipe warning above only
     # ever reached ~/.wasteless.log, never the dashboard.

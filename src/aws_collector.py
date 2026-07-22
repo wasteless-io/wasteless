@@ -310,16 +310,44 @@ class AWSCostCollector:
         return df
 
 
+def already_collected_today():
+    """True si cloud_costs_raw contient déjà des lignes collectées aujourd'hui.
+
+    Le pipeline `collect` (toutes les 5 min) appelle ce collecteur avec
+    --daily à chaque tick, mais les données Cost Explorer ne se rafraîchissent
+    qu'~1×/jour et chaque appel GetCostAndUsage est facturé : on saute donc
+    dès qu'on a les lignes du jour. Un run en échec n'insère rien (created_at
+    reste dans le passé), donc le tick suivant réessaie jusqu'à ce qu'une
+    collecte réussisse. On teste created_at (l'instant de collecte) et non
+    usage_date : Cost Explorer accuse un délai de facturation d'un ou deux
+    jours, la dernière usage_date n'est jamais aujourd'hui."""
+    connection = get_db_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT 1 FROM cloud_costs_raw WHERE created_at >= CURRENT_DATE LIMIT 1"
+        )
+        return cursor.fetchone() is not None
+    finally:
+        release_connection(connection)
+
+
 def main():
     """
     Point d'entrée principal du script.
 
-    Crée une instance du collecteur et lance la collecte
-    avec les paramètres par défaut.
+    Crée une instance du collecteur et lance la collecte avec les paramètres
+    par défaut. Le flag --daily (utilisé par le pipeline `collect`) saute la
+    collecte si elle a déjà réussi aujourd'hui et n'écrit pas de CSV pour ne
+    pas accumuler de fichiers à chaque tick.
     """
+    daily = "--daily" in sys.argv[1:]
     try:
+        if daily and already_collected_today():
+            print("✅ Coûts déjà collectés aujourd'hui — collecte quotidienne ignorée")
+            return
         collector = AWSCostCollector()
-        collector.run(days=30, save_to_db=True, export_csv=True)
+        collector.run(days=30, save_to_db=True, export_csv=not daily)
     except KeyboardInterrupt:
         print("\n⚠️  Collecte interrompue par l'utilisateur")
     except Exception as e:
