@@ -19,25 +19,24 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1>Connect your AWS account</h1>
-    <p>About 10 minutes, read-only by default — wasteless cannot modify anything unless you later create the optional remediation role.</p>
-</div>
-
-<!-- Current status -->
-<div class="card mb-2" style="padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.5rem 1.5rem; flex-wrap: wrap; font-size: 0.85rem;">
-    <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
-        <span class="text-muted">AWS connection:</span>
+<!-- Terminal-identity header, same sysbar the data pages carry (reports is
+     the clock-less variant this reuses). AWS connection status moves into the
+     header, as on every other page, so the old standalone status card goes. -->
+<header class="sysbar mb-1">
+    <h1 class="sysbar-crumb" style="margin: 0;">Wasteless <span class="path">/ Setup</span></h1>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.85rem;">
+        <span class="text-muted">AWS connection</span>
         {% if aws_status %}<span class="badge badge-success">Connected</span>
         {% elif aws_status is sameas false %}<span class="badge badge-danger">Not connected</span>
         {% else %}<span class="badge badge-info">Unknown</span>{% endif %}
-    </span>
-    {% if current_role_arn %}
-    <span class="text-muted">Role: {{ current_role_arn }}</span>
-    {% elif has_access_keys %}
-    <span class="text-muted">Using direct access keys</span>
-    {% endif %}
-</div>
+        {% if current_role_arn %}<span class="text-muted">via role</span>
+        {% elif has_access_keys %}<span class="text-muted">via access keys</span>{% endif %}
+    </div>
+</header>
+<p class="text-muted" style="font-size: 0.85rem; margin: 0 0 1.25rem 0;">
+    Connect your AWS account — about 10 minutes, read-only by default. Wasteless cannot
+    modify anything unless you later create the optional remediation role.
+</p>
 
 <!-- Step 1 -->
 <div class="card mb-2">
