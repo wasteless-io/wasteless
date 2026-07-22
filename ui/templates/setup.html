@@ -91,11 +91,13 @@
     <h3 style="margin: 0 0 0.5rem;">Test &amp; connect</h3>
     {% if account_id and not current_role_arn %}
     <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
-        Pre-filled from your account ID ({{ account_id }}) and the template's default
-        role names &mdash; once the stack shows <code>CREATE_COMPLETE</code>, just click
-        <strong>Test connection</strong>.
+        Pre-filled from your account ID ({{ account_id }}) — once the stack shows
+        <code>CREATE_COMPLETE</code>, just click <strong>Connect</strong>.
     </p>
     {% endif %}
+    <!-- Only the two fields the happy path needs (both pre-filled); the four
+         optional ones live under Advanced so the form isn't a wall of inputs.
+         Auto-opened when the user already has any of them set. -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
         <label style="font-size: 0.85rem;">AWS region
             <input class="form-input" id="setup-region" value="{{ current_region }}" placeholder="eu-west-1">
@@ -103,29 +105,33 @@
         <label style="font-size: 0.85rem;">Read-only role ARN
             <input class="form-input" id="setup-role-arn" value="{{ current_role_arn or suggested_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-readonly">
         </label>
-        <label style="font-size: 0.85rem;">Remediation role ARN
-            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Lets wasteless execute the actions you approve in the UI. Clear this field if you created the stack with CreateRemediationRole=false (detection only).">optional</span>
-            <input class="form-input" id="setup-write-role-arn" value="{{ current_write_role_arn or suggested_write_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-remediation">
-        </label>
-        <label style="font-size: 0.85rem;">External ID
-            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional shared secret checked at AssumeRole time, recommended for cross-account setups. Type it before opening the Create stack link so it is baked into the role trust.">optional</span>
-            <input class="form-input" id="setup-external-id" placeholder="">
-        </label>
-        <label style="font-size: 0.85rem;">Access key ID
-            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Leave empty if this machine already has AWS credentials (aws configure, instance profile). Fill it only if Test connection reports 'Unable to locate credentials'.">optional</span>
-            <input class="form-input" id="setup-access-key" autocomplete="off" placeholder="AKIA...">
-        </label>
-        <label style="font-size: 0.85rem;">Secret access key
-            <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Goes with the access key ID: both are only the source identity used to assume the wasteless roles.">optional</span>
-            <input class="form-input" id="setup-secret-key" type="password" autocomplete="off" placeholder="{{ 'saved — leave empty to keep' if has_access_keys else '' }}">
-        </label>
     </div>
-    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
-        With role ARNs set, the access keys are only the <em>source</em> identity used to
-        assume the wasteless roles &mdash; the permissions come from the roles, not the keys.
-        Fill them only if <strong>Test connection</strong> reports
-        <code>Unable to locate credentials</code>.
-    </p>
+    <details {% if current_write_role_arn or has_access_keys %}open{% endif %} style="margin-bottom: 0.75rem;">
+        <summary class="text-muted" style="font-size: 0.8rem; cursor: pointer;">Advanced &mdash; remediation role, External ID, access keys</summary>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; margin: 0.7rem 0 0.5rem;">
+            <label style="font-size: 0.85rem;">Remediation role ARN
+                <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Lets wasteless execute the actions you approve in the UI. Clear this field if you created the stack with CreateRemediationRole=false (detection only).">optional</span>
+                <input class="form-input" id="setup-write-role-arn" value="{{ current_write_role_arn or suggested_write_role_arn }}" placeholder="arn:aws:iam::123456789012:role/wasteless-remediation">
+            </label>
+            <label style="font-size: 0.85rem;">External ID
+                <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional shared secret checked at AssumeRole time, recommended for cross-account setups. Type it before opening the Create stack link so it is baked into the role trust.">optional</span>
+                <input class="form-input" id="setup-external-id" placeholder="">
+            </label>
+            <label style="font-size: 0.85rem;">Access key ID
+                <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Leave empty if this machine already has AWS credentials (aws configure, instance profile). Fill it only if the connection reports 'Unable to locate credentials'.">optional</span>
+                <input class="form-input" id="setup-access-key" autocomplete="off" placeholder="AKIA...">
+            </label>
+            <label style="font-size: 0.85rem;">Secret access key
+                <span class="kpi-hover setup-hint" tabindex="0" data-tip="Optional. Goes with the access key ID: both are only the source identity used to assume the wasteless roles.">optional</span>
+                <input class="form-input" id="setup-secret-key" type="password" autocomplete="off" placeholder="{{ 'saved — leave empty to keep' if has_access_keys else '' }}">
+            </label>
+        </div>
+        <p class="text-muted" style="font-size: 0.8rem; margin: 0;">
+            With role ARNs set, access keys are only the <em>source</em> identity that assumes the
+            roles &mdash; permissions come from the roles, not the keys. Fill them only if connecting
+            reports <code>Unable to locate credentials</code>.
+        </p>
+    </details>
     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
         <button class="btn btn-outline" id="setup-test-btn" onclick="setupTest()">Test connection</button>
         <button class="btn btn-primary" id="setup-connect-btn" onclick="setupSave()">Connect</button>
