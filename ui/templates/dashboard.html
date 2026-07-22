@@ -492,10 +492,21 @@
          folded into a neutral "Other"; the Total Cost modal's per-service
          table is the relief view for the low-contrast slots. -->
     <div style="border-top: 1px solid var(--hairline); margin-top: 1rem; padding-top: 0.9rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-            <div class="section-label" style="margin-bottom: 0;">Cost &amp; usage by month</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <div>
+                <div class="section-label" style="margin-bottom: 0;">Cost &amp; usage</div>
+                <span id="costSubtitle" class="chart-subtitle">{{ cost_chart.subtitle if cost_chart else 'Cost Explorer · by service' }}</span>
+            </div>
             <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <span class="chart-subtitle">Cost Explorer · by service · * partial month</span>
+                <!-- Range pills (same control as Waste Trend): 7d/30d/90d daily,
+                     1y monthly. Redraw in place via /api/dashboard/cost. -->
+                <div class="trend-ranges" role="group" aria-label="Cost time range">
+                    {% for key in ['7d', '30d', '90d', '1y'] %}
+                    <a href="?costrange={{ key }}" data-range="{{ key }}"
+                       class="btn trend-range-btn cost-range-btn {% if cost_range == key %}btn-primary{% else %}btn-outline{% endif %}"
+                       {% if cost_range == key %}aria-current="true"{% endif %}>{{ key }}</a>
+                    {% endfor %}
+                </div>
                 <!-- Chart-type toggle, console-style: grouped / line / stacked -->
                 <div id="costChartMode" role="group" aria-label="Chart type">
                     <button type="button" class="chart-mode-btn" data-mode="grouped" aria-pressed="false" title="Grouped bars"><svg width="16" height="14" viewBox="0 0 16 14" fill="currentColor" aria-hidden="true"><rect x="0" y="4" width="3" height="10" rx="0.5"/><rect x="4.5" y="0" width="3" height="14" rx="0.5"/><rect x="9" y="7" width="3" height="7" rx="0.5"/><rect x="13" y="10" width="3" height="4" rx="0.5"/></svg></button>
@@ -966,7 +977,8 @@ async function submitCostQuestion() {
 // neutral fold, never a generated 9th hue. Color follows the entity
 // across every mode.
 (function() {
-    const data = {{ cost_chart | tojson }};
+    let data = {{ cost_chart | tojson }};
+    let currentMode = 'stacked';
     const palette = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
     const otherColor = '#a8a69f';
     const colorFor = (s, i) => s.name === 'Other' ? otherColor : palette[i];
@@ -1023,7 +1035,7 @@ async function submitCostQuestion() {
                             footer: (items) => {
                                 const total = items[0].chart.data.datasets
                                     .reduce((sum, d) => sum + (d.data[items[0].dataIndex] || 0), 0);
-                                return `Month total: $${total.toFixed(2)}`;
+                                return `Total: $${total.toFixed(2)}`;
                             }
                         }
                     }
@@ -1053,10 +1065,35 @@ async function submitCostQuestion() {
             });
             btn.classList.add('active');
             btn.setAttribute('aria-pressed', 'true');
-            renderCostChart(btn.dataset.mode);
+            currentMode = btn.dataset.mode;
+            renderCostChart(currentMode);
         });
     });
-    renderCostChart('stacked');
+
+    // Range pills: fetch the series for the chosen window and redraw in
+    // place, keeping the current chart-type mode. Same drawing code as the
+    // server render (fetch_cost_series feeds both).
+    document.querySelectorAll('.cost-range-btn').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch(`/api/dashboard/cost?range=${btn.dataset.range}`);
+                if (!res.ok) return;
+                data = await res.json();
+                document.getElementById('costSubtitle').textContent = data.subtitle;
+                document.querySelectorAll('.cost-range-btn').forEach((b) => {
+                    b.classList.toggle('btn-primary', b === btn);
+                    b.classList.toggle('btn-outline', b !== btn);
+                    if (b === btn) b.setAttribute('aria-current', 'true');
+                    else b.removeAttribute('aria-current');
+                });
+                renderCostChart(currentMode);
+            } catch (err) {
+                /* keep the current chart on a failed fetch */
+            }
+        });
+    });
+    renderCostChart(currentMode);
 })();
 {% endif %}
 
