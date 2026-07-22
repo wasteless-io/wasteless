@@ -1077,7 +1077,11 @@
            dropdowns, tables). Bound by delegation to [data-tip-card] (body)
            + optional [data-tip-card-title] (bold heading), so it also covers
            dynamically-inserted rows (the notifications list). #}
-        <div id="appTip" style="position: fixed; z-index: 3000; display: none; max-width: 300px; padding: 0.6rem 0.75rem; background: white; border: 1px solid var(--gray-200); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); font-size: 0.78rem; line-height: 1.45; color: var(--gray-600); white-space: normal; pointer-events: none;"></div>
+        <!-- The one tooltip of the app. Signature look: light surface, hairline,
+             ink text, and the mint offset-slab shadow the briefing/saved cards
+             carry — so a tooltip reads as part of the same family. Every legacy
+             data-tip and native `title` is folded onto it (script below). -->
+        <div id="appTip" style="position: fixed; z-index: 3000; display: none; max-width: 280px; padding: 0.5rem 0.72rem; background: #ffffff; color: var(--ink); border: 1px solid var(--hairline); border-radius: 8px; box-shadow: 2px 2px 0 rgba(62,213,152,0.20), 0 8px 22px rgba(11,14,12,0.13); font-size: 0.76rem; line-height: 1.5; white-space: normal; pointer-events: none;"></div>
 
         <div id="notif-popover" class="notif-popover" role="dialog" aria-label="Notifications">
             <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem;">Notifications</div>
@@ -1509,14 +1513,40 @@
         (function () {
             const tip = document.getElementById('appTip');
             if (!tip) return;
+
+            // One visual language for tooltips across all pages: fold the
+            // legacy dark data-tip bubble and native `title` OS tooltips onto
+            // this shared #appTip. `title` is removed so the browser never
+            // draws its own tooltip; icon-only controls (no text) keep an
+            // accessible name via aria-label. Done at load for server-rendered
+            // markup; adopt() also runs on hover as the safety net for nodes
+            // added dynamically afterwards.
+            function adopt(el) {
+                if (el.hasAttribute('data-tip-card')) {
+                    el.removeAttribute('title');  // never let a native tooltip double up
+                    return;
+                }
+                const txt = el.getAttribute('data-tip') || el.getAttribute('title');
+                if (!txt) return;
+                el.setAttribute('data-tip-card', txt);
+                if (!el.getAttribute('aria-label') && !el.textContent.trim()) {
+                    el.setAttribute('aria-label', txt);
+                }
+                el.removeAttribute('data-tip');
+                el.removeAttribute('title');
+            }
+            document.querySelectorAll('[data-tip],[title]').forEach(adopt);
+
+            let activeEl = null;
             function show(el) {
+                if (!el.hasAttribute('data-tip-card')) adopt(el);
                 const body = el.getAttribute('data-tip-card');
                 if (!body) return;
                 tip.innerHTML = '';
                 const title = el.getAttribute('data-tip-card-title');
                 if (title) {
                     const h = document.createElement('strong');
-                    h.style.cssText = 'display:block; margin-bottom:0.25rem; font-size:0.8rem; color:var(--gray-800);';
+                    h.style.cssText = 'display:block; margin-bottom:0.2rem; font-size:0.78rem; color:var(--ink);';
                     h.textContent = title;
                     tip.appendChild(h);
                 }
@@ -1524,6 +1554,7 @@
                 b.textContent = body;
                 tip.appendChild(b);
                 tip.style.display = 'block';
+                activeEl = el;
                 const r = el.getBoundingClientRect();
                 let left = r.left + r.width / 2 - tip.offsetWidth / 2;
                 left = Math.max(8, Math.min(left, window.innerWidth - tip.offsetWidth - 8));
@@ -1532,16 +1563,17 @@
                 tip.style.left = left + 'px';
                 tip.style.top = top + 'px';
             }
-            function hide() { tip.style.display = 'none'; }
+            function hide() { tip.style.display = 'none'; activeEl = null; }
             document.addEventListener('mouseover', (e) => {
-                const el = e.target.closest('[data-tip-card]');
-                if (el) show(el);
+                const el = e.target.closest('[data-tip-card],[data-tip],[title]');
+                if (el && el !== activeEl) show(el);
             });
             document.addEventListener('mouseout', (e) => {
-                if (e.target.closest('[data-tip-card]')) hide();
+                const el = e.target.closest('[data-tip-card]');
+                if (el && el === activeEl) hide();
             });
             document.addEventListener('focusin', (e) => {
-                const el = e.target.closest('[data-tip-card]');
+                const el = e.target.closest('[data-tip-card],[data-tip],[title]');
                 if (el) show(el);
             });
             document.addEventListener('focusout', hide);
