@@ -219,74 +219,56 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
     # routes/dashboard.py; the parity test
     # (ui/tests/test_financial_tiles_parity.py) renders both pages and
     # fails if the two ever show different values. ----
+    # Both cost tiles describe the CURRENT month (mirrors AWS Cost Explorer):
+    # Total Cost = month-to-date actual, AWS Spend = the month-end projection
+    # from the run-rate. The month is partial by construction (Cost Explorer
+    # lags 1-2 days), so MTD is labelled as such and the projection is flagged
+    # as an estimate. Mirrored in routes/dashboard.py (parity test).
     cursor.execute("""
-        SELECT COALESCE(SUM(cost)
-                        FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
-                                                    - INTERVAL '1 month'), 0) as spend_eur,
-               COUNT(*) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
-                                                    - INTERVAL '1 month') as row_count,
-               MIN(usage_date) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
-                                                           - INTERVAL '1 month') as period_start,
-               MAX(usage_date) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
-                                                           - INTERVAL '1 month') as period_end,
-               COALESCE(SUM(cost)
-                        FILTER (WHERE usage_date < DATE_TRUNC('month', CURRENT_DATE)
-                                                   - INTERVAL '1 month'), 0) as prev_spend_eur,
-               COUNT(*) FILTER (WHERE usage_date < DATE_TRUNC('month', CURRENT_DATE)
-                                                   - INTERVAL '1 month') as prev_row_count
+        SELECT COALESCE(SUM(cost), 0) as mtd_eur,
+               MIN(usage_date) as period_start,
+               MAX(usage_date) as period_end,
+               COUNT(*) as row_count
         FROM cloud_costs_raw
-        WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 months'
-          AND usage_date < DATE_TRUNC('month', CURRENT_DATE)
+        WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
     """)
-    fin_spend = cursor.fetchone()
-    aws_spend_eur = float(fin_spend["spend_eur"]) if fin_spend["row_count"] > 0 else None
-    _last_full_month_end = date.today().replace(day=1) - timedelta(days=1)
-    aws_spend_month = _last_full_month_end.strftime("%B %Y")
-    aws_spend_prev_month = (_last_full_month_end.replace(day=1) - timedelta(days=1)).strftime("%B")
-    aws_spend_period = None
-    # Partial = the collected days don't span the whole calendar month (a
-    # fresh install only has data from its first collection). The tile then
-    # keeps the honest "June · 22–30 collected" sub-label, the tooltip drops
-    # its "the whole bill" claim, and the MoM delta below is suppressed so a
-    # 9-day month never fakes a plunge against a full previous month.
-    aws_spend_partial = False
-    if aws_spend_eur is not None:
-        start, end = fin_spend["period_start"], fin_spend["period_end"]
+    mtd = cursor.fetchone()
+    _month_start = date.today().replace(day=1)
+    _next_month = (_month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    _days_in_month = (_next_month - _month_start).days
+    aws_spend_month = date.today().strftime("%B %Y")
+    aws_spend_prev_month = (_month_start - timedelta(days=1)).strftime("%B")
+
+    total_cost_eur = float(mtd["mtd_eur"]) if mtd["row_count"] > 0 else None
+    total_cost_period = None
+    aws_spend_eur = None  # month-end projection from the run-rate
+    aws_spend_period = None  # days collected this month, e.g. "1–21"
+    aws_spend_days_elapsed = None
+    aws_spend_days_in_month = _days_in_month
+    aws_spend_delta_pct = None
+    if total_cost_eur is not None:
+        start, end = mtd["period_start"], mtd["period_end"]
+        aws_spend_days_elapsed = (end - _month_start).days + 1
         aws_spend_period = (
             start.strftime("%-d")
             if start == end
             else f"{start.strftime('%-d')}–{end.strftime('%-d')}"
         )
-        aws_spend_partial = (
-            start > _last_full_month_end.replace(day=1) or end < _last_full_month_end
-        )
-    aws_spend_delta_pct = None
-    if (
-        aws_spend_eur is not None
-        and not aws_spend_partial
-        and fin_spend["prev_row_count"] > 0
-        and float(fin_spend["prev_spend_eur"]) > 0
-    ):
-        prev = float(fin_spend["prev_spend_eur"])
-        aws_spend_delta_pct = (aws_spend_eur - prev) / prev * 100
-
-    cursor.execute("""
-        SELECT COALESCE(SUM(cost), 0) as total_eur,
-               MIN(usage_date) as first_day,
-               MAX(usage_date) as last_day,
-               COUNT(*) as row_count
-        FROM cloud_costs_raw
-    """)
-    total_row = cursor.fetchone()
-    total_cost_eur = float(total_row["total_eur"]) if total_row["row_count"] > 0 else None
-    total_cost_period = None
-    if total_cost_eur is not None:
-        first, last = total_row["first_day"], total_row["last_day"]
-        total_cost_period = (
-            first.strftime("%-d %b")
-            if first == last
-            else f"{first.strftime('%-d %b')} to {last.strftime('%-d %b')}"
-        )
+        total_cost_period = f"{aws_spend_period} {end.strftime('%b')} · month-to-date"
+        # Projection: run-rate over the days actually collected, scaled to the
+        # whole month. Delta compares that projection to last month's full bill.
+        aws_spend_eur = total_cost_eur / aws_spend_days_elapsed * _days_in_month
+        cursor.execute("""
+            SELECT COALESCE(SUM(cost), 0) as prev_eur, COUNT(*) as prev_rows
+            FROM cloud_costs_raw
+            WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+              AND usage_date <  DATE_TRUNC('month', CURRENT_DATE)
+        """)
+        prev = cursor.fetchone()
+        if prev["prev_rows"] > 0 and float(prev["prev_eur"]) > 0:
+            aws_spend_delta_pct = (
+                (aws_spend_eur - float(prev["prev_eur"])) / float(prev["prev_eur"]) * 100
+            )
 
     cursor.execute("""
         SELECT CASE WHEN COALESCE(SUM(estimated_savings_eur), 0) > 0
@@ -414,7 +396,8 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
             "aws_spend_prev_month": aws_spend_prev_month,
             "aws_spend_delta_pct": aws_spend_delta_pct,
             "aws_spend_period": aws_spend_period,
-            "aws_spend_partial": aws_spend_partial,
+            "aws_spend_days_elapsed": aws_spend_days_elapsed,
+            "aws_spend_days_in_month": aws_spend_days_in_month,
             "decision_queue": decision_queue,
             "waste_exceeds_spend": waste_exceeds_spend,
             "welcome": welcome == "1",

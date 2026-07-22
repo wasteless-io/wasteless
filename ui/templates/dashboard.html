@@ -733,13 +733,13 @@
 <div id="spendModal" role="dialog" aria-modal="true" aria-labelledby="spendModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeCostModal('spendModal')">
     <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
-            <h3 id="spendModalTitle" style="margin: 0; font-size: 1rem;">AWS Spend · {{ aws_spend_month }}</h3>
+            <h3 id="spendModalTitle" style="margin: 0; font-size: 1rem;">AWS Spend · {{ aws_spend_month }} (projected)</h3>
             <button type="button" data-modal-close aria-label="Close" onclick="closeCostModal('spendModal')" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
         </div>
         <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
-            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Whole bill, not just waste</div>
-            <div style="font-size: 1.3rem; font-weight: 600; color: var(--gray-800);">{{ eur(aws_spend_eur) }}</div>
-            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ aws_spend_detail.days_covered }} day{{ 's' if aws_spend_detail.days_covered != 1 }} collected · {{ aws_spend_month.split(' ')[0] }} {{ aws_spend_period }}</div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Projected month-end bill (estimate)</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: var(--gray-800);">~{{ eur(aws_spend_eur) }}</div>
+            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">run-rate over {{ aws_spend_detail.days_covered }} of {{ aws_spend_detail.days_in_month }} days · {{ aws_spend_month.split(' ')[0] }} {{ aws_spend_period }} so far</div>
         </div>
         <div style="font-size: 0.85rem; color: var(--gray-700);">
             <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
@@ -771,8 +771,8 @@
 {% endif %}
 
 {% if total_cost_detail %}
-<!-- Total Cost details modal: same gabarit as the AWS Spend one, but over
-     the whole collected window (all months confounded) -->
+<!-- Total Cost details modal: same gabarit as the AWS Spend one, but the
+     actual spend this month to date (not the projection) -->
 <div id="totalCostModal" role="dialog" aria-modal="true" aria-labelledby="totalCostModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeCostModal('totalCostModal')">
     <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
@@ -780,7 +780,7 @@
             <button type="button" data-modal-close aria-label="Close" onclick="closeCostModal('totalCostModal')" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
         </div>
         <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
-            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Cumulative bill, every collected month</div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Spent so far this month</div>
             <div style="font-size: 1.3rem; font-weight: 600; color: var(--gray-800);">{{ eur(total_cost_eur) }}</div>
             <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ total_cost_detail.days_covered }} day{{ 's' if total_cost_detail.days_covered != 1 }} collected · {{ total_cost_period }}</div>
         </div>
