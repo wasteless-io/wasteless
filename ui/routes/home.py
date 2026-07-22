@@ -244,6 +244,12 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
     aws_spend_month = _last_full_month_end.strftime("%B %Y")
     aws_spend_prev_month = (_last_full_month_end.replace(day=1) - timedelta(days=1)).strftime("%B")
     aws_spend_period = None
+    # Partial = the collected days don't span the whole calendar month (a
+    # fresh install only has data from its first collection). The tile then
+    # keeps the honest "June · 22–30 collected" sub-label, the tooltip drops
+    # its "the whole bill" claim, and the MoM delta below is suppressed so a
+    # 9-day month never fakes a plunge against a full previous month.
+    aws_spend_partial = False
     if aws_spend_eur is not None:
         start, end = fin_spend["period_start"], fin_spend["period_end"]
         aws_spend_period = (
@@ -251,9 +257,13 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
             if start == end
             else f"{start.strftime('%-d')}–{end.strftime('%-d')}"
         )
+        aws_spend_partial = (
+            start > _last_full_month_end.replace(day=1) or end < _last_full_month_end
+        )
     aws_spend_delta_pct = None
     if (
         aws_spend_eur is not None
+        and not aws_spend_partial
         and fin_spend["prev_row_count"] > 0
         and float(fin_spend["prev_spend_eur"]) > 0
     ):
@@ -404,6 +414,7 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
             "aws_spend_prev_month": aws_spend_prev_month,
             "aws_spend_delta_pct": aws_spend_delta_pct,
             "aws_spend_period": aws_spend_period,
+            "aws_spend_partial": aws_spend_partial,
             "decision_queue": decision_queue,
             "waste_exceeds_spend": waste_exceeds_spend,
             "welcome": welcome == "1",
