@@ -59,36 +59,30 @@
     <div class="setup-eyebrow">Step 1</div>
     <h3 style="margin: 0 0 0.5rem;">Create the wasteless roles in your AWS account</h3>
     <p class="text-muted" style="margin-bottom: 0.75rem;">
-        One CloudFormation stack creates <code>wasteless-readonly</code>
-        &mdash; Describe/Get/List permissions only. This is the only part that
-        happens inside your AWS account, and the button below pre-fills it all.
+        One CloudFormation stack, read-only (<code>Describe/Get/List</code>). The button pre-fills everything.
     </p>
-    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem;">
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem;">
         <button class="btn btn-primary" onclick="openQuickCreate()">Create the roles in AWS &rarr;</button>
         <button class="btn btn-outline" onclick="copyQuickCreate()">Copy link</button>
         <span id="quickcreate-copied" class="text-muted" style="font-size: 0.8rem;"></span>
     </div>
-    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.5rem;">
-        Opens your AWS console on a pre-filled <em>Create stack</em> review page:
-        sign in as an administrator, tick <em>"I acknowledge that AWS CloudFormation
-        might create IAM resources with custom names"</em>, click <strong>Create stack</strong>,
-        wait for <code>CREATE_COMPLETE</code> (~1 min), then come back here and hit
-        <strong>Test connection</strong> &mdash; the fields in step&nbsp;2 are already filled in.
-        If someone else manages AWS, send them the link with <em>Copy link</em>.
-        Type an External&nbsp;ID in step&nbsp;2 <em>before</em> opening the link to bake it in.
-    </p>
+    <p class="text-muted" style="font-size: 0.8rem; margin: 0 0 0.3rem;">In the AWS console that opens:</p>
+    <ol class="text-muted" style="font-size: 0.8rem; margin: 0 0 0.25rem 1.1rem; padding: 0; line-height: 1.75;">
+        <li>Sign in as an administrator.</li>
+        <li>Tick the IAM acknowledgement, then <strong>Create stack</strong>.</li>
+        <li>Wait ~1 min for <code>CREATE_COMPLETE</code>, then return to <strong>Step&nbsp;2</strong>.</li>
+    </ol>
     <details>
-        <summary class="text-muted" style="font-size: 0.8rem; cursor: pointer;">Manual alternatives (no pre-filled link)</summary>
-        <ul style="margin: 0.5rem 0 0.5rem 1.25rem; font-size: 0.875rem;">
-            <li><strong>CloudFormation</strong> (no tooling needed): upload
-                <code>onboarding/cloudformation/wasteless-onboarding.yaml</code> in the
-                <a href="https://console.aws.amazon.com/cloudformation/home#/stacks/create" target="_blank" rel="noopener">AWS console &rarr; Create stack</a></li>
-            <li><strong>Terraform</strong> (only if your team already uses it): apply <code>onboarding/terraform/</code></li>
+        <summary class="text-muted" style="font-size: 0.8rem; cursor: pointer;">More options &amp; help</summary>
+        <ul style="margin: 0.5rem 0 0 1.25rem; font-size: 0.8rem; line-height: 1.75;">
+            <li>Someone else manages AWS? Send them the <strong>Copy link</strong>.</li>
+            <li>Using an <strong>External&nbsp;ID</strong>? Enter it in Step&nbsp;2 <em>before</em> opening the link.</li>
+            <li>No pre-filled link: upload <code>onboarding/cloudformation/wasteless-onboarding.yaml</code>
+                in the <a href="https://console.aws.amazon.com/cloudformation/home#/stacks/create" target="_blank" rel="noopener">AWS console</a>,
+                or apply <code>onboarding/terraform/</code>.</li>
+            <li>Full walkthrough: <code>docs/CTO_QUICKSTART.md</code> or <code>docs/AWS_SETUP.md</code>.</li>
         </ul>
     </details>
-    <p class="text-muted" style="font-size: 0.8rem;">
-        Full walkthrough: <code>docs/CTO_QUICKSTART.md</code> (short) or <code>docs/AWS_SETUP.md</code> (detailed, per-permission).
-    </p>
 </div>
 
 <!-- Step 2: the form -->
