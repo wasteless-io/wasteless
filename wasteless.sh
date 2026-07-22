@@ -120,17 +120,13 @@ _start() {
     PORT="${WASTELESS_PORT:-$(_env_var STREAMLIT_SERVER_PORT)}"
     PORT="${PORT:-8888}"
 
-    # Page d'atterrissage : le wizard /setup tant qu'aucune connexion AWS
-    # n'est configuree (ARNs/cles dans ui/.env — ecrits par install.sh et
-    # /setup —, variables d'environnement, ou credentials partages crees par
-    # `aws configure`). Dans le doute on ouvre la home : mieux vaut manquer
-    # /setup que d'y renvoyer un compte deja connecte.
+    # Page d'atterrissage : on ouvre toujours la home et on laisse le serveur
+    # decider. La redirection /  ->  /setup (routes/home.py via
+    # aws_connection_configured) est la SEULE source de verite pour "wasteless
+    # est-il connecte ?", donc le shell ne duplique plus cette heuristique (et
+    # ne peut plus diverger d'elle). Un simple ~/.aws/credentials ne saute plus
+    # le guide /setup au premier lancement.
     LANDING_URL="http://localhost:$PORT"
-    if [ -z "$(_env_var AWS_ROLE_ARN)$(_env_var AWS_ACCESS_KEY_ID)" ] \
-        && [ -z "${AWS_ROLE_ARN:-}${AWS_ACCESS_KEY_ID:-}" ] \
-        && [ ! -f "$HOME/.aws/credentials" ]; then
-        LANDING_URL="http://localhost:$PORT/setup"
-    fi
 
     # Already running? On ouvre quand meme le navigateur : ce chemin est
     # atteint quand l'utilisateur relance `wasteless` (ou re-execute
@@ -180,10 +176,8 @@ _start() {
             echo -e "  ${CYAN}wasteless logs${NC}     View server logs"
             echo -e "  ${CYAN}wasteless stop${NC}     Stop the server"
             echo ""
-            if [ "$LANDING_URL" != "http://localhost:$PORT" ]; then
-                echo -e "  ${YELLOW}AWS not connected yet — opening the setup guide (/setup)${NC}"
-                echo ""
-            fi
+            # The server redirects to /setup when wasteless isn't connected yet
+            # (aws_connection_configured), so opening the home URL is enough.
             _open_browser "$LANDING_URL"
             return 0
         fi
