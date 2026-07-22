@@ -1035,7 +1035,8 @@ PYCHECK
         echo "  WasteLess peut expliquer chaque recommandation via un LLM."
         echo "  Les metadonnees de vos ressources AWS seront envoyees au provider choisi."
         echo "  1) DeepSeek   2) Claude (Anthropic)   3) OpenAI   4) Ollama (local, sans cle)"
-        read -p "Choisissez un provider [Entree = passer]: " LLM_CHOICE
+        echo "  5) Aucun — WasteLess marche sans IA (activable plus tard)"
+        read -p "Choisissez un provider [Entree ou 5 = aucun]: " LLM_CHOICE
 
         case "$LLM_CHOICE" in
             1) LLM_MODEL="deepseek/deepseek-chat";  LLM_KEY_VAR="DEEPSEEK_API_KEY" ;;
@@ -1043,7 +1044,7 @@ PYCHECK
             3) LLM_MODEL="openai/gpt-4o-mini";      LLM_KEY_VAR="OPENAI_API_KEY" ;;
             4) read -p "Modele Ollama [llama3.1]: " OLLAMA_MODEL
                LLM_MODEL="ollama/${OLLAMA_MODEL:-llama3.1}" ;;
-            "") print_step "Insights IA ignores (activables plus tard: voir .env.template)" ;;
+            5|"") print_step "Insights IA ignores — WasteLess fonctionne sans (activables plus tard: voir .env.template)" ;;
             *)  print_warning "Choix invalide — insights IA ignores (activables plus tard: voir .env.template)" ;;
         esac
 
