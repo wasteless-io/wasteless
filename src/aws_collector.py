@@ -99,37 +99,49 @@ class AWSCostCollector:
         print(f"\n📊 Collecte des coûts: {start_date} → {end_date} ({days} jours)")
 
         try:
-            # Appel à l'API Cost Explorer
-            response = self.ce_client.get_cost_and_usage(
-                TimePeriod={"Start": str(start_date), "End": str(end_date)},
-                Granularity="DAILY",  # Granularité quotidienne
-                Metrics=["UnblendedCost", "UsageQuantity"],  # Coût et usage
-                GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],  # Grouper par service
-            )
-
             # Traitement des résultats de l'API
             costs_data = []
 
-            # Parcourir chaque jour dans la réponse
-            for daily_result in response["ResultsByTime"]:
-                date = daily_result["TimePeriod"]["Start"]
+            # Cost Explorer pagine les gros résultats via NextPageToken : un an
+            # de granularité quotidienne × services dépasse une page, et sans
+            # cette boucle le backfill serait tronqué en silence (seule la 1re
+            # page insérée). On suit le token jusqu'à épuisement.
+            next_token = None
+            while True:
+                params = {
+                    "TimePeriod": {"Start": str(start_date), "End": str(end_date)},
+                    "Granularity": "DAILY",  # Granularité quotidienne
+                    "Metrics": ["UnblendedCost", "UsageQuantity"],  # Coût et usage
+                    "GroupBy": [{"Type": "DIMENSION", "Key": "SERVICE"}],  # par service
+                }
+                if next_token:
+                    params["NextPageToken"] = next_token
+                response = self.ce_client.get_cost_and_usage(**params)
 
-                # Parcourir chaque service pour ce jour
-                for group in daily_result["Groups"]:
-                    service_name = group["Keys"][0]
-                    cost_amount = float(group["Metrics"]["UnblendedCost"]["Amount"])
-                    usage_quantity = float(group["Metrics"]["UsageQuantity"]["Amount"])
+                # Parcourir chaque jour dans la page courante
+                for daily_result in response["ResultsByTime"]:
+                    date = daily_result["TimePeriod"]["Start"]
 
-                    # Filtrer les coûts négligeables (< 1 centime)
-                    if cost_amount > 0.01:
-                        costs_data.append(
-                            {
-                                "date": date,
-                                "service": service_name,
-                                "cost_usd": cost_amount,
-                                "usage": usage_quantity,
-                            }
-                        )
+                    # Parcourir chaque service pour ce jour
+                    for group in daily_result["Groups"]:
+                        service_name = group["Keys"][0]
+                        cost_amount = float(group["Metrics"]["UnblendedCost"]["Amount"])
+                        usage_quantity = float(group["Metrics"]["UsageQuantity"]["Amount"])
+
+                        # Filtrer les coûts négligeables (< 1 centime)
+                        if cost_amount > 0.01:
+                            costs_data.append(
+                                {
+                                    "date": date,
+                                    "service": service_name,
+                                    "cost_usd": cost_amount,
+                                    "usage": usage_quantity,
+                                }
+                            )
+
+                next_token = response.get("NextPageToken")
+                if not next_token:
+                    break
 
             # Créer le DataFrame pandas
             df = pd.DataFrame(costs_data)
@@ -332,22 +344,53 @@ def already_collected_today():
         release_connection(connection)
 
 
+def cost_history_days():
+    """Profondeur d'historique déjà présente dans cloud_costs_raw, en jours
+    (0 si vide).
+
+    Pilote la décision de backfill : la première collecte remonte jusqu'à
+    WASTELESS_COST_BACKFILL_DAYS (défaut 365, pour que le sélecteur de plage
+    1 an ait des données) ; une fois cette profondeur atteinte, chaque run
+    suivant ne rafraîchit que la queue récente (WASTELESS_COST_REFRESH_DAYS),
+    ce qui garde l'appel Cost Explorer (facturé) petit. Les anciennes lignes
+    ne sont jamais supprimées : la fenêtre collectée ne fait que grandir."""
+    connection = get_db_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT COALESCE(CURRENT_DATE - MIN(usage_date), 0) AS depth FROM cloud_costs_raw"
+        )
+        row = cursor.fetchone()
+        try:
+            return int(row["depth"])
+        except (TypeError, KeyError, IndexError):
+            return int(row[0])
+    finally:
+        release_connection(connection)
+
+
 def main():
     """
     Point d'entrée principal du script.
 
-    Crée une instance du collecteur et lance la collecte avec les paramètres
-    par défaut. Le flag --daily (utilisé par le pipeline `collect`) saute la
-    collecte si elle a déjà réussi aujourd'hui et n'écrit pas de CSV pour ne
-    pas accumuler de fichiers à chaque tick.
+    Crée une instance du collecteur et lance la collecte. Le flag --daily
+    (utilisé par le pipeline `collect`) saute la collecte si elle a déjà
+    réussi aujourd'hui et n'écrit pas de CSV pour ne pas accumuler de fichiers
+    à chaque tick. La profondeur est auto-adaptative : backfill d'un an au
+    premier passage, puis simple rafraîchissement de la queue récente.
     """
     daily = "--daily" in sys.argv[1:]
+    backfill_days = int(os.getenv("WASTELESS_COST_BACKFILL_DAYS", "365"))
+    refresh_days = int(os.getenv("WASTELESS_COST_REFRESH_DAYS", "35"))
     try:
         if daily and already_collected_today():
             print("✅ Coûts déjà collectés aujourd'hui — collecte quotidienne ignorée")
             return
+        # Backfill tant qu'on n'a pas la profondeur cible ; sinon on ne
+        # rafraîchit que la queue récente pour garder l'appel API petit.
+        days = refresh_days if cost_history_days() >= backfill_days else backfill_days
         collector = AWSCostCollector()
-        collector.run(days=30, save_to_db=True, export_csv=not daily)
+        collector.run(days=days, save_to_db=True, export_csv=not daily)
     except KeyboardInterrupt:
         print("\n⚠️  Collecte interrompue par l'utilisateur")
     except Exception as e:
