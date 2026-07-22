@@ -12,6 +12,14 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Stable launcher for scheduled jobs. The installed symlink (~/.local/bin/
+# wasteless) sits at a fixed path, so moving the repo + re-running install.sh
+# re-points it without regenerating the launchd/systemd/cron entries (which
+# would otherwise bake the old repo path and silently break on a move). Falls
+# back to this script's own path when run uninstalled, straight from the repo.
+LAUNCHER="$HOME/.local/bin/wasteless"
+[ -x "$LAUNCHER" ] || LAUNCHER="$SCRIPT_DIR/wasteless.sh"
+
 # Robustesse PATH. La boucle d'auto-collecte (_ensure_cron) reexecute ce script
 # toutes les 5 min en heritant du PATH du shell qui a lance `wasteless start`.
 # Lance depuis un contexte GUI / IDE / launchd, ce PATH n'inclut pas Homebrew,
@@ -425,7 +433,7 @@ _ensure_cron() {
     fi
 
     (
-        SELF="$SCRIPT_DIR/wasteless.sh"
+        SELF="$LAUNCHER"
         while true; do
             "$SELF" collect >> "$LOG_FILE" 2>&1
             sleep "$COLLECT_INTERVAL_SEC"
@@ -450,7 +458,7 @@ _schedule_macos() {
     <key>Label</key><string>${LAUNCHD_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${SCRIPT_DIR}/wasteless.sh</string>
+        <string>${LAUNCHER}</string>
         <string>collect</string>
     </array>
     <key>StartInterval</key><integer>${COLLECT_INTERVAL_SEC}</integer>
@@ -478,7 +486,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=${SCRIPT_DIR}/wasteless.sh collect
+ExecStart=${LAUNCHER} collect
 UNIT
     cat > "$SYSTEMD_USER_DIR/${SYSTEMD_UNIT}.timer" <<UNIT
 [Unit]
@@ -504,7 +512,7 @@ UNIT
 }
 
 _schedule_cron() {
-    local self="$SCRIPT_DIR/wasteless.sh"
+    local self="$LAUNCHER"
     local entry="*/5 * * * * $self collect >> $LOG_FILE 2>&1 $CRON_MARKER"
     ( crontab -l 2>/dev/null | grep -vF "$CRON_MARKER"; echo "$entry" ) | crontab -
     echo -e "  ${GREEN}[OK]${NC} entree crontab ajoutee (toutes les 5 min)"

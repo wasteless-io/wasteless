@@ -1368,10 +1368,24 @@ UIENV
     print_step "Configuration UI creee (ui/.env)"
 fi
 
-# Alias wasteless → pointe vers wasteless.sh (CLI racine)
+# Commande 'wasteless' : un vrai executable (symlink dans ~/.local/bin) plutot
+# qu'un alias shell. Avantages sur l'alias : marche dans les scripts et les
+# shells non-interactifs (le scheduler s'en sert), independant du shell
+# (zsh/bash/fish/...), et son chemin est STABLE — deplacer le repo puis
+# relancer install.sh re-pointe le lien sans avoir a regenerer les entrees
+# launchd/systemd/cron (elles visent ce chemin fixe, pas celui du repo).
 chmod +x "$(pwd)/wasteless.sh"
-WASTELESS_CLI="$(pwd)/wasteless.sh"
-ALIAS_LINE="alias wasteless='$WASTELESS_CLI'"
+WASTELESS_ROOT="$(pwd)"
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+ln -sf "$WASTELESS_ROOT/wasteless.sh" "$BIN_DIR/wasteless"
+# Marqueur de l'emplacement d'install (uninstall / debug / outils).
+mkdir -p "$HOME/.config/wasteless"
+echo "$WASTELESS_ROOT" > "$HOME/.config/wasteless/root"
+print_step "Commande 'wasteless' installee -> $BIN_DIR/wasteless"
+
+# Detecter le rc du shell (pour retirer un ancien alias et, au besoin, mettre
+# ~/.local/bin sur le PATH).
 SHELL_RC=""
 if [ -f "$HOME/.zshrc" ]; then
     SHELL_RC="$HOME/.zshrc"
@@ -1381,22 +1395,29 @@ elif [ -f "$HOME/.bashrc" ]; then
     SHELL_RC="$HOME/.bashrc"
 fi
 
-if [ -n "$SHELL_RC" ]; then
-    if grep -q "alias wasteless='$WASTELESS_CLI'" "$SHELL_RC" 2>/dev/null; then
-        print_step "Alias 'wasteless' deja present"
-    elif grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
-        sed_inplace "s|alias wasteless=.*|$ALIAS_LINE|" "$SHELL_RC"
-        print_step "Alias 'wasteless' mis a jour dans $SHELL_RC"
-    else
-        echo "" >> "$SHELL_RC"
-        echo "# WasteLess CLI" >> "$SHELL_RC"
-        echo "$ALIAS_LINE" >> "$SHELL_RC"
-        print_step "Alias 'wasteless' ajoute a $SHELL_RC"
-    fi
-else
-    print_warning "Shell non detecte. Ajoutez manuellement:"
-    echo "  alias wasteless='$(pwd)/wasteless.sh'"
+# Un ancien 'alias wasteless=' (installs precedents) masquerait le nouvel
+# executable : le retirer.
+if [ -n "$SHELL_RC" ] && grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
+    sed_inplace '/# WasteLess CLI/d' "$SHELL_RC"
+    sed_inplace '/alias wasteless=/d' "$SHELL_RC"
+    print_step "Ancien alias 'wasteless' retire de $SHELL_RC (remplace par le symlink)"
 fi
+
+# S'assurer que ~/.local/bin est sur le PATH, sinon 'wasteless' resterait
+# introuvable. Ajout unique au rc s'il n'y figure pas deja.
+case ":$PATH:" in
+    *":$BIN_DIR:"*)
+        : ;;  # deja sur le PATH de cette session
+    *)
+        if [ -n "$SHELL_RC" ] && ! grep -q '\.local/bin' "$SHELL_RC" 2>/dev/null; then
+            printf '\n# WasteLess CLI\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$SHELL_RC"
+            print_step "~/.local/bin ajoute au PATH dans $SHELL_RC"
+        elif [ -z "$SHELL_RC" ]; then
+            print_warning "Shell non detecte. Ajoutez ~/.local/bin au PATH:"
+            echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+        fi
+        ;;
+esac
 
 # =============================================================================
 # VERIFICATION FINALE
