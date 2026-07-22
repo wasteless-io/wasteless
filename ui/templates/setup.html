@@ -94,7 +94,7 @@
 <!-- Step 2: the form -->
 <div class="card mb-2 setup-card">
     <div class="setup-eyebrow">Step 2</div>
-    <h3 style="margin: 0 0 0.5rem;">Test and save</h3>
+    <h3 style="margin: 0 0 0.5rem;">Test &amp; connect</h3>
     {% if account_id and not current_role_arn %}
     <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
         Pre-filled from your account ID ({{ account_id }}) and the template's default
@@ -133,29 +133,24 @@
         <code>Unable to locate credentials</code>.
     </p>
     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <button class="btn btn-outline" onclick="setupTest()">Test connection</button>
-        <button class="btn btn-primary" onclick="setupSave()">Test &amp; save</button>
+        <button class="btn btn-outline" id="setup-test-btn" onclick="setupTest()">Test connection</button>
+        <button class="btn btn-primary" id="setup-connect-btn" onclick="setupSave()">Connect</button>
+        <a href="#" id="setup-cancel" onclick="setupCancel(event)" style="display: none; font-size: 0.8rem; color: var(--gray-500);">Cancel</a>
         <span id="setup-result" style="font-size: 0.85rem;"></span>
     </div>
 </div>
 
-<!-- Step 3 -->
-<div class="card mb-2 setup-card">
-    <div class="setup-eyebrow">Step 3</div>
-    <h3 style="margin: 0 0 0.5rem;">Watch the dashboard fill</h3>
-    <p class="text-muted" style="font-size: 0.875rem;">
-        A first collection starts automatically the moment you save, and the dashboard
-        fills up within a couple of minutes; collection then re-runs on schedule.
-        Nothing in your account is ever modified without an
-        explicit approval in <a href="/recommendations">Recommendations</a>.
-    </p>
-</div>
-
-<!-- Optional AI, kept off the onboarding critical path: setup is AWS-only.
-     The LLM that explains recommendations is added later, never required. -->
-<p class="text-muted" style="font-size: 0.8rem; text-align: center; margin: 0 0 1.5rem 0;">
+<!-- What happens after connecting — an outcome, not a step the user performs
+     (the success overlay repeats the collection line), so it is a muted note,
+     not a numbered card. The optional-AI pointer sits alongside it. -->
+<p class="text-muted" style="font-size: 0.82rem; margin: 0 0 0.4rem 0;">
+    After you connect, a first collection starts automatically and the dashboard fills within a
+    couple of minutes. Nothing in your account is ever modified without an explicit approval in
+    <a href="/recommendations">Recommendations</a>.
+</p>
+<p class="text-muted" style="font-size: 0.82rem; margin: 0 0 1.5rem 0;">
     Optional: WasteLess can explain each recommendation with an AI model — enable it any time in
-    <a href="/settings">Settings &rarr; AI Insights</a>. It is never required; everything works without it.
+    <a href="/settings">Settings &rarr; AI Insights</a>. Never required; everything works without it.
 </p>
 
 <!-- Success overlay: shown by Test & save on success. This is the formal
@@ -219,10 +214,21 @@ function setupPayload() {
     };
 }
 
-async function setupCall(url, pendingLabel) {
-    const out = document.getElementById('setup-result');
-    out.style.color = '';
-    out.textContent = pendingLabel;
+// The role can lag behind the CloudFormation stack by ~1 min, so a first click
+// often lands before the role exists. The backend labels that failure
+// error_kind='not_ready'; instead of a red error we show an amber "waiting"
+// state and poll until the role is ready, then finish automatically. Real
+// errors (creds/config) stay red and stop.
+let setupPoll = null;
+const SETUP_POLL_MS = 5000;
+const SETUP_POLL_MAX = 24;   // ~2 minutes
+
+function setupBusy(on) {
+    document.getElementById('setup-test-btn').disabled = on;
+    document.getElementById('setup-connect-btn').disabled = on;
+}
+
+async function setupCall(url) {
     try {
         const resp = await fetch(url, {
             method: 'POST',
@@ -230,39 +236,83 @@ async function setupCall(url, pendingLabel) {
             body: JSON.stringify(setupPayload())
         });
         const data = await resp.json();
-        if (resp.ok && data.success) {
-            out.style.color = '#166534';
-            return data;
-        }
-        out.style.color = '#991b1b';
-        out.textContent = data.error || 'Unexpected error';
-        return null;
+        if (resp.ok && data.success) return { ok: true, data };
+        return { ok: false, kind: data.error_kind || 'config', error: data.error || 'Unexpected error' };
     } catch (e) {
-        out.style.color = '#991b1b';
-        out.textContent = 'Request failed: ' + e;
-        return null;
+        return { ok: false, kind: 'network', error: 'Request failed: ' + e };
     }
 }
 
-async function setupTest() {
-    const data = await setupCall('/api/aws-setup/test', 'Testing…');
-    if (data) {
-        document.getElementById('setup-result').textContent =
-            'Connected as ' + data.identity + (data.role_assumed ? ' — role assumed' : '');
-    }
+function setupMsg(color, text) {
+    const out = document.getElementById('setup-result');
+    out.style.color = color;
+    out.textContent = text;
 }
 
-async function setupSave() {
-    const data = await setupCall('/api/aws-setup', 'Testing and saving…');
-    if (data) {
-        document.getElementById('setup-result').textContent = '';
-        document.getElementById('setup-success-account').textContent = data.account_id;
-        document.getElementById('setup-success-collection').textContent = data.collection_started
-            ? 'Your first collection is already running: the dashboard fills up within a couple of minutes.'
-            : 'The next scheduled collection will fill the dashboard (or run "wasteless collect" now).';
-        document.getElementById('setup-success').style.display = 'flex';
-        setTimeout(() => { window.location.href = '/?welcome=1'; }, 5000);
-    }
+function setupWaiting() {
+    setupMsg('#b45309', 'Roles not ready yet — CloudFormation may still be creating them (~1 min). Waiting…');
 }
+
+function setupStopPolling() {
+    if (setupPoll) { clearTimeout(setupPoll); setupPoll = null; }
+    document.getElementById('setup-cancel').style.display = 'none';
+    setupBusy(false);
+}
+
+function setupCancel(ev) {
+    if (ev) ev.preventDefault();
+    setupStopPolling();
+    setupMsg('var(--gray-500)', 'Stopped waiting. Click Connect once the stack shows CREATE_COMPLETE.');
+}
+
+// Poll the target endpoint until the roles are ready. `save` = true finishes by
+// persisting (Connect); false is a dry check (Test connection).
+function setupPollUntilReady(save, attempt) {
+    attempt = attempt || 1;
+    document.getElementById('setup-cancel').style.display = 'inline';
+    setupBusy(true);
+    setupPoll = setTimeout(async () => {
+        const r = await setupCall(save ? '/api/aws-setup' : '/api/aws-setup/test');
+        if (r.ok) { setupStopPolling(); save ? setupOnSaved(r.data) : setupOnConnected(r.data); return; }
+        if (r.kind !== 'not_ready') { setupStopPolling(); setupMsg('#991b1b', r.error); return; }
+        if (attempt >= SETUP_POLL_MAX) {
+            setupStopPolling();
+            setupMsg('#b45309', 'Still not ready after 2 min. Check the stack reached CREATE_COMPLETE. '
+                + 'If you set up detection-only, clear the Remediation role ARN, then click Connect.');
+            return;
+        }
+        setupWaiting();
+        setupPollUntilReady(save, attempt + 1);
+    }, SETUP_POLL_MS);
+}
+
+function setupOnConnected(data) {
+    setupMsg('#166534', 'Connected as ' + data.identity
+        + (data.role_assumed ? ' — role assumed' : '') + '. Click Connect to save.');
+}
+
+function setupOnSaved(data) {
+    document.getElementById('setup-result').textContent = '';
+    document.getElementById('setup-success-account').textContent = data.account_id;
+    document.getElementById('setup-success-collection').textContent = data.collection_started
+        ? 'Your first collection is already running: the dashboard fills up within a couple of minutes.'
+        : 'The next scheduled collection will fill the dashboard (or run "wasteless collect" now).';
+    document.getElementById('setup-success').style.display = 'flex';
+    setTimeout(() => { window.location.href = '/?welcome=1'; }, 5000);
+}
+
+async function setupRun(save) {
+    if (setupPoll) return;              // a poll is already in flight
+    setupBusy(true);
+    setupMsg('', save ? 'Connecting…' : 'Testing…');
+    const r = await setupCall(save ? '/api/aws-setup' : '/api/aws-setup/test');
+    setupBusy(false);
+    if (r.ok) { save ? setupOnSaved(r.data) : setupOnConnected(r.data); return; }
+    if (r.kind === 'not_ready') { setupWaiting(); setupPollUntilReady(save); return; }
+    setupMsg('#991b1b', r.error);
+}
+
+function setupTest() { setupRun(false); }
+function setupSave() { setupRun(true); }
 </script>
 {% endblock %}
