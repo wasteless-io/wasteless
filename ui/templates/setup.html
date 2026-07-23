@@ -79,6 +79,17 @@
     @media (prefers-reduced-motion: reduce) {
         .btn-terminal.is-clicked::after { animation: none; }
     }
+    /* Connect keeps the original mint variant: green letters and the sweep on
+       hover. The flat white / sweep-on-click style above is the Create CTA. */
+    .btn-terminal--mint {
+        color: #3ed598;
+        transition: box-shadow 0.18s ease, color 0.18s ease, transform 0.05s ease;
+    }
+    .btn-terminal--mint:hover { color: #eafff5; box-shadow: 2px 2px 0 rgba(62, 213, 152, 0.35); }
+    .btn-terminal--mint:hover::after { animation: btn-terminal-sweep 0.7s ease; }
+    @media (prefers-reduced-motion: reduce) {
+        .btn-terminal--mint:hover::after { animation: none; }
+    }
 </style>
 {% endblock %}
 
@@ -182,7 +193,7 @@
     </details>
     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
         <button class="btn btn-outline" id="setup-test-btn" onclick="setupTest()">Test connection</button>
-        <button class="btn-terminal" id="setup-connect-btn" onclick="setupSave()">Connect</button>
+        <button class="btn-terminal btn-terminal--mint" id="setup-connect-btn" onclick="setupSave()">Connect</button>
         <a href="#" id="setup-cancel" onclick="setupCancel(event)" style="display: none; font-size: 0.8rem; color: var(--gray-500);">Cancel</a>
         <span id="setup-result" style="font-size: 0.85rem;"></span>
     </div>
@@ -363,9 +374,10 @@ async function setupRun(save) {
 function setupTest() { setupRun(false); }
 function setupSave() { setupRun(true); }
 
-// Terminal CTAs animate on click only: replay the mint sweep on every press by
-// restarting the .is-clicked animation (reflow between remove and add).
-document.querySelectorAll('.btn-terminal').forEach(function (b) {
+// Flat terminal CTAs (Create) animate on click only: replay the mint sweep on
+// every press by restarting the .is-clicked animation. The mint variant
+// (Connect) sweeps on hover via CSS, so it is excluded here.
+document.querySelectorAll('.btn-terminal:not(.btn-terminal--mint)').forEach(function (b) {
     b.addEventListener('click', function () {
         b.classList.remove('is-clicked');
         void b.offsetWidth;            // force reflow so the animation restarts
