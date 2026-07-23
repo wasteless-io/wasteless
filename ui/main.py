@@ -112,6 +112,12 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     print("Auto-sync scheduler started (every 5 min)")
 
+    # Instance scheduler: build the stop/start cron jobs from the saved config
+    # (no-op when disabled). Re-run whenever /settings saves a new schedule.
+    from jobs import reschedule_instance_jobs
+
+    reschedule_instance_jobs()
+
     yield
 
     # Shutdown
