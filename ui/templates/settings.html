@@ -37,6 +37,7 @@
 </div>
 {% endif %}
 
+<div style="margin: 1.9rem 0 0.7rem; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500);">Execution &amp; safety</div>
 <!-- Execution Mode -->
 <div class="card mb-2" style="padding: 1rem;">
     <h3 style="margin: 0 0 1rem 0;">Execution Mode</h3>
@@ -159,56 +160,6 @@
     </div>
 </div>
 
-<!-- Terraform PR (GitOps remediation) -->
-{% set tf_pr = config.get('terraform_pr', {}) or {} %}
-<div class="card mb-2" style="padding: 1rem;">
-    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-        <h3 style="margin: 0;">Terraform Pull Requests</h3>
-        <span class="badge badge-info" style="font-size: 0.65rem;">GitOps</span>
-    </div>
-    <p class="text-muted" style="margin: 0 0 1rem 0; font-size: 0.85rem;">
-        High-stakes recommendations open a pull request on your Terraform repo
-        instead of touching AWS: the change ships with savings estimate, risk,
-        rollback plan and Cost Explorer evidence. Merging applies it through
-        your pipeline; closing rejects the recommendation. Requires an
-        authenticated <code>gh</code> CLI.
-    </p>
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem 1.5rem; font-size: 0.85rem;">
-        <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid var(--gray-200); border-radius: 6px; cursor: pointer;">
-            <input type="checkbox" {% if tf_pr.get('enabled') %}checked{% endif %}
-                   onchange="updateConfig('terraform_pr:enabled', this.checked)">
-            <span>Enable PR remediation</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 0.6rem;">
-            <span style="white-space: nowrap;">PR required above</span>
-            <input type="number" min="0" step="1" class="form-input" style="width: 90px; padding: 0.4rem;"
-                   value="{{ tf_pr.get('pr_threshold_eur', 50) }}"
-                   onchange="updateConfig('terraform_pr:pr_threshold_eur', parseFloat(this.value))">
-            <span class="text-muted">$/month</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 0.6rem;">
-            <span style="white-space: nowrap;">Terraform repo</span>
-            <input type="text" class="form-input" style="flex: 1; padding: 0.4rem;" placeholder="owner/name"
-                   value="{{ tf_pr.get('repo', '') }}"
-                   onchange="updateConfig('terraform_pr:repo', this.value)">
-        </label>
-        <div style="display: flex; gap: 1rem;">
-            <label style="display: flex; align-items: center; gap: 0.6rem; flex: 1;">
-                <span style="white-space: nowrap;">Base branch</span>
-                <input type="text" class="form-input" style="width: 100px; padding: 0.4rem;"
-                       value="{{ tf_pr.get('base_branch', 'main') }}"
-                       onchange="updateConfig('terraform_pr:base_branch', this.value)">
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.6rem; flex: 1;">
-                <span style="white-space: nowrap;">Module dir</span>
-                <input type="text" class="form-input" style="width: 100px; padding: 0.4rem;"
-                       value="{{ tf_pr.get('terraform_dir', '.') }}"
-                       onchange="updateConfig('terraform_pr:terraform_dir', this.value)">
-            </label>
-        </div>
-    </div>
-</div>
-
 <!-- Whitelist -->
 <div class="card mb-2" style="padding: 1rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -264,6 +215,112 @@
     </div>
 </div>
 
+<!-- Instance schedule (stop after hours / start in the morning) -->
+<style>
+  .sched-chip { font-family: var(--font-mono); font-size: 0.7rem; padding: 0.35rem 0.5rem; min-width: 42px; cursor: pointer; background: var(--gray-100); color: var(--gray-500); border: 1px solid var(--gray-200); }
+  .sched-chip.on { background: rgba(62,213,152,0.16); color: #15803d; border-color: rgba(62,213,152,0.45); }
+  .sched-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 0.75rem 1.25rem; }
+  .sched-field { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; }
+  .sched-field > span { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-500); }
+</style>
+<div class="card mb-2" id="schedCard" style="padding: 1rem;">
+    {% set sched = instance_schedule %}
+    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
+        <h3 style="margin:0;">Instance schedule</h3>
+        <span class="badge {{ 'badge-success' if sched.enabled else 'badge-info' }}" id="schedBadge" style="font-size:0.65rem;">{{ 'On' if sched.enabled else 'Off' }}</span>
+    </div>
+    <p class="text-muted" style="margin:0 0 0.9rem 0; font-size:0.85rem;">
+        Stop tagged EC2 instances after hours and start them again in the morning &mdash; the biggest single lever on a dev / staging bill. Protected &amp; Auto&nbsp;Scaling instances are never touched.
+    </p>
+    <label style="display:flex; align-items:center; gap:0.6rem; font-size:0.9rem; margin-bottom:0.9rem;">
+        <input type="checkbox" id="sched-enabled" {% if sched.enabled %}checked{% endif %}>
+        <span>Enable schedule</span>
+    </label>
+    <div class="sched-grid" style="margin-bottom:0.9rem;">
+        <label class="sched-field"><span>Stop at</span><input type="time" id="sched-stop" class="form-input" value="{{ sched.stop_time }}" style="padding:0.4rem;"></label>
+        <label class="sched-field"><span>Start at</span><input type="time" id="sched-start" class="form-input" value="{{ sched.start_time }}" style="padding:0.4rem;"></label>
+        <label class="sched-field"><span>Timezone</span>
+            <select id="sched-tz" class="form-input" style="padding:0.4rem;">
+                {% set tzs = ['Europe/Paris','UTC','America/New_York','America/Los_Angeles','Asia/Singapore','Australia/Sydney'] %}
+                {% for tz in tzs %}<option {% if sched.timezone == tz %}selected{% endif %}>{{ tz }}</option>{% endfor %}
+                {% if sched.timezone not in tzs %}<option selected>{{ sched.timezone }}</option>{% endif %}
+            </select>
+        </label>
+    </div>
+    <div class="sched-field" style="margin-bottom:0.9rem;">
+        <span>Days</span>
+        <div id="sched-days" style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+            {% for d in ['mon','tue','wed','thu','fri','sat','sun'] %}
+            <button type="button" class="sched-chip {% if d in sched.days %}on{% endif %}" data-day="{{ d }}" aria-pressed="{{ 'true' if d in sched.days else 'false' }}">{{ d|capitalize }}</button>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="sched-grid" style="margin-bottom:0.9rem;">
+        <label class="sched-field"><span>Tag key</span><input type="text" id="sched-tagk" class="form-input" value="{{ sched.tag_key }}" style="padding:0.4rem;"></label>
+        <label class="sched-field"><span>Tag value</span><input type="text" id="sched-tagv" class="form-input" value="{{ sched.tag_value }}" style="padding:0.4rem;"></label>
+    </div>
+    <label style="display:flex; align-items:center; gap:0.6rem; font-size:0.85rem; margin-bottom:0.9rem;">
+        <input type="checkbox" id="sched-dry" {% if sched.dry_run %}checked{% endif %}>
+        <span>Dry-run &mdash; log every action to History, never touch AWS</span>
+    </label>
+    <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="saveSchedule()" style="padding:0.4rem 0.85rem;">Save schedule</button>
+        <span id="sched-status" style="font-size:0.85rem;"></span>
+    </div>
+</div>
+<script>
+(function(){
+    document.querySelectorAll('#sched-days .sched-chip').forEach(function(c){
+        c.addEventListener('click', function(){
+            var on = c.classList.toggle('on');
+            c.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+    });
+})();
+async function saveSchedule(){
+    var days = Array.prototype.map.call(document.querySelectorAll('#sched-days .sched-chip.on'), function(c){ return c.dataset.day; });
+    var enabled = document.getElementById('sched-enabled').checked;
+    var dry = document.getElementById('sched-dry').checked;
+    var payload = {
+        enabled: enabled,
+        stop_time: document.getElementById('sched-stop').value,
+        start_time: document.getElementById('sched-start').value,
+        timezone: document.getElementById('sched-tz').value,
+        days: days,
+        tag_key: document.getElementById('sched-tagk').value,
+        tag_value: document.getElementById('sched-tagv').value,
+        dry_run: dry
+    };
+    var st = document.getElementById('sched-status');
+    st.style.color=''; st.textContent='Saving…';
+    try{
+        var r = await fetch('/api/instance-schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        var d = await r.json();
+        if(r.ok && d.success){
+            st.style.color = d.warning ? '#b45309' : '#166534';
+            st.textContent = d.warning ? d.warning : ('Saved · ' + (enabled ? (dry ? 'dry-run active' : 'LIVE') : 'off'));
+            var b = document.getElementById('schedBadge');
+            b.textContent = enabled ? 'On' : 'Off';
+            b.className = 'badge ' + (enabled ? 'badge-success' : 'badge-info');
+        } else {
+            st.style.color='#991b1b'; st.textContent = d.error || 'Save failed';
+        }
+    }catch(e){ st.style.color='#991b1b'; st.textContent='Request failed: '+e; }
+}
+</script>
+
+<div style="margin: 1.9rem 0 0.7rem; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500);">Integrations</div>
+<!-- AWS connection (managed in /setup) -->
+<a href="/setup" class="card mb-2" style="padding: 1rem; text-decoration: none; color: inherit; display: block;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+        <h3 style="margin: 0;">AWS Account</h3>
+        <span class="badge {{ 'badge-success' if aws_reachable() is sameas true else 'badge-info' }}" style="font-size: 0.65rem;">{{ 'connected' if aws_reachable() is sameas true else 'not connected' }}</span>
+    </div>
+    <p class="text-muted" style="margin: 0; font-size: 0.85rem;">
+        Roles, region and credentials{% if aws_account_id() %} for account <code>{{ aws_account_id() }}</code>{% endif %}. Managed in the guided connection setup &mdash; click to open.
+    </p>
+</a>
+
 <!-- AI Insights (LLM) -->
 <div class="card mb-2" style="padding: 1rem;">
     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
@@ -296,6 +353,57 @@
     <div id="llmStatus" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>
 </div>
 
+<!-- Terraform PR (GitOps remediation) -->
+{% set tf_pr = config.get('terraform_pr', {}) or {} %}
+<div class="card mb-2" style="padding: 1rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+        <h3 style="margin: 0;">Terraform Pull Requests</h3>
+        <span class="badge badge-info" style="font-size: 0.65rem;">GitOps</span>
+    </div>
+    <p class="text-muted" style="margin: 0 0 1rem 0; font-size: 0.85rem;">
+        High-stakes recommendations open a pull request on your Terraform repo
+        instead of touching AWS: the change ships with savings estimate, risk,
+        rollback plan and Cost Explorer evidence. Merging applies it through
+        your pipeline; closing rejects the recommendation. Requires an
+        authenticated <code>gh</code> CLI.
+    </p>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem 1.5rem; font-size: 0.85rem;">
+        <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid var(--gray-200); border-radius: 6px; cursor: pointer;">
+            <input type="checkbox" {% if tf_pr.get('enabled') %}checked{% endif %}
+                   onchange="updateConfig('terraform_pr:enabled', this.checked)">
+            <span>Enable PR remediation</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 0.6rem;">
+            <span style="white-space: nowrap;">PR required above</span>
+            <input type="number" min="0" step="1" class="form-input" style="width: 90px; padding: 0.4rem;"
+                   value="{{ tf_pr.get('pr_threshold_eur', 50) }}"
+                   onchange="updateConfig('terraform_pr:pr_threshold_eur', parseFloat(this.value))">
+            <span class="text-muted">$/month</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 0.6rem;">
+            <span style="white-space: nowrap;">Terraform repo</span>
+            <input type="text" class="form-input" style="flex: 1; padding: 0.4rem;" placeholder="owner/name"
+                   value="{{ tf_pr.get('repo', '') }}"
+                   onchange="updateConfig('terraform_pr:repo', this.value)">
+        </label>
+        <div style="display: flex; gap: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.6rem; flex: 1;">
+                <span style="white-space: nowrap;">Base branch</span>
+                <input type="text" class="form-input" style="width: 100px; padding: 0.4rem;"
+                       value="{{ tf_pr.get('base_branch', 'main') }}"
+                       onchange="updateConfig('terraform_pr:base_branch', this.value)">
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.6rem; flex: 1;">
+                <span style="white-space: nowrap;">Module dir</span>
+                <input type="text" class="form-input" style="width: 100px; padding: 0.4rem;"
+                       value="{{ tf_pr.get('terraform_dir', '.') }}"
+                       onchange="updateConfig('terraform_pr:terraform_dir', this.value)">
+            </label>
+        </div>
+    </div>
+</div>
+
+<div style="margin: 1.9rem 0 0.7rem; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500);">Reference</div>
 <!-- Policy as Code -->
 <div class="card mb-2" style="padding: 1rem; border: 1px solid var(--gray-300);">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">

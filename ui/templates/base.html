@@ -261,6 +261,24 @@
             align-items: center;
             gap: 0.6rem;
         }
+        /* When the card links to /setup: clear affordances — pointer, hover
+           feedback, keyboard focus ring, and a chevron that nudges on hover. */
+        a.aws-card {
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        a.aws-card:hover { background: #f6f7f6; border-color: rgba(0, 0, 0, 0.16); }
+        a.aws-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .aws-chevron {
+            margin-left: auto;
+            color: #b7b7b2;
+            flex-shrink: 0;
+            display: inline-flex;
+            transition: transform 0.15s ease, color 0.15s ease;
+        }
+        a.aws-card:hover .aws-chevron { color: #6b6b66; transform: translateX(2px); }
 
         .aws-avatar {
             width: 32px;
@@ -528,6 +546,73 @@
             inset: 0;
             background: rgba(0, 0, 0, 0.35);
             z-index: 1090;
+        }
+
+        /* ===== Collapsible sidebar (desktop; mobile hides the sidebar) ===== */
+        .sidebar-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+            margin-top: 0.4rem;
+            padding: 0.5rem 0.75rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--gray-500);
+            font: inherit;
+            text-align: left;
+            border-radius: 8px;
+        }
+        .sidebar-toggle:hover { background: rgba(0, 0, 0, 0.04); color: var(--ink); }
+        .sidebar-toggle .nav-icon { display: inline-flex; transition: transform 0.2s ease; }
+        .nav-links .nav-icon { transition: transform 0.15s ease; }
+        /* Width/margin animate only after first paint (avoids a load flash) */
+        body.transitions-ready .sidebar { transition: width 0.2s ease, padding 0.2s ease; }
+        body.transitions-ready .main { transition: margin-left 0.2s ease; }
+
+        @media (min-width: 769px) {
+            /* z-index lifts the whole sidebar (and its hover bubbles) above the
+               positioned main-content cards (e.g. the AI console, z-index:1)
+               that were painting over the bubbles; stays below modals/popovers. */
+            body.sidebar-collapsed .sidebar { width: 68px; padding-left: 0.5rem; padding-right: 0.5rem; overflow: visible; z-index: 200; }
+            body.sidebar-collapsed .main { margin-left: 68px; }
+            body.sidebar-collapsed .sidebar-header .logo { justify-content: center; }
+            body.sidebar-collapsed .logo-mark { display: none; }
+            body.sidebar-collapsed .nav-links a,
+            body.sidebar-collapsed .sidebar-toggle {
+                justify-content: center; gap: 0; padding-left: 0; padding-right: 0; position: relative;
+            }
+            body.sidebar-collapsed .aws-card { justify-content: center; padding: 0.5rem; position: relative; }
+            body.sidebar-collapsed .aws-card > div,
+            body.sidebar-collapsed .aws-chevron { display: none; }
+            body.sidebar-collapsed .sidebar-toggle .nav-icon { transform: rotate(180deg); }
+            /* Hover on a collapsed icon: it swells (logo animation) */
+            body.sidebar-collapsed .nav-links a:hover .nav-icon { transform: scale(1.22); }
+            body.sidebar-collapsed .sidebar-toggle:hover .nav-icon { transform: rotate(180deg) scale(1.15); }
+            /* The label becomes a bubble to the right on hover (app tooltip look) */
+            body.sidebar-collapsed .nav-label {
+                position: absolute;
+                left: calc(100% + 12px);
+                top: 50%;
+                transform: translateY(-50%);
+                background: #ffffff;
+                color: var(--ink);
+                border: 1px solid var(--hairline);
+                border-radius: 8px;
+                box-shadow: 2px 2px 0 rgba(62, 213, 152, 0.2), 0 8px 22px rgba(11, 14, 12, 0.13);
+                padding: 0.35rem 0.6rem;
+                font-size: 0.78rem;
+                white-space: nowrap;
+                opacity: 0;
+                pointer-events: none;
+                z-index: 3000;
+                transition: opacity 0.12s ease;
+            }
+            body.sidebar-collapsed .nav-links a:hover .nav-label,
+            body.sidebar-collapsed .nav-links a:focus-visible .nav-label,
+            body.sidebar-collapsed .sidebar-toggle:hover .nav-label,
+            body.sidebar-collapsed .sidebar-toggle:focus-visible .nav-label { opacity: 1; }
         }
 
         @media (max-width: 768px) {
@@ -821,31 +906,39 @@
         }
 
         .notif-bell {
-            position: relative;
-            border: none;
-            background: none;
+            position: fixed;
+            top: 0.75rem;
+            right: 1.1rem;
+            z-index: 1081;
+            border: 1px solid var(--hairline);
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: saturate(1.4) blur(6px);
             cursor: pointer;
             color: #3a3a38;
-            padding: 4px;
-            border-radius: 8px;
+            padding: 8px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
+            transition: background 0.15s, color 0.15s, box-shadow 0.15s;
         }
         .notif-bell:hover {
-            background: rgba(0, 0, 0, 0.05);
+            background: #ffffff;
             color: #1d1d1f;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
         }
         .notif-bell .notif-badge {
-            border-color: #faf9f7; /* sidebar plane, not white */
+            border-color: #ffffff; /* the bell's own pill */
         }
 
         .notif-popover {
             display: none;
             position: fixed;
-            left: 252px; /* sidebar width + gap; the sidebar is fixed */
-            top: 14px;
-            z-index: 1000;
+            right: 1.1rem; /* aligned under the top-right bell */
+            left: auto;
+            top: 3.4rem;   /* just below the bell */
+            z-index: 1082; /* above the bell */
             width: 340px;
+            max-width: calc(100vw - 2rem);
             background: white;
             border: 1px solid var(--hairline);
             border-radius: 12px;
@@ -978,6 +1071,28 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+<script>
+    // Sidebar collapse. Apply the persisted state here — during parse, before
+    // the sidebar element paints — so there is no expand→collapse flash. The
+    // collapsed look itself lives in CSS (desktop only, min-width:769px).
+    try { if (localStorage.getItem('wl-sidebar-collapsed') === '1') document.body.classList.add('sidebar-collapsed'); } catch (e) {}
+    function _wlSyncToggle() {
+        var btn = document.getElementById('sidebar-toggle');
+        if (!btn) return;
+        var collapsed = document.body.classList.contains('sidebar-collapsed');
+        btn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+        var lbl = btn.querySelector('.nav-label');
+        if (lbl) lbl.textContent = collapsed ? 'Expand' : 'Collapse';
+    }
+    function toggleSidebar() {
+        document.body.classList.toggle('sidebar-collapsed');
+        try { localStorage.setItem('wl-sidebar-collapsed', document.body.classList.contains('sidebar-collapsed') ? '1' : '0'); } catch (e) {}
+        _wlSyncToggle();
+    }
+    // Enable width/margin transitions only after the first paint.
+    requestAnimationFrame(function () { document.body.classList.add('transitions-ready'); });
+    document.addEventListener('DOMContentLoaded', _wlSyncToggle);
+</script>
     {# Top progress bar: a thin green line trickles while the next page is
        being fetched, so a slow load reads as "loading", never a freeze. #}
     <div id="page-progress" aria-hidden="true"></div>
@@ -985,15 +1100,17 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div id="mobileNavBackdrop" class="mobile-nav-backdrop" onclick="closeMobileNav()"></div>
+    {# Notification bell: pinned to the top-right of the viewport (opposite the
+       top-left burger), out of the sidebar so collapsing it never moves it. #}
+    <button type="button" id="notif-bell" class="notif-bell" aria-label="Notifications — recommendations awaiting review" onclick="toggleNotifPopover(event)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="notif-badge js-pending-badge" style="display: none;">0</span>
+    </button>
     <div class="layout">
         <aside class="sidebar" id="appSidebar">
             <div class="sidebar-header">
-                <div class="logo" style="justify-content: space-between;">
+                <div class="logo">
                     <a href="/" class="logo-mark" aria-label="Wasteless — back to overview"><span>W</span><span>a</span><span>s</span><span>t</span><span>e</span><span>l</span><span>e</span><span>s</span><span>s</span></a>
-                    <button type="button" id="notif-bell" class="notif-bell" aria-label="Notifications — recommendations awaiting review" onclick="toggleNotifPopover(event)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-                        <span class="notif-badge js-pending-badge" style="display: none;">0</span>
-                    </button>
                 </div>
             </div>
 
@@ -1001,27 +1118,27 @@
                 <ul class="nav-links">
                     <li><a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
-                        Overview
+                        <span class="nav-label">Overview</span>
                     </a></li>
                     <li><a href="/recommendations" class="{% if request.url.path == '/recommendations' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
-                        Recommendations
+                        <span class="nav-label">Recommendations</span>
                     </a></li>
                     <li><a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
-                        Dashboard
+                        <span class="nav-label">Dashboard</span>
                     </a></li>
                     <li><a href="/cloud-resources" class="{% if request.url.path == '/cloud-resources' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg></span>
-                        Cloud Resources
+                        <span class="nav-label">Cloud Resources</span>
                     </a></li>
                     <li><a href="/history" class="{% if request.url.path == '/history' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-                        History
+                        <span class="nav-label">History</span>
                     </a></li>
                     <li><a href="/reports" class="{% if request.url.path == '/reports' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
-                        Reports
+                        <span class="nav-label">Reports</span>
                     </a></li>
                 </ul>
 
@@ -1029,27 +1146,36 @@
                     <ul class="nav-links">
                         <li><a href="/logs" class="{% if request.url.path == '/logs' %}active{% endif %}">
                             <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
-                            Logs
+                            <span class="nav-label">Logs</span>
                         </a></li>
                         <li><a href="/settings" class="{% if request.url.path == '/settings' %}active{% endif %}">
                             <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span>
-                            Settings
+                            <span class="nav-label">Settings</span>
                         </a></li>
                     </ul>
                 </div>
             </nav>
 
+            {# Collapse toggle: narrows the sidebar to icons only; state kept
+               in localStorage so it survives navigation. Desktop only. #}
+            <button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-label="Collapse or expand sidebar" onclick="toggleSidebar()">
+                <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span>
+                <span class="nav-label">Collapse</span>
+            </button>
+
             {# Bottom card: the connected AWS account plays the role a user
                card would in a multi-user product. Tri-state via the cached
                reachability status — never calls AWS during a render. #}
             {% if aws_reachable() is sameas true %}
-            <div class="aws-card">
+            <a href="/setup" class="aws-card" aria-label="AWS account {{ aws_account_id() }}, connected — open connection setup">
                 <span class="aws-avatar" style="background:#e3f1e4;color:#256b2d;">AWS</span>
                 <div style="min-width:0;">
-                    <div style="font-size:0.8rem;font-weight:600;color:#1d1d1f;">AWS Account</div>
-                    <div style="font-size:0.72rem;color:#86868b;">Connected</div>
+                    <div style="font-size:0.8rem;font-weight:600;color:#1d1d1f;line-height:1.3;">AWS Account</div>
+                    <div style="font-size:0.72rem;color:#86868b;font-family:var(--font-mono);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ aws_account_id() or 'Connected' }}</div>
+                    {% if aws_account_id() %}<div style="font-size:0.68rem;color:#256b2d;line-height:1.3;">Connected</div>{% endif %}
                 </div>
-            </div>
+                <span class="aws-chevron" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </a>
             {% elif aws_reachable() is sameas false %}
             <a href="/setup" class="aws-card" style="text-decoration:none;">
                 <span class="aws-avatar" style="background:#fdeaea;color:#b91c1c;">AWS</span>
@@ -1077,7 +1203,11 @@
            dropdowns, tables). Bound by delegation to [data-tip-card] (body)
            + optional [data-tip-card-title] (bold heading), so it also covers
            dynamically-inserted rows (the notifications list). #}
-        <div id="appTip" style="position: fixed; z-index: 3000; display: none; max-width: 300px; padding: 0.6rem 0.75rem; background: white; border: 1px solid var(--gray-200); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); font-size: 0.78rem; line-height: 1.45; color: var(--gray-600); white-space: normal; pointer-events: none;"></div>
+        <!-- The one tooltip of the app. Signature look: light surface, hairline,
+             ink text, and the mint offset-slab shadow the briefing/saved cards
+             carry — so a tooltip reads as part of the same family. Every legacy
+             data-tip and native `title` is folded onto it (script below). -->
+        <div id="appTip" style="position: fixed; z-index: 3000; display: none; max-width: 280px; padding: 0.5rem 0.72rem; background: #ffffff; color: var(--ink); border: 1px solid var(--hairline); border-radius: 8px; box-shadow: 2px 2px 0 rgba(62,213,152,0.20), 0 8px 22px rgba(11,14,12,0.13); font-size: 0.76rem; line-height: 1.5; white-space: normal; pointer-events: none;"></div>
 
         <div id="notif-popover" class="notif-popover" role="dialog" aria-label="Notifications">
             <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem;">Notifications</div>
@@ -1509,14 +1639,42 @@
         (function () {
             const tip = document.getElementById('appTip');
             if (!tip) return;
+
+            // One visual language for tooltips across all pages: fold the
+            // legacy dark data-tip bubble and native `title` OS tooltips onto
+            // this shared #appTip. `title` is removed so the browser never
+            // draws its own tooltip; icon-only controls (no text) keep an
+            // accessible name via aria-label. Done at load for server-rendered
+            // markup; adopt() also runs on hover as the safety net for nodes
+            // added dynamically afterwards.
+            function adopt(el) {
+                if (el.hasAttribute('data-tip-card')) {
+                    el.removeAttribute('title');  // never let a native tooltip double up
+                    return;
+                }
+                const txt = el.getAttribute('data-tip') || el.getAttribute('title');
+                if (!txt) return;
+                el.setAttribute('data-tip-card', txt);
+                const isIconOnly = (el.tagName === 'BUTTON' || el.tagName === 'A') && !el.textContent.trim();
+                const isLabeled = el.getAttribute('aria-labelledby') || (el.labels && el.labels.length);
+                if (!el.getAttribute('aria-label') && isIconOnly && !isLabeled) {
+                    el.setAttribute('aria-label', txt);
+                }
+                el.removeAttribute('data-tip');
+                el.removeAttribute('title');
+            }
+            document.querySelectorAll('[data-tip],[title]').forEach(adopt);
+
+            let activeEl = null;
             function show(el) {
+                if (!el.hasAttribute('data-tip-card')) adopt(el);
                 const body = el.getAttribute('data-tip-card');
                 if (!body) return;
                 tip.innerHTML = '';
                 const title = el.getAttribute('data-tip-card-title');
                 if (title) {
                     const h = document.createElement('strong');
-                    h.style.cssText = 'display:block; margin-bottom:0.25rem; font-size:0.8rem; color:var(--gray-800);';
+                    h.style.cssText = 'display:block; margin-bottom:0.2rem; font-size:0.78rem; color:var(--ink);';
                     h.textContent = title;
                     tip.appendChild(h);
                 }
@@ -1524,6 +1682,7 @@
                 b.textContent = body;
                 tip.appendChild(b);
                 tip.style.display = 'block';
+                activeEl = el;
                 const r = el.getBoundingClientRect();
                 let left = r.left + r.width / 2 - tip.offsetWidth / 2;
                 left = Math.max(8, Math.min(left, window.innerWidth - tip.offsetWidth - 8));
@@ -1532,16 +1691,17 @@
                 tip.style.left = left + 'px';
                 tip.style.top = top + 'px';
             }
-            function hide() { tip.style.display = 'none'; }
+            function hide() { tip.style.display = 'none'; activeEl = null; }
             document.addEventListener('mouseover', (e) => {
-                const el = e.target.closest('[data-tip-card]');
-                if (el) show(el);
+                const el = e.target.closest('[data-tip-card],[data-tip],[title]');
+                if (el && el !== activeEl) show(el);
             });
             document.addEventListener('mouseout', (e) => {
-                if (e.target.closest('[data-tip-card]')) hide();
+                const el = e.target.closest('[data-tip-card]');
+                if (el && el === activeEl) hide();
             });
             document.addEventListener('focusin', (e) => {
-                const el = e.target.closest('[data-tip-card]');
+                const el = e.target.closest('[data-tip-card],[data-tip],[title]');
                 if (el) show(el);
             });
             document.addEventListener('focusout', hide);

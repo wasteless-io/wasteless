@@ -146,38 +146,86 @@ def _validation_error(payload: AwsSetupRequest) -> str | None:
     return None
 
 
+class SetupError(Exception):
+    """A connection-test failure carrying a UX category for /setup.
+
+    kind:
+      - 'not_ready' : the wasteless role can't be assumed yet — almost always
+                      CloudFormation still creating it (the page polls on this).
+      - 'creds'     : the source identity itself is wrong (bad/absent keys).
+      - 'config'    : a genuine input problem (region, account, trust, ...).
+    """
+
+    def __init__(self, message: str, kind: str):
+        super().__init__(message)
+        self.kind = kind
+
+
+# STS error codes that mean the SOURCE identity is wrong, not that the
+# wasteless role isn't ready.
+_CRED_ERROR_CODES = {
+    "InvalidClientTokenId",
+    "SignatureDoesNotMatch",
+    "AuthFailure",
+    "UnrecognizedClientException",
+    "ExpiredToken",
+    "ExpiredTokenException",
+    "TokenRefreshRequired",
+}
+
+
+def _aws_error_code(exc: Exception) -> str:
+    resp = getattr(exc, "response", None)
+    return resp.get("Error", {}).get("Code", "") if isinstance(resp, dict) else ""
+
+
 def _test_connection(payload: AwsSetupRequest) -> dict:
-    """STS get-caller-identity with the submitted values, then AssumeRole
-    when a role is given. Raises botocore exceptions on failure."""
+    """STS get-caller-identity with the submitted values, then AssumeRole when
+    a role is given. Raises SetupError (categorised) on failure so the page can
+    tell 'not ready yet' apart from a real error."""
     session = boto3.Session(
         aws_access_key_id=payload.access_key_id or None,
         aws_secret_access_key=payload.secret_access_key or None,
         region_name=payload.region,
     )
     sts = session.client("sts", config=_STS_CONFIG)
-    ident = sts.get_caller_identity()
+    try:
+        ident = sts.get_caller_identity()
+    except Exception as e:
+        # Failure here is about the source identity, not the wasteless role.
+        if _aws_error_code(e) in _CRED_ERROR_CODES or "Unable to locate credentials" in str(e):
+            raise SetupError(str(e), "creds") from e
+        raise SetupError(str(e), "config") from e
+
     result = {"identity": ident["Arn"], "account_id": ident["Account"]}
-    if payload.role_arn:
-        kwargs = {"RoleArn": payload.role_arn, "RoleSessionName": "wasteless-setup-check"}
+    # Both roles come from the same CloudFormation stack; the form pre-fills the
+    # remediation ARN, so if the stack was created with CreateRemediationRole=
+    # false it never exists — saving it silently would break remediation later,
+    # hence we test it too. AccessDenied on either AssumeRole during setup is
+    # treated as 'not_ready' (role/trust not in place yet); the page polls and,
+    # on timeout, points at the permanent causes (detection-only, External ID).
+    for arn in (payload.role_arn, payload.write_role_arn):
+        if not arn:
+            continue
+        kwargs = {"RoleArn": arn, "RoleSessionName": "wasteless-setup-check"}
         if payload.external_id:
             kwargs["ExternalId"] = payload.external_id
-        sts.assume_role(**kwargs)
+        try:
+            sts.assume_role(**kwargs)
+        except Exception as e:
+            kind = (
+                "not_ready"
+                if _aws_error_code(e) in ("AccessDenied", "AccessDeniedException")
+                else "config"
+            )
+            raise SetupError(str(e), kind) from e
+
+    if payload.role_arn:
         result["role_assumed"] = payload.role_arn
         # The account that matters downstream is the one the role lives in
         # (cross-account setups), not the source identity's.
         result["account_id"] = payload.role_arn.split(":")[4]
     if payload.write_role_arn:
-        # The form pre-fills this ARN from the account ID; if the stack was
-        # created with CreateRemediationRole=false the role doesn't exist,
-        # and saving it silently would break remediation much later. Fail
-        # here instead, while the user can still clear the field.
-        kwargs = {
-            "RoleArn": payload.write_role_arn,
-            "RoleSessionName": "wasteless-setup-check",
-        }
-        if payload.external_id:
-            kwargs["ExternalId"] = payload.external_id
-        sts.assume_role(**kwargs)
         result["write_role_assumed"] = payload.write_role_arn
     return result
 
@@ -249,15 +297,34 @@ def api_aws_setup_test(payload: AwsSetupRequest):
     """Dry connection test, touches AWS, never writes anything."""
     error = _validation_error(payload)
     if error:
-        return JSONResponse({"success": False, "error": error}, status_code=400)
+        return JSONResponse(
+            {"success": False, "error": error, "error_kind": "config"}, status_code=400
+        )
     try:
         result = _test_connection(payload)
-    except Exception as e:
-        # The botocore message (AccessDenied, InvalidClientTokenId, ...) is
-        # accurate but jargon; pair it with one plain repair step so the
-        # user knows which field to fix. No secrets in either.
+    except SetupError as e:
+        # error_kind lets the page poll on 'not_ready' and only alarm on the rest;
+        # hint adds one plain repair step for the cases that stay red.
         return JSONResponse(
-            {"success": False, "error": str(e), "hint": _repair_hint(str(e), payload)},
+            {
+                "success": False,
+                "error": str(e),
+                "error_kind": e.kind,
+                "hint": _repair_hint(str(e), payload),
+            },
+            status_code=400,
+        )
+    except Exception as e:
+        # Unexpected (non-SetupError) failure: default the poll category to
+        # 'config' and still attach a plain repair step when the raw botocore
+        # message maps to one. Accurate but jargon message, no secrets in it.
+        return JSONResponse(
+            {
+                "success": False,
+                "error": str(e),
+                "error_kind": "config",
+                "hint": _repair_hint(str(e), payload),
+            },
             status_code=400,
         )
     return {"success": True, **result}
@@ -268,12 +335,29 @@ def api_aws_setup_save(payload: AwsSetupRequest):
     """Test, then persist to both env files and apply to this process."""
     error = _validation_error(payload)
     if error:
-        return JSONResponse({"success": False, "error": error}, status_code=400)
+        return JSONResponse(
+            {"success": False, "error": error, "error_kind": "config"}, status_code=400
+        )
     try:
         result = _test_connection(payload)
+    except SetupError as e:
+        return JSONResponse(
+            {
+                "success": False,
+                "error": str(e),
+                "error_kind": e.kind,
+                "hint": _repair_hint(str(e), payload),
+            },
+            status_code=400,
+        )
     except Exception as e:
         return JSONResponse(
-            {"success": False, "error": str(e), "hint": _repair_hint(str(e), payload)},
+            {
+                "success": False,
+                "error": str(e),
+                "error_kind": "config",
+                "hint": _repair_hint(str(e), payload),
+            },
             status_code=400,
         )
 

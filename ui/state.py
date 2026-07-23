@@ -178,6 +178,9 @@ templates.env.globals["get_auto_remediation_enabled"] = _config_manager.get_auto
 # calls AWS during a page render. Tri-state: True / False / None (unknown,
 # banner hidden until the first check completes).
 templates.env.globals["aws_reachable"] = lambda: _aws_status.get("reachable")
+# Connected account ID for the sidebar card (ui/.env is loaded at startup; the
+# /setup save applies it to the process too). Empty string when not set.
+templates.env.globals["aws_account_id"] = lambda: os.getenv("AWS_ACCOUNT_ID", "")
 
 # Scheduler instance (jobs registered by main.py's lifespan)
 scheduler = AsyncIOScheduler()
@@ -238,15 +241,39 @@ def get_last_data_at():
 templates.env.globals["aws_data_at"] = get_last_data_at
 
 
+def _wasteless_has_collected() -> bool:
+    """True once any collection has run — proof wasteless is set up and
+    talking to AWS, whatever chain provided the credentials. Lets an account
+    connected via `aws configure` (default chain, no ARN) stop being sent to
+    /setup after it starts working. A DB hiccup returns False: safer to show
+    the setup guide than to hide it behind an unverifiable 'configured'."""
+    try:
+        pool = _get_pool()
+        conn = pool.getconn()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT EXISTS (SELECT 1 FROM collection_runs)")
+            row = cur.fetchone()
+            return bool(row["exists"] if isinstance(row, dict) else row[0])
+        finally:
+            conn.rollback()
+            pool.putconn(conn)
+    except Exception:
+        return False
+
+
 def aws_connection_configured() -> bool:
-    """Une connexion AWS est-elle configurée ? Même heuristique large que
-    l'atterrissage navigateur de wasteless.sh : ARNs/clés dans
-    l'environnement (ui/.env est chargé au démarrage) ou credentials
-    partagés crées par `aws configure`. Dans le doute, considéré configuré
-    — on ne renvoie jamais un compte connecté vers /setup."""
+    """Is *wasteless* set up? Only its own config counts: an AWS role ARN or
+    access key in the environment (ui/.env is loaded at startup and the /setup
+    wizard writes there), or a collection that has already run. A bare
+    ~/.aws/credentials on the machine is deliberately NOT enough — it may be
+    unrelated to wasteless, so a first run still lands on /setup, where the
+    wizard can adopt the existing credentials. This is the single gate: the
+    browser landing in wasteless.sh just opens `/` and defers to the
+    /  ->  /setup redirect that reads this function."""
     if os.getenv("AWS_ROLE_ARN") or os.getenv("AWS_ACCESS_KEY_ID"):
         return True
-    return (Path.home() / ".aws" / "credentials").exists()
+    return _wasteless_has_collected()
 
 
 def check_aws_reachable() -> bool:

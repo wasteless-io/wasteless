@@ -363,35 +363,43 @@ class TestDashboardCoherence(unittest.TestCase):
         self.assertIn(f'title="{arn}"', body)
 
     def test_total_cost_kpi_matches_cloud_costs_raw(self):
+        # Total Cost is month-to-date since the cost-tile rework, so the row
+        # must fall in the current month: CURRENT_DATE is always in-month
+        # whatever calendar day the test runs.
         self.cur.execute("""
             INSERT INTO cloud_costs_raw
             (provider, account_id, service, usage_date, cost, currency, region)
             VALUES ('aws', 'test', 'Coherence Test Service',
-                    CURRENT_DATE - 1, 4455.66, 'USD', 'eu-west-1')
+                    CURRENT_DATE, 4455.66, 'USD', 'eu-west-1')
         """)
 
+        # Rendered Total Cost = SUM over the current month (month-to-date).
         self.cur.execute(
             "SELECT COALESCE(SUM(cost), 0) AS s, MIN(usage_date) AS f, "
-            "MAX(usage_date) AS l FROM cloud_costs_raw"
+            "MAX(usage_date) AS l FROM cloud_costs_raw "
+            "WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)"
         )
         row = self.cur.fetchone()
         expected = eur(row["s"])
+        # Sub-label = route's total_cost_period: "<day span> <mon> · month-to-date"
+        # (single day number when first == last).
         if row["f"] == row["l"]:
-            period = row["f"].strftime("%-d %b")
+            day_span = row["f"].strftime("%-d")
         else:
-            period = f"{row['f'].strftime('%-d %b')} to {row['l'].strftime('%-d %b')}"
+            day_span = f"{row['f'].strftime('%-d')}–{row['l'].strftime('%-d')}"
+        period = f"{day_span} {row['l'].strftime('%b')} · month-to-date"
 
         body = self._page_body()
         self.assertIn("Total Cost", body)
         self.assertIn(expected, body)
-        # The sub-label states the exact collected window, never more
+        # The sub-label states the collected window, month-to-date
         self.assertIn(f'<div class="kpi-sub">{period}</div>', body)
         # Click-through modal: same window in the title, per-service rows
         self.assertIn(f"Total Cost · {period}", body)
         self.assertIn('id="totalCostModal"', body)
         self.assertIn("Coherence Test Service", body)
-        # Monthly stacked chart renders whenever cost data exists
-        self.assertIn("Cost &amp; usage by month", body)
+        # Range-aware cost chart renders whenever cost data exists
+        self.assertIn("Cost &amp; usage", body)
         self.assertIn('id="costByServiceChart"', body)
 
 

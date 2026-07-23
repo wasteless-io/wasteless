@@ -567,8 +567,14 @@ async function loadBriefing(refresh) {
         };
         if (data.generated_at) {
             const d = new Date(data.generated_at);
-            meta.textContent = 'Generated ' + d.toLocaleDateString([], { day: 'numeric', month: 'short' })
-                + ', ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            // Pin locale + timezone to en-GB / Europe/Paris so this stamp
+            // agrees with the hero clock and the server-rendered
+            // Last-collection stamp — otherwise the browser locale/timezone
+            // leaks in ("22 juil." next to "22 JUL").
+            const TZ = 'Europe/Paris';
+            meta.textContent = 'Generated '
+                + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: TZ })
+                + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
         }
         btn.style.display = 'inline-flex';
     } catch (err) {
