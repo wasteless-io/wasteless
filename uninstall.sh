@@ -253,12 +253,19 @@ print_header "5/6 - Suppression de la commande 'wasteless'"
 SHELL_RCS=("$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc")
 ALIAS_REMOVED=0
 
-# Symlink installe par install.sh (uniquement s'il s'agit bien d'un lien, pour
-# ne jamais supprimer un binaire 'wasteless' sans rapport) + marqueur d'install.
+# Symlink installe par install.sh : ne le supprimer que s'il pointe vers cette
+# installation (marqueur ~/.config/wasteless/root) ou vers ce repo.
+ROOT_MARKER="$HOME/.config/wasteless/root"
 if [ -L "$HOME/.local/bin/wasteless" ]; then
-    rm -f "$HOME/.local/bin/wasteless"
-    print_step "Symlink ~/.local/bin/wasteless supprime"
-    ALIAS_REMOVED=1
+    TARGET="$(readlink "$HOME/.local/bin/wasteless" 2>/dev/null || true)"
+    MARKER_ROOT="$(cat "$ROOT_MARKER" 2>/dev/null || true)"
+    if [[ "$TARGET" == "$SCRIPT_DIR/wasteless.sh" || ( -n "$MARKER_ROOT" && "$TARGET" == "$MARKER_ROOT/wasteless.sh" ) ]]; then
+        rm -f "$HOME/.local/bin/wasteless"
+        print_step "Symlink ~/.local/bin/wasteless supprime"
+        ALIAS_REMOVED=1
+    else
+        print_skip "Symlink ~/.local/bin/wasteless conserve (ne correspond pas a l'installation WasteLess)"
+    fi
 fi
 rm -rf "$HOME/.config/wasteless"
 
