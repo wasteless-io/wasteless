@@ -1079,7 +1079,7 @@ async function submitCostQuestion() {
             e.preventDefault();
             try {
                 const res = await fetch(`/api/dashboard/cost?range=${btn.dataset.range}`);
-                if (!res.ok) return;
+                if (!res.ok) { window.location.href = btn.href; return; }
                 data = await res.json();
                 document.getElementById('costSubtitle').textContent = data.subtitle;
                 document.querySelectorAll('.cost-range-btn').forEach((b) => {
@@ -1090,7 +1090,7 @@ async function submitCostQuestion() {
                 });
                 renderCostChart(currentMode);
             } catch (err) {
-                /* keep the current chart on a failed fetch */
+                window.location.href = btn.href;
             }
         });
     });
