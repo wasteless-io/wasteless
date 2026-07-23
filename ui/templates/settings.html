@@ -37,6 +37,7 @@
 </div>
 {% endif %}
 
+<div style="margin: 1.9rem 0 0.7rem; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500);">Execution &amp; safety</div>
 <!-- Execution Mode -->
 <div class="card mb-2" style="padding: 1rem;">
     <h3 style="margin: 0 0 1rem 0;">Execution Mode</h3>
@@ -159,56 +160,6 @@
     </div>
 </div>
 
-<!-- Terraform PR (GitOps remediation) -->
-{% set tf_pr = config.get('terraform_pr', {}) or {} %}
-<div class="card mb-2" style="padding: 1rem;">
-    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-        <h3 style="margin: 0;">Terraform Pull Requests</h3>
-        <span class="badge badge-info" style="font-size: 0.65rem;">GitOps</span>
-    </div>
-    <p class="text-muted" style="margin: 0 0 1rem 0; font-size: 0.85rem;">
-        High-stakes recommendations open a pull request on your Terraform repo
-        instead of touching AWS: the change ships with savings estimate, risk,
-        rollback plan and Cost Explorer evidence. Merging applies it through
-        your pipeline; closing rejects the recommendation. Requires an
-        authenticated <code>gh</code> CLI.
-    </p>
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem 1.5rem; font-size: 0.85rem;">
-        <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid var(--gray-200); border-radius: 6px; cursor: pointer;">
-            <input type="checkbox" {% if tf_pr.get('enabled') %}checked{% endif %}
-                   onchange="updateConfig('terraform_pr:enabled', this.checked)">
-            <span>Enable PR remediation</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 0.6rem;">
-            <span style="white-space: nowrap;">PR required above</span>
-            <input type="number" min="0" step="1" class="form-input" style="width: 90px; padding: 0.4rem;"
-                   value="{{ tf_pr.get('pr_threshold_eur', 50) }}"
-                   onchange="updateConfig('terraform_pr:pr_threshold_eur', parseFloat(this.value))">
-            <span class="text-muted">$/month</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 0.6rem;">
-            <span style="white-space: nowrap;">Terraform repo</span>
-            <input type="text" class="form-input" style="flex: 1; padding: 0.4rem;" placeholder="owner/name"
-                   value="{{ tf_pr.get('repo', '') }}"
-                   onchange="updateConfig('terraform_pr:repo', this.value)">
-        </label>
-        <div style="display: flex; gap: 1rem;">
-            <label style="display: flex; align-items: center; gap: 0.6rem; flex: 1;">
-                <span style="white-space: nowrap;">Base branch</span>
-                <input type="text" class="form-input" style="width: 100px; padding: 0.4rem;"
-                       value="{{ tf_pr.get('base_branch', 'main') }}"
-                       onchange="updateConfig('terraform_pr:base_branch', this.value)">
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.6rem; flex: 1;">
-                <span style="white-space: nowrap;">Module dir</span>
-                <input type="text" class="form-input" style="width: 100px; padding: 0.4rem;"
-                       value="{{ tf_pr.get('terraform_dir', '.') }}"
-                       onchange="updateConfig('terraform_pr:terraform_dir', this.value)">
-            </label>
-        </div>
-    </div>
-</div>
-
 <!-- Whitelist -->
 <div class="card mb-2" style="padding: 1rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -264,6 +215,18 @@
     </div>
 </div>
 
+<div style="margin: 1.9rem 0 0.7rem; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500);">Integrations</div>
+<!-- AWS connection (managed in /setup) -->
+<a href="/setup" class="card mb-2" style="padding: 1rem; text-decoration: none; color: inherit; display: block;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+        <h3 style="margin: 0;">AWS Account</h3>
+        <span class="badge {{ 'badge-success' if aws_reachable() is sameas true else 'badge-info' }}" style="font-size: 0.65rem;">{{ 'connected' if aws_reachable() is sameas true else 'not connected' }}</span>
+    </div>
+    <p class="text-muted" style="margin: 0; font-size: 0.85rem;">
+        Roles, region and credentials{% if aws_account_id() %} for account <code>{{ aws_account_id() }}</code>{% endif %}. Managed in the guided connection setup &mdash; click to open.
+    </p>
+</a>
+
 <!-- AI Insights (LLM) -->
 <div class="card mb-2" style="padding: 1rem;">
     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
@@ -296,6 +259,57 @@
     <div id="llmStatus" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>
 </div>
 
+<!-- Terraform PR (GitOps remediation) -->
+{% set tf_pr = config.get('terraform_pr', {}) or {} %}
+<div class="card mb-2" style="padding: 1rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+        <h3 style="margin: 0;">Terraform Pull Requests</h3>
+        <span class="badge badge-info" style="font-size: 0.65rem;">GitOps</span>
+    </div>
+    <p class="text-muted" style="margin: 0 0 1rem 0; font-size: 0.85rem;">
+        High-stakes recommendations open a pull request on your Terraform repo
+        instead of touching AWS: the change ships with savings estimate, risk,
+        rollback plan and Cost Explorer evidence. Merging applies it through
+        your pipeline; closing rejects the recommendation. Requires an
+        authenticated <code>gh</code> CLI.
+    </p>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem 1.5rem; font-size: 0.85rem;">
+        <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid var(--gray-200); border-radius: 6px; cursor: pointer;">
+            <input type="checkbox" {% if tf_pr.get('enabled') %}checked{% endif %}
+                   onchange="updateConfig('terraform_pr:enabled', this.checked)">
+            <span>Enable PR remediation</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 0.6rem;">
+            <span style="white-space: nowrap;">PR required above</span>
+            <input type="number" min="0" step="1" class="form-input" style="width: 90px; padding: 0.4rem;"
+                   value="{{ tf_pr.get('pr_threshold_eur', 50) }}"
+                   onchange="updateConfig('terraform_pr:pr_threshold_eur', parseFloat(this.value))">
+            <span class="text-muted">$/month</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 0.6rem;">
+            <span style="white-space: nowrap;">Terraform repo</span>
+            <input type="text" class="form-input" style="flex: 1; padding: 0.4rem;" placeholder="owner/name"
+                   value="{{ tf_pr.get('repo', '') }}"
+                   onchange="updateConfig('terraform_pr:repo', this.value)">
+        </label>
+        <div style="display: flex; gap: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.6rem; flex: 1;">
+                <span style="white-space: nowrap;">Base branch</span>
+                <input type="text" class="form-input" style="width: 100px; padding: 0.4rem;"
+                       value="{{ tf_pr.get('base_branch', 'main') }}"
+                       onchange="updateConfig('terraform_pr:base_branch', this.value)">
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.6rem; flex: 1;">
+                <span style="white-space: nowrap;">Module dir</span>
+                <input type="text" class="form-input" style="width: 100px; padding: 0.4rem;"
+                       value="{{ tf_pr.get('terraform_dir', '.') }}"
+                       onchange="updateConfig('terraform_pr:terraform_dir', this.value)">
+            </label>
+        </div>
+    </div>
+</div>
+
+<div style="margin: 1.9rem 0 0.7rem; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500);">Reference</div>
 <!-- Policy as Code -->
 <div class="card mb-2" style="padding: 1rem; border: 1px solid var(--gray-300);">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
