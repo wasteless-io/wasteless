@@ -60,6 +60,9 @@
     .btn-terminal:active { transform: translate(1px, 1px); }
     .btn-terminal:focus-visible { outline: 2px solid #3ed598; outline-offset: 2px; }
     .btn-terminal:disabled { opacity: 0.45; cursor: not-allowed; }
+    /* Flat variant (Create): no green outline — border matches the black plane
+       so the box size stays identical to the mint Connect button. */
+    .btn-terminal:not(.btn-terminal--mint) { border-color: #0b0e0c; }
     /* The green animation: a mint light sweep, played once per click only
        (setupTerminalBtns() toggles .is-clicked) — never on hover. */
     .btn-terminal::after {
