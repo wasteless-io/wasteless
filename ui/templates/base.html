@@ -548,6 +548,70 @@
             z-index: 1090;
         }
 
+        /* ===== Collapsible sidebar (desktop; mobile hides the sidebar) ===== */
+        .sidebar-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+            margin-top: 0.4rem;
+            padding: 0.5rem 0.75rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--gray-500);
+            font: inherit;
+            text-align: left;
+            border-radius: 8px;
+        }
+        .sidebar-toggle:hover { background: rgba(0, 0, 0, 0.04); color: var(--ink); }
+        .sidebar-toggle .nav-icon { display: inline-flex; transition: transform 0.2s ease; }
+        .nav-links .nav-icon { transition: transform 0.15s ease; }
+        /* Width/margin animate only after first paint (avoids a load flash) */
+        body.transitions-ready .sidebar { transition: width 0.2s ease, padding 0.2s ease; }
+        body.transitions-ready .main { transition: margin-left 0.2s ease; }
+
+        @media (min-width: 769px) {
+            body.sidebar-collapsed .sidebar { width: 68px; padding-left: 0.5rem; padding-right: 0.5rem; overflow: visible; }
+            body.sidebar-collapsed .main { margin-left: 68px; }
+            body.sidebar-collapsed .sidebar-header .logo { justify-content: center; }
+            body.sidebar-collapsed .logo-mark { display: none; }
+            body.sidebar-collapsed .nav-links a,
+            body.sidebar-collapsed .sidebar-toggle {
+                justify-content: center; gap: 0; padding-left: 0; padding-right: 0; position: relative;
+            }
+            body.sidebar-collapsed .aws-card { justify-content: center; padding: 0.5rem; position: relative; }
+            body.sidebar-collapsed .aws-card > div,
+            body.sidebar-collapsed .aws-chevron { display: none; }
+            body.sidebar-collapsed .sidebar-toggle .nav-icon { transform: rotate(180deg); }
+            /* Hover on a collapsed icon: it swells (logo animation) */
+            body.sidebar-collapsed .nav-links a:hover .nav-icon { transform: scale(1.22); }
+            body.sidebar-collapsed .sidebar-toggle:hover .nav-icon { transform: rotate(180deg) scale(1.15); }
+            /* The label becomes a bubble to the right on hover (app tooltip look) */
+            body.sidebar-collapsed .nav-label {
+                position: absolute;
+                left: calc(100% + 12px);
+                top: 50%;
+                transform: translateY(-50%);
+                background: #ffffff;
+                color: var(--ink);
+                border: 1px solid var(--hairline);
+                border-radius: 8px;
+                box-shadow: 2px 2px 0 rgba(62, 213, 152, 0.2), 0 8px 22px rgba(11, 14, 12, 0.13);
+                padding: 0.35rem 0.6rem;
+                font-size: 0.78rem;
+                white-space: nowrap;
+                opacity: 0;
+                pointer-events: none;
+                z-index: 3000;
+                transition: opacity 0.12s ease;
+            }
+            body.sidebar-collapsed .nav-links a:hover .nav-label,
+            body.sidebar-collapsed .nav-links a:focus-visible .nav-label,
+            body.sidebar-collapsed .sidebar-toggle:hover .nav-label,
+            body.sidebar-collapsed .sidebar-toggle:focus-visible .nav-label { opacity: 1; }
+        }
+
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .sidebar.mobile-open { display: flex; z-index: 1100; }
@@ -996,6 +1060,28 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+<script>
+    // Sidebar collapse. Apply the persisted state here — during parse, before
+    // the sidebar element paints — so there is no expand→collapse flash. The
+    // collapsed look itself lives in CSS (desktop only, min-width:769px).
+    try { if (localStorage.getItem('wl-sidebar-collapsed') === '1') document.body.classList.add('sidebar-collapsed'); } catch (e) {}
+    function _wlSyncToggle() {
+        var btn = document.getElementById('sidebar-toggle');
+        if (!btn) return;
+        var collapsed = document.body.classList.contains('sidebar-collapsed');
+        btn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+        var lbl = btn.querySelector('.nav-label');
+        if (lbl) lbl.textContent = collapsed ? 'Expand' : 'Collapse';
+    }
+    function toggleSidebar() {
+        document.body.classList.toggle('sidebar-collapsed');
+        try { localStorage.setItem('wl-sidebar-collapsed', document.body.classList.contains('sidebar-collapsed') ? '1' : '0'); } catch (e) {}
+        _wlSyncToggle();
+    }
+    // Enable width/margin transitions only after the first paint.
+    requestAnimationFrame(function () { document.body.classList.add('transitions-ready'); });
+    document.addEventListener('DOMContentLoaded', _wlSyncToggle);
+</script>
     {# Top progress bar: a thin green line trickles while the next page is
        being fetched, so a slow load reads as "loading", never a freeze. #}
     <div id="page-progress" aria-hidden="true"></div>
@@ -1019,27 +1105,27 @@
                 <ul class="nav-links">
                     <li><a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
-                        Overview
+                        <span class="nav-label">Overview</span>
                     </a></li>
                     <li><a href="/recommendations" class="{% if request.url.path == '/recommendations' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
-                        Recommendations
+                        <span class="nav-label">Recommendations</span>
                     </a></li>
                     <li><a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
-                        Dashboard
+                        <span class="nav-label">Dashboard</span>
                     </a></li>
                     <li><a href="/cloud-resources" class="{% if request.url.path == '/cloud-resources' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg></span>
-                        Cloud Resources
+                        <span class="nav-label">Cloud Resources</span>
                     </a></li>
                     <li><a href="/history" class="{% if request.url.path == '/history' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-                        History
+                        <span class="nav-label">History</span>
                     </a></li>
                     <li><a href="/reports" class="{% if request.url.path == '/reports' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
-                        Reports
+                        <span class="nav-label">Reports</span>
                     </a></li>
                 </ul>
 
@@ -1047,15 +1133,22 @@
                     <ul class="nav-links">
                         <li><a href="/logs" class="{% if request.url.path == '/logs' %}active{% endif %}">
                             <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
-                            Logs
+                            <span class="nav-label">Logs</span>
                         </a></li>
                         <li><a href="/settings" class="{% if request.url.path == '/settings' %}active{% endif %}">
                             <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span>
-                            Settings
+                            <span class="nav-label">Settings</span>
                         </a></li>
                     </ul>
                 </div>
             </nav>
+
+            {# Collapse toggle: narrows the sidebar to icons only; state kept
+               in localStorage so it survives navigation. Desktop only. #}
+            <button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-label="Collapse or expand sidebar" onclick="toggleSidebar()">
+                <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span>
+                <span class="nav-label">Collapse</span>
+            </button>
 
             {# Bottom card: the connected AWS account plays the role a user
                card would in a multi-user product. Tri-state via the cached
