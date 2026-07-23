@@ -355,9 +355,10 @@
        the top edge right-to-left on the collapsed band (stops when .open); the
        title swells on hover and reveals a description tooltip. */
     .estate-chat::before {
-        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-        background-image: linear-gradient(90deg, transparent 44%, #3ed598 50%, transparent 56%);
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background-image: linear-gradient(90deg, transparent 30%, #3ed598 50%, transparent 70%);
         background-size: 220% 100%; background-repeat: no-repeat;
+        box-shadow: 0 0 8px rgba(62, 213, 152, 0.5);
         animation: estate-sweep 3.4s linear infinite; pointer-events: none; z-index: 5;
     }
     .estate-chat.open::before { animation: none; opacity: 0; }
