@@ -359,11 +359,11 @@ def cost_history_days():
     ne sont jamais supprimées : la fenêtre collectée ne fait que grandir."""
     connection = get_db_connection()
     try:
-        cursor = connection.cursor()
-        cursor.execute(
-            "SELECT COALESCE(CURRENT_DATE - MIN(usage_date), 0) AS depth FROM cloud_costs_raw"
-        )
-        row = cursor.fetchone()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT COALESCE(CURRENT_DATE - MIN(usage_date), 0) AS depth FROM cloud_costs_raw"
+            )
+            row = cursor.fetchone()
         try:
             return int(row["depth"])
         except (TypeError, KeyError, IndexError):
