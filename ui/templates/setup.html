@@ -41,7 +41,7 @@
         align-items: center;
         justify-content: center;
         background: #0b0e0c;
-        color: #3ed598;
+        color: #ffffff;                   /* white letters */
         font-family: var(--font-mono);
         font-size: 0.82rem;
         font-weight: 500;
@@ -52,13 +52,13 @@
         cursor: pointer;
         position: relative;
         overflow: hidden;
-        transition: box-shadow 0.18s ease, color 0.18s ease, transform 0.05s ease;
+        transition: transform 0.05s ease;
     }
-    .btn-terminal:hover { color: #eafff5; box-shadow: 2px 2px 0 rgba(62, 213, 152, 0.35); }
-    .btn-terminal:active { transform: translate(1px, 1px); box-shadow: none; }
+    .btn-terminal:active { transform: translate(1px, 1px); }
     .btn-terminal:focus-visible { outline: 2px solid #3ed598; outline-offset: 2px; }
-    .btn-terminal:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
-    /* The green animation: a mint light sweeping across on hover. */
+    .btn-terminal:disabled { opacity: 0.45; cursor: not-allowed; }
+    /* The green animation: a mint light sweep, played once per click only
+       (setupTerminalBtns() toggles .is-clicked) — never on hover. */
     .btn-terminal::after {
         content: "";
         position: absolute;
@@ -66,18 +66,18 @@
         left: -50%;
         width: 45%;
         height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(62, 213, 152, 0.45), transparent);
+        background: linear-gradient(90deg, transparent, rgba(62, 213, 152, 0.55), transparent);
         transform: skewX(-20deg);
         pointer-events: none;
         opacity: 0;
     }
-    .btn-terminal:hover::after { animation: btn-terminal-sweep 0.7s ease; }
+    .btn-terminal.is-clicked::after { animation: btn-terminal-sweep 0.6s ease; }
     @keyframes btn-terminal-sweep {
         from { left: -50%; opacity: 1; }
         to   { left: 130%; opacity: 1; }
     }
     @media (prefers-reduced-motion: reduce) {
-        .btn-terminal:hover::after { animation: none; }
+        .btn-terminal.is-clicked::after { animation: none; }
     }
 </style>
 {% endblock %}
@@ -362,5 +362,16 @@ async function setupRun(save) {
 
 function setupTest() { setupRun(false); }
 function setupSave() { setupRun(true); }
+
+// Terminal CTAs animate on click only: replay the mint sweep on every press by
+// restarting the .is-clicked animation (reflow between remove and add).
+document.querySelectorAll('.btn-terminal').forEach(function (b) {
+    b.addEventListener('click', function () {
+        b.classList.remove('is-clicked');
+        void b.offsetWidth;            // force reflow so the animation restarts
+        b.classList.add('is-clicked');
+    });
+    b.addEventListener('animationend', function () { b.classList.remove('is-clicked'); });
+});
 </script>
 {% endblock %}
