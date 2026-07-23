@@ -502,9 +502,8 @@
                 <!-- Range pills (same control as Waste Trend): 7d/30d/90d daily,
                      1y monthly. Redraw in place via /api/dashboard/cost. -->
                 <div class="trend-ranges" role="group" aria-label="Cost time range">
-                    {% for key in ['7d', '30d', '90d', '1y'] %}
-                    <a href="?costrange={{ key }}" data-range="{{ key }}"
-                       class="btn trend-range-btn cost-range-btn {% if cost_range == key %}btn-primary{% else %}btn-outline{% endif %}"
+                    <a href="/dashboard?trend={{ trend_range }}&costrange={{ key }}" data-range="{{ key }}"
+                       class="btn cost-range-btn {% if cost_range == key %}btn-primary{% else %}btn-outline{% endif %}"
                        {% if cost_range == key %}aria-current="true"{% endif %}>{{ key }}</a>
                     {% endfor %}
                 </div>
