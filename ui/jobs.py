@@ -634,20 +634,22 @@ from utils.aws_clients import get_client as _get_client
 
 def _instance_schedule_targets(ec2, tag_key, tag_value, states):
     whitelist = set((_config_manager.get_whitelist() or {}).get("instance_ids", []) or [])
-    resp = ec2.describe_instances(
+    paginator = ec2.get_paginator("describe_instances")
+    page_iter = paginator.paginate(
         Filters=[
             {"Name": f"tag:{tag_key}", "Values": [tag_value]},
             {"Name": "instance-state-name", "Values": states},
         ]
     )
     targets = []
-    for res in resp.get("Reservations", []):
-        for inst in res.get("Instances", []):
-            iid = inst["InstanceId"]
-            tags = {t["Key"]: t["Value"] for t in inst.get("Tags", [])}
-            if iid in whitelist or "aws:autoscaling:groupName" in tags:
-                continue  # protected or ASG-managed — never scheduled
-            targets.append(iid)
+    for page in page_iter:
+        for res in page.get("Reservations", []):
+            for inst in res.get("Instances", []):
+                iid = inst["InstanceId"]
+                tags = {t["Key"]: t.get("Value", "") for t in inst.get("Tags", [])}
+                if iid in whitelist or "aws:autoscaling:groupName" in tags:
+                    continue  # protected or ASG-managed — never scheduled
+                targets.append(iid)
     return targets
 
 
