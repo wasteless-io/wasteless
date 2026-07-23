@@ -233,7 +233,9 @@ class AWSCostCollector:
                  cost, currency, region, raw_data)
                 VALUES %s
                 ON CONFLICT ON CONSTRAINT uq_cloud_costs
-                DO UPDATE SET cost = EXCLUDED.cost, currency = EXCLUDED.currency
+                DO UPDATE SET cost = EXCLUDED.cost,
+                              currency = EXCLUDED.currency,
+                              created_at = NOW()
                 """,
                 insert_values,
             )
@@ -328,11 +330,17 @@ def already_collected_today():
     Le pipeline `collect` (toutes les 5 min) appelle ce collecteur avec
     --daily à chaque tick, mais les données Cost Explorer ne se rafraîchissent
     qu'~1×/jour et chaque appel GetCostAndUsage est facturé : on saute donc
-    dès qu'on a les lignes du jour. Un run en échec n'insère rien (created_at
-    reste dans le passé), donc le tick suivant réessaie jusqu'à ce qu'une
-    collecte réussisse. On teste created_at (l'instant de collecte) et non
-    usage_date : Cost Explorer accuse un délai de facturation d'un ou deux
-    jours, la dernière usage_date n'est jamais aujourd'hui."""
+    dès qu'on a collecté aujourd'hui. On teste created_at (l'instant de
+    collecte) et non usage_date : Cost Explorer accuse un délai de facturation
+    d'un ou deux jours, la dernière usage_date n'est jamais aujourd'hui.
+
+    Fiabilité de la garde : l'upsert bumpe created_at = NOW() aussi en
+    DO UPDATE, donc TOUTE collecte réussie du jour marque des lignes en
+    created_at >= today, même quand le refresh ne fait que mettre à jour des
+    dates déjà présentes (aucune usage_date neuve). Un run en échec n'écrit
+    rien, donc le tick suivant réessaie jusqu'à une collecte réussie. Sans ce
+    bump, un matin sans nouvelle usage_date laissait la garde à False et le
+    collecteur facturé refirait à chaque tick de 5 min."""
     connection = get_db_connection()
     cursor = None
     try:
