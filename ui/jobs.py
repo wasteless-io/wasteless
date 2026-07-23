@@ -616,3 +616,157 @@ def savings_verifier_job() -> None:
         print(f"Savings verifier: trackers package not installed (re-run pip install -e .): {e}")
     except Exception as e:
         print(f"Savings verifier error: {e}")
+
+
+# =============================================================================
+# Instance scheduler — stop tagged instances after hours, start them in the
+# morning. main.py registers two cron jobs that call schedule_stop_job /
+# schedule_start_job. Lean by design: describe-by-tag, drop the instances we
+# must never touch (whitelisted / Auto Scaling), then act or dry-run and log
+# each to actions_log. Effective dry-run = the schedule's flag OR the global
+# dry-run master switch.
+# =============================================================================
+import os as _os
+import json as _json
+
+from utils.aws_clients import get_client as _get_client
+
+
+def _instance_schedule_targets(ec2, tag_key, tag_value, states):
+    whitelist = set((_config_manager.get_whitelist() or {}).get("instance_ids", []) or [])
+    paginator = ec2.get_paginator("describe_instances")
+    page_iter = paginator.paginate(
+        Filters=[
+            {"Name": f"tag:{tag_key}", "Values": [tag_value]},
+            {"Name": "instance-state-name", "Values": states},
+        ]
+    )
+    targets = []
+    for page in page_iter:
+        for res in page.get("Reservations", []):
+            for inst in res.get("Instances", []):
+                iid = inst["InstanceId"]
+                tags = {t["Key"]: t.get("Value", "") for t in inst.get("Tags", [])}
+                if iid in whitelist or "aws:autoscaling:groupName" in tags:
+                    continue  # protected or ASG-managed — never scheduled
+                targets.append(iid)
+    return targets
+
+
+def _log_schedule_action(resource_id, action_type, status, dry_run, error=None):
+    try:
+        with closing(psycopg2.connect(**DB_CONFIG)) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO actions_log "
+                    "(resource_id, resource_type, action_type, action_status, "
+                    "dry_run, error_message, executed_by, metadata) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (
+                        resource_id,
+                        "ec2_instance",
+                        action_type,
+                        status,
+                        dry_run,
+                        error,
+                        "scheduler",
+                        _json.dumps({"source": "instance_schedule"}),
+                    ),
+                )
+            conn.commit()
+    except Exception as e:
+        logger.error("schedule: could not log action for %s: %s", resource_id, e)
+
+
+def _run_instance_schedule(action):
+    """action = 'stop' | 'start'."""
+    cfg = _config_manager.get_instance_schedule()
+    if not cfg.get("enabled"):
+        return {"skipped": "disabled"}
+    # Global dry-run is the master switch: the schedule never goes live while
+    # the whole product is in dry-run.
+    dry = bool(cfg.get("dry_run", True)) or bool(_config_manager.get_dry_run())
+    try:
+        ec2 = _get_client("ec2", region=_os.getenv("AWS_REGION"), write=True)
+    except Exception as e:
+        logger.error("schedule: no EC2 client (%s)", e)
+        return {"error": str(e)}
+
+    want = ["running"] if action == "stop" else ["stopped"]
+    ids = _instance_schedule_targets(ec2, cfg["tag_key"], cfg["tag_value"], want)
+    acted, failed = [], []
+    for iid in ids:
+        try:
+            if dry:
+                logger.info("schedule [DRY-RUN] would %s %s", action, iid)
+                _log_schedule_action(iid, f"schedule_{action}", "dry_run", True)
+            else:
+                fn = ec2.stop_instances if action == "stop" else ec2.start_instances
+                fn(InstanceIds=[iid])
+                logger.info("schedule: %s %s", action, iid)
+                _log_schedule_action(iid, f"schedule_{action}", "success", False)
+            acted.append(iid)
+        except Exception as e:
+            logger.error("schedule: %s %s failed: %s", action, iid, e)
+            _log_schedule_action(iid, f"schedule_{action}", "failed", dry, error=str(e))
+            failed.append(iid)
+    if ids:
+        logger.info(
+            "schedule %s: %d acted, %d failed (dry_run=%s)", action, len(acted), len(failed), dry
+        )
+    return {"action": action, "dry_run": dry, "acted": acted, "failed": failed}
+
+
+def schedule_stop_job():
+    """Cron job: stop the scheduled instances (end of business hours)."""
+    return _run_instance_schedule("stop")
+
+
+def schedule_start_job():
+    """Cron job: start the scheduled instances (start of business hours)."""
+    return _run_instance_schedule("start")
+
+
+def reschedule_instance_jobs():
+    """(Re)build the stop/start cron jobs from the saved schedule. Called at
+    startup and after every save; removes the jobs when the schedule is off.
+    Kept here (not main.py) so routes can trigger a reschedule without a
+    circular import."""
+    from state import scheduler
+    from apscheduler.triggers.cron import CronTrigger
+    from apscheduler.jobstores.base import JobLookupError
+
+    cfg = _config_manager.get_instance_schedule()
+    for jid in ("instance_stop", "instance_start"):
+        try:
+            scheduler.remove_job(jid)
+        except JobLookupError:
+            pass  # not scheduled yet (first run, or schedule was off) — nothing to remove
+    if not cfg.get("enabled"):
+        logger.info("instance schedule: disabled (no cron jobs)")
+        return
+    dow = ",".join(cfg["days"])
+    tz = cfg["timezone"]
+    sh, sm = cfg["stop_time"].split(":")
+    bh, bm = cfg["start_time"].split(":")
+    scheduler.add_job(
+        schedule_stop_job,
+        CronTrigger(day_of_week=dow, hour=int(sh), minute=int(sm), timezone=tz),
+        id="instance_stop",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        schedule_start_job,
+        CronTrigger(day_of_week=dow, hour=int(bh), minute=int(bm), timezone=tz),
+        id="instance_start",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    logger.info(
+        "instance schedule: stop %s, start %s on [%s] (%s)",
+        cfg["stop_time"],
+        cfg["start_time"],
+        dow,
+        tz,
+    )

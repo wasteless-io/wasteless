@@ -507,6 +507,68 @@ class ConfigManager:
         config = self.load_config()
         return config.get("schedule", {})
 
+    # --- Instance scheduler (stop after hours / start in the morning) --------
+    # NB: distinct from `schedule` above, which restricts WHEN remediation may
+    # run. This one drives ui/jobs.py's stop/start cron jobs.
+    def get_instance_schedule(self) -> Dict[str, Any]:
+        """Instance start/stop scheduler config, with safe defaults filled in."""
+        cfg = self.load_config().get("instance_schedule", {}) or {}
+        return {
+            "enabled": bool(cfg.get("enabled", False)),
+            "stop_time": cfg.get("stop_time", "19:00"),
+            "start_time": cfg.get("start_time", "08:00"),
+            "days": cfg.get("days") or ["mon", "tue", "wed", "thu", "fri"],
+            "timezone": cfg.get("timezone", "Europe/Paris"),
+            "tag_key": cfg.get("tag_key", "wasteless:schedule"),
+            "tag_value": cfg.get("tag_value", "office-hours"),
+            "dry_run": bool(cfg.get("dry_run", True)),
+        }
+
+    def set_instance_schedule(self, values: Dict[str, Any]) -> bool:
+        """Validate and persist the instance_schedule section (partial update)."""
+        import re as _re
+        from zoneinfo import ZoneInfo
+
+        canon_days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+        def _time(v: Any) -> str:
+            v = str(v).strip()
+            if not _re.match(r"^([01]?\d|2[0-3]):[0-5]\d$", v):
+                raise ConfigValidationError(f"invalid time {v!r} (expected HH:MM, 24h)")
+            h, m = v.split(":")
+            return f"{int(h):02d}:{m}"
+
+        out = self.get_instance_schedule()
+        if "enabled" in values:
+            out["enabled"] = bool(values["enabled"])
+        if "dry_run" in values:
+            out["dry_run"] = bool(values["dry_run"])
+        if "stop_time" in values:
+            out["stop_time"] = _time(values["stop_time"])
+        if "start_time" in values:
+            out["start_time"] = _time(values["start_time"])
+        if "timezone" in values:
+            tz = str(values["timezone"]).strip()
+            try:
+                ZoneInfo(tz)
+            except Exception as e:
+                raise ConfigValidationError(f"invalid timezone {tz!r}") from e
+            out["timezone"] = tz
+        if "days" in values:
+            given = {str(d).lower()[:3] for d in (values["days"] or [])}
+            days = [d for d in canon_days if d in given]
+            if not days:
+                raise ConfigValidationError("select at least one day")
+            out["days"] = days
+        if "tag_key" in values:
+            out["tag_key"] = str(values["tag_key"]).strip() or "wasteless:schedule"
+        if "tag_value" in values:
+            out["tag_value"] = str(values["tag_value"]).strip() or "office-hours"
+
+        config = self.load_config()
+        config["instance_schedule"] = out
+        return self.save_config(config)
+
     def get_notifications(self) -> Dict[str, Any]:
         """Get notification configuration (email/slack toggles).
 

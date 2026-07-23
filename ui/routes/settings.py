@@ -3,10 +3,11 @@ AI insights (LLM) connection."""
 
 import os
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from pydantic import BaseModel
 
 from state import get_db, templates
 from schemas import ConfigUpdate, LlmSetupRequest, PolicyImport
@@ -58,6 +59,7 @@ def settings(request: Request, conn=Depends(get_db)):
             "automatable_actions": automatable_actions,
             "llm_model": llm_model,
             "llm_key_set": bool(llm_key_var and os.getenv(llm_key_var)),
+            "instance_schedule": config_manager.get_instance_schedule(),
         },
     )
 
@@ -96,6 +98,44 @@ def api_update_config(update: ConfigUpdate):
         return {"success": success}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+class InstanceScheduleRequest(BaseModel):
+    enabled: Optional[bool] = None
+    stop_time: Optional[str] = None
+    start_time: Optional[str] = None
+    days: Optional[list] = None
+    timezone: Optional[str] = None
+    tag_key: Optional[str] = None
+    tag_value: Optional[str] = None
+    dry_run: Optional[bool] = None
+
+
+@router.post("/api/instance-schedule")
+def api_instance_schedule(payload: InstanceScheduleRequest):
+    """Save the instance start/stop schedule and (re)build its cron jobs."""
+    from utils.config_manager import ConfigManager, ConfigValidationError
+
+    dump = getattr(payload, "model_dump", None) or payload.dict
+    values = {k: v for k, v in dump().items() if v is not None}
+    cm = ConfigManager()
+    try:
+        ok = cm.set_instance_schedule(values)
+    except ConfigValidationError as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=400)
+    if not ok:
+        return JSONResponse(
+            {"success": False, "error": "could not save the schedule"}, status_code=500
+        )
+    try:
+        from jobs import reschedule_instance_jobs
+
+        reschedule_instance_jobs()
+    except Exception as e:
+        return JSONResponse(
+            {"success": True, "warning": f"Saved, but the scheduler was not updated: {e}"}
+        )
+    return {"success": True, "schedule": cm.get_instance_schedule()}
 
 
 @router.post("/api/llm/test")

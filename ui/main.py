@@ -36,7 +36,6 @@ from jobs import (
     sync_aws_job,
     terraform_pr_sync_job,
     grace_executor_job,
-    cost_collector_job,
     savings_verifier_job,
     _grace_execution_status,  # noqa: F401 -- re-exported for ui/tests `from main import ...`
     _sync_ec2_instance_states,  # noqa: F401 -- re-exported for ui/tests `from main import ...`
@@ -87,17 +86,12 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(grace_executor_job, "interval", minutes=5, id="grace_executor")
     # Terraform PR reconciliation: merged -> approved, closed -> rejected
     scheduler.add_job(terraform_pr_sync_job, "interval", minutes=5, id="terraform_pr_sync")
-    # Cost Explorer collection: immediate first run (a fresh install gets
-    # its Waste Rate / AWS Spend without waiting), then every 6h — the job
-    # itself skips the paid CE call while yesterday's data is in base, so
-    # this costs ~1 request ($0.01) per day, not 4.
-    scheduler.add_job(
-        cost_collector_job,
-        "interval",
-        hours=6,
-        id="cost_collector",
-        next_run_time=datetime.now(),
-    )
+    # Cost Explorer collection is NOT scheduled here: it lives in the `collect`
+    # pipeline (src/aws_collector.py --daily, wired into wasteless.sh next to
+    # the detectors), self-guarded to one paid CE call per day. Registering it
+    # in this in-process scheduler too billed Cost Explorer twice a day from
+    # two different guards. jobs.cost_collector_job() is kept (unit-tested,
+    # callable on demand) but no longer runs on a timer.
     # Savings verification (Applied -> Verified): immediate first run then
     # every 6h. The job exits on a cheap DB check while no applied action
     # is both real and 7+ days old, so idle ticks never call AWS; each
@@ -111,6 +105,12 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
     print("Auto-sync scheduler started (every 5 min)")
+
+    # Instance scheduler: build the stop/start cron jobs from the saved config
+    # (no-op when disabled). Re-run whenever /settings saves a new schedule.
+    from jobs import reschedule_instance_jobs
+
+    reschedule_instance_jobs()
 
     yield
 

@@ -246,25 +246,45 @@ else
 fi
 
 # =============================================================================
-# 5. SUPPRIMER L'ALIAS DU SHELL
+# 5. SUPPRIMER LA COMMANDE 'wasteless'
 # =============================================================================
-print_header "5/6 - Suppression de l'alias 'wasteless'"
+print_header "5/6 - Suppression de la commande 'wasteless'"
 
 SHELL_RCS=("$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc")
 ALIAS_REMOVED=0
 
+# Symlink installe par install.sh : ne le supprimer que s'il pointe vers cette
+# installation (marqueur ~/.config/wasteless/root) ou vers ce repo.
+ROOT_MARKER="$HOME/.config/wasteless/root"
+if [ -L "$HOME/.local/bin/wasteless" ]; then
+    TARGET="$(readlink "$HOME/.local/bin/wasteless" 2>/dev/null || true)"
+    MARKER_ROOT="$(cat "$ROOT_MARKER" 2>/dev/null || true)"
+    if [[ "$TARGET" == "$SCRIPT_DIR/wasteless.sh" || ( -n "$MARKER_ROOT" && "$TARGET" == "$MARKER_ROOT/wasteless.sh" ) ]]; then
+        rm -f "$HOME/.local/bin/wasteless"
+        print_step "Symlink ~/.local/bin/wasteless supprime"
+        ALIAS_REMOVED=1
+    else
+        print_skip "Symlink ~/.local/bin/wasteless conserve (ne correspond pas a l'installation WasteLess)"
+    fi
+fi
+rm -rf "$HOME/.config/wasteless"
+
+# Retirer un ancien alias (installs precedents) + le commentaire de section, de
+# facon portable (grep -v : pas de 'sed -i' dont la syntaxe differe GNU/BSD). On
+# laisse volontairement un eventuel 'export PATH=...local/bin' : benin et
+# souvent partage avec d'autres outils.
 for SHELL_RC in "${SHELL_RCS[@]}"; do
-    if [ -f "$SHELL_RC" ] && grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
-        # Supprimer la ligne de commentaire et l'alias
-        sed -i '' '/# WasteLess CLI/d' "$SHELL_RC"
-        sed -i '' '/alias wasteless=/d' "$SHELL_RC"
-        print_step "Alias supprime de $SHELL_RC"
+    if [ -f "$SHELL_RC" ] && grep -qE "alias wasteless=|^# WasteLess CLI$" "$SHELL_RC" 2>/dev/null; then
+        tmp="$(mktemp)"
+        grep -vE '^# WasteLess CLI$|alias wasteless=' "$SHELL_RC" > "$tmp" && cat "$tmp" > "$SHELL_RC"
+        rm -f "$tmp"
+        print_step "Reference 'wasteless' retiree de $SHELL_RC"
         ALIAS_REMOVED=1
     fi
 done
 
 if [ "$ALIAS_REMOVED" -eq 0 ]; then
-    print_skip "Aucun alias 'wasteless' trouve dans les fichiers shell"
+    print_skip "Aucune commande 'wasteless' trouvee (symlink / alias)"
 fi
 
 # =============================================================================

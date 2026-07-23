@@ -347,7 +347,7 @@
 
     /* Cost Analyst console: EXACTLY the Recommendations "How can I help you?"
        estate-chat, scoped to cost questions (same style + features). */
-    .estate-chat { background-color: #0b0e0c; border-radius: 12px; color: #f2f5f3; background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px); background-size: 22px 22px; box-shadow: 5px 5px 0 0 rgba(62,213,152,0.22); padding: 0.9rem 1.1rem; position: relative; z-index: 1; }
+    .estate-chat { background-color: #0b0e0c; border-radius: 0; color: #f2f5f3; background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px); background-size: 22px 22px; box-shadow: 5px 5px 0 0 rgba(62,213,152,0.22); padding: 0.9rem 1.1rem; position: relative; z-index: 1; }
     .estate-chat .ec-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0; cursor: pointer; user-select: none; }
     .estate-chat.open .ec-head { margin-bottom: 0.65rem; }
     .estate-chat .ec-name { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; font-weight: 700; display: inline-flex; align-items: center; gap: 0.5rem; }
@@ -381,10 +381,11 @@
        the top edge right-to-left on the collapsed band (stops when .open); the
        title swells on hover and reveals a description tooltip. */
     .estate-chat::before {
-        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-        background-image: linear-gradient(90deg, transparent 44%, #3ed598 50%, transparent 56%);
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background-image: linear-gradient(90deg, transparent 30%, #3ed598 50%, transparent 70%);
         background-size: 220% 100%; background-repeat: no-repeat;
-        animation: estate-sweep 3.4s linear infinite; pointer-events: none; z-index: 5;
+        box-shadow: 0 0 8px rgba(62, 213, 152, 0.5);
+        animation: estate-sweep 3s ease-in-out infinite alternate; pointer-events: none; z-index: 5;
     }
     .estate-chat.open::before { animation: none; opacity: 0; }
     @keyframes estate-sweep { from { background-position: 160% 0; } to { background-position: -60% 0; } }
@@ -518,10 +519,21 @@
          folded into a neutral "Other"; the Total Cost modal's per-service
          table is the relief view for the low-contrast slots. -->
     <div style="border-top: 1px solid var(--hairline); margin-top: 1rem; padding-top: 0.9rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-            <div class="section-label" style="margin-bottom: 0;">Cost &amp; usage by month</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <div>
+                <div class="section-label" style="margin-bottom: 0;">Cost &amp; usage</div>
+                <span id="costSubtitle" class="chart-subtitle">{{ cost_chart.subtitle if cost_chart else 'Cost Explorer · by service' }}</span>
+            </div>
             <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <span class="chart-subtitle">Cost Explorer · by service · * partial month</span>
+                <!-- Range pills (same control as Waste Trend): 7d/30d/90d daily,
+                     1y monthly. Redraw in place via /api/dashboard/cost. -->
+                <div class="trend-ranges" role="group" aria-label="Cost time range">
+                    {% for key in ['7d', '30d', '90d', '1y'] %}
+                    <a href="/dashboard?trend={{ trend_range }}&costrange={{ key }}" data-range="{{ key }}"
+                       class="btn cost-range-btn {% if cost_range == key %}btn-primary{% else %}btn-outline{% endif %}"
+                       {% if cost_range == key %}aria-current="true"{% endif %}>{{ key }}</a>
+                    {% endfor %}
+                </div>
                 <!-- Chart-type toggle, console-style: grouped / line / stacked -->
                 <div id="costChartMode" role="group" aria-label="Chart type">
                     <button type="button" class="chart-mode-btn" data-mode="grouped" aria-pressed="false" title="Grouped bars"><svg width="16" height="14" viewBox="0 0 16 14" fill="currentColor" aria-hidden="true"><rect x="0" y="4" width="3" height="10" rx="0.5"/><rect x="4.5" y="0" width="3" height="14" rx="0.5"/><rect x="9" y="7" width="3" height="7" rx="0.5"/><rect x="13" y="10" width="3" height="4" rx="0.5"/></svg></button>
@@ -773,13 +785,13 @@
 <div id="spendModal" role="dialog" aria-modal="true" aria-labelledby="spendModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeCostModal('spendModal')">
     <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
-            <h3 id="spendModalTitle" style="margin: 0; font-size: 1rem;">AWS Spend · {{ aws_spend_month }}</h3>
+            <h3 id="spendModalTitle" style="margin: 0; font-size: 1rem;">AWS Spend · {{ aws_spend_month }} (projected)</h3>
             <button type="button" data-modal-close aria-label="Close" onclick="closeCostModal('spendModal')" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
         </div>
         <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
-            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Whole bill, not just waste</div>
-            <div style="font-size: 1.3rem; font-weight: 600; color: var(--gray-800);">{{ eur(aws_spend_eur) }}</div>
-            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ aws_spend_detail.days_covered }} day{{ 's' if aws_spend_detail.days_covered != 1 }} collected · {{ aws_spend_month.split(' ')[0] }} {{ aws_spend_period }}</div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Projected month-end bill (estimate)</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: var(--gray-800);">~{{ eur(aws_spend_eur) }}</div>
+            <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">run-rate over {{ aws_spend_detail.days_covered }} of {{ aws_spend_detail.days_in_month }} days · {{ aws_spend_month.split(' ')[0] }} {{ aws_spend_period }} so far</div>
         </div>
         <div style="font-size: 0.85rem; color: var(--gray-700);">
             <div style="display: flex; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--gray-100);">
@@ -811,8 +823,8 @@
 {% endif %}
 
 {% if total_cost_detail %}
-<!-- Total Cost details modal: same gabarit as the AWS Spend one, but over
-     the whole collected window (all months confounded) -->
+<!-- Total Cost details modal: same gabarit as the AWS Spend one, but the
+     actual spend this month to date (not the projection) -->
 <div id="totalCostModal" role="dialog" aria-modal="true" aria-labelledby="totalCostModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeCostModal('totalCostModal')">
     <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
@@ -820,7 +832,7 @@
             <button type="button" data-modal-close aria-label="Close" onclick="closeCostModal('totalCostModal')" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
         </div>
         <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
-            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Cumulative bill, every collected month</div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin-bottom: 0.3rem;">Spent so far this month</div>
             <div style="font-size: 1.3rem; font-weight: 600; color: var(--gray-800);">{{ eur(total_cost_eur) }}</div>
             <div style="font-size: 0.82rem; color: var(--gray-600); margin-top: 0.15rem;">{{ total_cost_detail.days_covered }} day{{ 's' if total_cost_detail.days_covered != 1 }} collected · {{ total_cost_period }}</div>
         </div>
@@ -1017,7 +1029,8 @@ async function submitCostQuestion() {
 // neutral fold, never a generated 9th hue. Color follows the entity
 // across every mode.
 (function() {
-    const data = {{ cost_chart | tojson }};
+    let data = {{ cost_chart | tojson }};
+    let currentMode = 'stacked';
     const palette = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
     const otherColor = '#a8a69f';
     const colorFor = (s, i) => s.name === 'Other' ? otherColor : palette[i];
@@ -1074,7 +1087,7 @@ async function submitCostQuestion() {
                             footer: (items) => {
                                 const total = items[0].chart.data.datasets
                                     .reduce((sum, d) => sum + (d.data[items[0].dataIndex] || 0), 0);
-                                return `Month total: $${total.toFixed(2)}`;
+                                return `Total: $${total.toFixed(2)}`;
                             }
                         }
                     }
@@ -1104,10 +1117,35 @@ async function submitCostQuestion() {
             });
             btn.classList.add('active');
             btn.setAttribute('aria-pressed', 'true');
-            renderCostChart(btn.dataset.mode);
+            currentMode = btn.dataset.mode;
+            renderCostChart(currentMode);
         });
     });
-    renderCostChart('stacked');
+
+    // Range pills: fetch the series for the chosen window and redraw in
+    // place, keeping the current chart-type mode. Same drawing code as the
+    // server render (fetch_cost_series feeds both).
+    document.querySelectorAll('.cost-range-btn').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch(`/api/dashboard/cost?range=${btn.dataset.range}`);
+                if (!res.ok) { window.location.href = btn.href; return; }
+                data = await res.json();
+                document.getElementById('costSubtitle').textContent = data.subtitle;
+                document.querySelectorAll('.cost-range-btn').forEach((b) => {
+                    b.classList.toggle('btn-primary', b === btn);
+                    b.classList.toggle('btn-outline', b !== btn);
+                    if (b === btn) b.setAttribute('aria-current', 'true');
+                    else b.removeAttribute('aria-current');
+                });
+                renderCostChart(currentMode);
+            } catch (err) {
+                window.location.href = btn.href;
+            }
+        });
+    });
+    renderCostChart(currentMode);
 })();
 {% endif %}
 

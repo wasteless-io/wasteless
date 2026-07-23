@@ -12,6 +12,14 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Stable launcher for scheduled jobs. The installed symlink (~/.local/bin/
+# wasteless) sits at a fixed path, so moving the repo + re-running install.sh
+# re-points it without regenerating the launchd/systemd/cron entries (which
+# would otherwise bake the old repo path and silently break on a move). Falls
+# back to this script's own path when run uninstalled, straight from the repo.
+LAUNCHER="$HOME/.local/bin/wasteless"
+[ -x "$LAUNCHER" ] || LAUNCHER="$SCRIPT_DIR/wasteless.sh"
+
 # Robustesse PATH. La boucle d'auto-collecte (_ensure_cron) reexecute ce script
 # toutes les 5 min en heritant du PATH du shell qui a lance `wasteless start`.
 # Lance depuis un contexte GUI / IDE / launchd, ce PATH n'inclut pas Homebrew,
@@ -120,17 +128,13 @@ _start() {
     PORT="${WASTELESS_PORT:-$(_env_var STREAMLIT_SERVER_PORT)}"
     PORT="${PORT:-8888}"
 
-    # Page d'atterrissage : le wizard /setup tant qu'aucune connexion AWS
-    # n'est configuree (ARNs/cles dans ui/.env — ecrits par install.sh et
-    # /setup —, variables d'environnement, ou credentials partages crees par
-    # `aws configure`). Dans le doute on ouvre la home : mieux vaut manquer
-    # /setup que d'y renvoyer un compte deja connecte.
+    # Page d'atterrissage : on ouvre toujours la home et on laisse le serveur
+    # decider. La redirection /  ->  /setup (routes/home.py via
+    # aws_connection_configured) est la SEULE source de verite pour "wasteless
+    # est-il connecte ?", donc le shell ne duplique plus cette heuristique (et
+    # ne peut plus diverger d'elle). Un simple ~/.aws/credentials ne saute plus
+    # le guide /setup au premier lancement.
     LANDING_URL="http://localhost:$PORT"
-    if [ -z "$(_env_var AWS_ROLE_ARN)$(_env_var AWS_ACCESS_KEY_ID)" ] \
-        && [ -z "${AWS_ROLE_ARN:-}${AWS_ACCESS_KEY_ID:-}" ] \
-        && [ ! -f "$HOME/.aws/credentials" ]; then
-        LANDING_URL="http://localhost:$PORT/setup"
-    fi
 
     # Already running? On ouvre quand meme le navigateur : ce chemin est
     # atteint quand l'utilisateur relance `wasteless` (ou re-execute
@@ -180,10 +184,8 @@ _start() {
             echo -e "  ${CYAN}wasteless logs${NC}     View server logs"
             echo -e "  ${CYAN}wasteless stop${NC}     Stop the server"
             echo ""
-            if [ "$LANDING_URL" != "http://localhost:$PORT" ]; then
-                echo -e "  ${YELLOW}AWS not connected yet — opening the setup guide (/setup)${NC}"
-                echo ""
-            fi
+            # The server redirects to /setup when wasteless isn't connected yet
+            # (aws_connection_configured), so opening the home URL is enough.
             _open_browser "$LANDING_URL"
             return 0
         fi
@@ -364,6 +366,24 @@ _collect() {
         _SKIPPED_STEPS="elb_unused,nat_gateway_unused,vpc_unused,ebs_gp2_migration,ami_orphan,rds_stopped,rds_idle,rds_snapshot_orphan"
     fi
 
+    # Daily cost collection (Cost Explorer -> cloud_costs_raw). Runs on every
+    # tick like the detectors, but aws_collector.py --daily self-guards: it
+    # skips once today's rows exist, so the billable GetCostAndUsage call fires
+    # at most once per day (data refreshes ~1x/day anyway). Kept OUT of the
+    # numbered detector sweep and out of _FAILED_STEPS on purpose: a Cost
+    # Explorer hiccup must not mark the whole run "failed" and so drop it from
+    # the last_sync freshness query (see ui/routes/home.py). Without this step
+    # cloud_costs_raw stays empty forever and the TOTAL COST / AWS SPEND /
+    # AWS SERVICES tiles never leave their "appears after the first collection"
+    # placeholder.
+    echo -e "${CYAN}[costs]${NC} Collecting AWS costs (Cost Explorer, once/day)..."
+    if python3 src/aws_collector.py --daily; then
+        echo -e "${GREEN}[OK]${NC} Done"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Cost collection failed — will retry next tick"
+    fi
+    echo ""
+
     # Record the run so the UI can flag a partial collection instead of
     # silently under-reporting waste — the steampipe warning above only
     # ever reached ~/.wasteless.log, never the dashboard.
@@ -413,7 +433,7 @@ _ensure_cron() {
     fi
 
     (
-        SELF="$SCRIPT_DIR/wasteless.sh"
+        SELF="$LAUNCHER"
         while true; do
             "$SELF" collect >> "$LOG_FILE" 2>&1
             sleep "$COLLECT_INTERVAL_SEC"
@@ -438,7 +458,7 @@ _schedule_macos() {
     <key>Label</key><string>${LAUNCHD_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${SCRIPT_DIR}/wasteless.sh</string>
+        <string>${LAUNCHER}</string>
         <string>collect</string>
     </array>
     <key>StartInterval</key><integer>${COLLECT_INTERVAL_SEC}</integer>
@@ -466,7 +486,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=${SCRIPT_DIR}/wasteless.sh collect
+ExecStart=${LAUNCHER} collect
 UNIT
     cat > "$SYSTEMD_USER_DIR/${SYSTEMD_UNIT}.timer" <<UNIT
 [Unit]
@@ -492,7 +512,7 @@ UNIT
 }
 
 _schedule_cron() {
-    local self="$SCRIPT_DIR/wasteless.sh"
+    local self="$LAUNCHER"
     local entry="*/5 * * * * $self collect >> $LOG_FILE 2>&1 $CRON_MARKER"
     ( crontab -l 2>/dev/null | grep -vF "$CRON_MARKER"; echo "$entry" ) | crontab -
     echo -e "  ${GREEN}[OK]${NC} entree crontab ajoutee (toutes les 5 min)"

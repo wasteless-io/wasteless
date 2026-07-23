@@ -157,6 +157,98 @@ def fetch_waste_trend(cursor, trend: str):
     return trend, granularity, subtitle, rows
 
 
+def fetch_cost_series(cursor, range_key: str):
+    """Cost-by-service series from cloud_costs_raw for a range key.
+
+    The cost twin of fetch_waste_trend: daily buckets for 7d/30d/90d, monthly
+    buckets for 1y. Returns the stacked-chart shape (labels + the 7 biggest
+    services plus an "Other" fold) that the dashboard's costByServiceChart
+    already draws, so the AJAX redraw and the initial server render share one
+    code path and can never disagree.
+    """
+    if range_key not in TREND_RANGES:
+        range_key = "30d"
+    days, granularity, _ = TREND_RANGES[range_key]
+    bucket_sql = "DATE_TRUNC('month', usage_date)::date" if granularity == "month" else "usage_date"
+    # bucket_sql is one of two hardcoded expressions, never user input, so the
+    # interpolation is safe (noqa: S608).
+    query = (
+        f"SELECT {bucket_sql} AS bucket, service, SUM(cost) AS eur, "  # noqa: S608
+        "COUNT(DISTINCT usage_date) AS days_covered "
+        "FROM cloud_costs_raw "
+        "WHERE usage_date >= CURRENT_DATE - %s * INTERVAL '1 day' "
+        "GROUP BY 1, 2 ORDER BY 1"
+    )
+    cursor.execute(query, (days,))
+    rows = cursor.fetchall()
+
+    buckets = sorted({r["bucket"] for r in rows})
+    totals_by_service: dict = {}
+    for r in rows:
+        totals_by_service[r["service"]] = totals_by_service.get(r["service"], 0.0) + float(r["eur"])
+    top_services = [
+        s for s, _ in sorted(totals_by_service.items(), key=lambda kv: kv[1], reverse=True)[:7]
+    ]
+    series_names = top_services + (["Other"] if len(totals_by_service) > len(top_services) else [])
+    cells: dict = {}
+    days_by_bucket: dict = {}
+    for r in rows:
+        name = r["service"] if r["service"] in top_services else "Other"
+        cells[(r["bucket"], name)] = cells.get((r["bucket"], name), 0.0) + float(r["eur"])
+        days_by_bucket[r["bucket"]] = max(
+            days_by_bucket.get(r["bucket"], 0), int(r["days_covered"])
+        )
+
+    labels = []
+    for b in buckets:
+        if granularity == "month":
+            nxt = (b.replace(day=28) + timedelta(days=4)).replace(day=1)
+            days_in_month = (nxt - b).days
+            labels.append(
+                b.strftime("%b") + ("*" if days_by_bucket.get(b, 0) < days_in_month else "")
+            )
+        else:
+            labels.append(b.strftime("%-d %b"))
+
+    series = [
+        {"name": name, "data": [round(cells.get((b, name), 0.0), 2) for b in buckets]}
+        for name in series_names
+    ]
+
+    # Honest subtitle: the span actually on screen, the granularity, and a
+    # partial-month note only when a monthly bar is starred (same honesty
+    # rule as fetch_waste_trend and the old static subtitle).
+    unit = "monthly" if granularity == "month" else "daily"
+    if buckets:
+        first, last = buckets[0], buckets[-1]
+        if granularity == "month":
+            if first == last:
+                span = first.strftime("%b %Y")
+            elif first.year == last.year:
+                span = f"{first.strftime('%b')} – {last.strftime('%b %Y')}"
+            else:
+                span = f"{first.strftime('%b %Y')} – {last.strftime('%b %Y')}"
+        elif first == last:
+            span = first.strftime("%-d %b")
+        else:
+            span = f"{first.strftime('%-d %b')} – {last.strftime('%-d %b %Y')}"
+        subtitle = f"{span} · by service · {unit}"
+        if "*" in "".join(labels):
+            subtitle += " · * partial month"
+    else:
+        subtitle = f"by service · {unit}"
+
+    return {
+        "labels": labels,
+        "series": series,
+        "granularity": granularity,
+        "subtitle": subtitle,
+        "range": range_key,
+        "total": round(sum(totals_by_service.values()), 2),
+        "service_count": len(totals_by_service),
+    }
+
+
 def build_waste_heatmap(cursor, weeks: int = 53) -> Dict[str, Any]:
     """GitHub-style daily-waste calendar for the last ~year, from the SAME
     waste_snapshots that feed the trend curve. Returns week columns (each 7
@@ -224,7 +316,7 @@ def build_waste_heatmap(cursor, weeks: int = 53) -> Dict[str, Any]:
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
+def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d", costrange: str = "1y"):
     """Executive dashboard with KPIs and charts."""
     cursor = conn.cursor()
 
@@ -321,41 +413,24 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         """)
     waste_by_type = cursor.fetchall()
 
-    # AWS Spend KPI: last full calendar month from Cost Explorer data
-    # (cloud_costs_raw, collected daily by cost_collector_job), same
-    # denominator convention as home's Waste Rate: the current month would
-    # be a partial month-to-date and mechanically understate the bill.
+    # Both cost tiles describe the CURRENT month (mirrors AWS Cost Explorer):
+    # Total Cost = month-to-date actual, AWS Spend = the month-end projection
+    # from the run-rate. Cost Explorer lags 1-2 days so the month is partial
+    # by construction; MTD says so and the projection is flagged as an
+    # estimate. Mirrored in routes/home.py (parity test).
     cursor.execute("""
-        SELECT COALESCE(SUM(cost)
-                        FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
-                                                    - INTERVAL '1 month'), 0) as spend_eur,
-               COUNT(*) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
-                                                    - INTERVAL '1 month') as row_count,
-               MIN(usage_date) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
-                                                           - INTERVAL '1 month') as period_start,
-               MAX(usage_date) FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
-                                                           - INTERVAL '1 month') as period_end,
-               COUNT(DISTINCT usage_date)
-                   FILTER (WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
-                                               - INTERVAL '1 month') as days_covered,
-               COALESCE(SUM(cost)
-                        FILTER (WHERE usage_date < DATE_TRUNC('month', CURRENT_DATE)
-                                                   - INTERVAL '1 month'), 0) as prev_spend_eur,
-               COUNT(*) FILTER (WHERE usage_date < DATE_TRUNC('month', CURRENT_DATE)
-                                                   - INTERVAL '1 month') as prev_row_count
+        SELECT COALESCE(SUM(cost), 0) as mtd_eur,
+               MIN(usage_date) as period_start,
+               MAX(usage_date) as period_end,
+               COUNT(*) as row_count,
+               COUNT(DISTINCT usage_date) as days_covered
         FROM cloud_costs_raw
-        WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 months'
-          AND usage_date < DATE_TRUNC('month', CURRENT_DATE)
+        WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
     """)
-    spend_row = cursor.fetchone()
-    aws_spend_eur = (
-        float(spend_row["spend_eur"]) if spend_row and spend_row["row_count"] > 0 else None
-    )
+    mtd = cursor.fetchone()
 
     # Distinct services billed over the last 30 rolling days (the only
-    # window the daily collection guarantees complete). Same figure the
-    # Overview rings used to carry; the tile now lives in Financial
-    # Overview.
+    # window the daily collection guarantees complete).
     cursor.execute("""
         SELECT COUNT(DISTINCT service) AS n
         FROM cloud_costs_raw
@@ -363,155 +438,87 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
         """)
     aws_service_count = int(cursor.fetchone()["n"])
 
-    _last_full_month_end = date.today().replace(day=1) - timedelta(days=1)
-    aws_spend_month = _last_full_month_end.strftime("%B %Y")
-    # Named month for the MoM delta sub-label ("vs May", not "vs previous month")
-    aws_spend_prev_month = (_last_full_month_end.replace(day=1) - timedelta(days=1)).strftime("%B")
-    # Exact days covered by the collection inside that month: a fresh install
-    # only has data from its first collection day, and "June 2026" alone
-    # would overclaim (same honesty rule as the resource chart's subtitle).
-    # The sub-label reads "June · 17–30 collected", so the period is
-    # day numbers only; the month name comes from aws_spend_month.
-    aws_spend_period = None
-    aws_spend_detail = None
-    if aws_spend_eur is not None:
-        start, end = spend_row["period_start"], spend_row["period_end"]
-        if start == end:
-            aws_spend_period = start.strftime("%-d")
-        else:
-            aws_spend_period = f"{start.strftime('%-d')}–{end.strftime('%-d')}"
+    _month_start = date.today().replace(day=1)
+    _next_month = (_month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    _days_in_month = (_next_month - _month_start).days
+    aws_spend_month = date.today().strftime("%B %Y")
+    aws_spend_prev_month = (_month_start - timedelta(days=1)).strftime("%B")
 
-        # Per-service breakdown of the same window, for the click-through
-        # modal: where the figure comes from, service by service.
-        cursor.execute("""
-            SELECT service,
-                   SUM(cost) as eur
-            FROM cloud_costs_raw
-            WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
-              AND usage_date < DATE_TRUNC('month', CURRENT_DATE)
-            GROUP BY service
-            ORDER BY eur DESC
-        """)
-        aws_spend_detail = {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "days_covered": spend_row["days_covered"],
-            "services": [
-                {
-                    "service": r["service"],
-                    "eur": float(r["eur"]),
-                    "pct": float(r["eur"]) / aws_spend_eur * 100 if aws_spend_eur else 0,
-                }
-                for r in cursor.fetchall()
-            ],
-        }
-    # Month-over-month delta, only when both full months have data: a partial
-    # first month of collection would fake a huge increase.
-    aws_spend_delta_pct = None
-    if (
-        aws_spend_eur is not None
-        and spend_row["prev_row_count"] > 0
-        and float(spend_row["prev_spend_eur"]) > 0
-    ):
-        prev = float(spend_row["prev_spend_eur"])
-        aws_spend_delta_pct = (aws_spend_eur - prev) / prev * 100
-
-    # Total Cost KPI: everything Cost Explorer has reported into
-    # cloud_costs_raw, all months confounded. Unlike AWS Spend (last full
-    # calendar month), this is the cumulative bill over the whole collected
-    # window, so the sub-label always states that window (honesty rule).
-    cursor.execute("""
-        SELECT COALESCE(SUM(cost), 0) as total_eur,
-               MIN(usage_date) as first_day,
-               MAX(usage_date) as last_day,
-               COUNT(*) as row_count,
-               COUNT(DISTINCT usage_date) as days_covered
-        FROM cloud_costs_raw
-    """)
-    total_row = cursor.fetchone()
-    total_cost_eur = float(total_row["total_eur"]) if total_row["row_count"] > 0 else None
+    total_cost_eur = float(mtd["mtd_eur"]) if mtd["row_count"] > 0 else None
     total_cost_period = None
     total_cost_detail = None
+    aws_spend_eur = None  # month-end projection from the run-rate
+    aws_spend_period = None  # days collected this month, e.g. "1–21"
+    aws_spend_days_elapsed = None
+    aws_spend_days_in_month = _days_in_month
+    aws_spend_delta_pct = None
+    aws_spend_detail = None
     if total_cost_eur is not None:
-        first, last = total_row["first_day"], total_row["last_day"]
-        if first == last:
-            total_cost_period = first.strftime("%-d %b")
-        else:
-            total_cost_period = f"{first.strftime('%-d %b')} to {last.strftime('%-d %b')}"
+        start, end = mtd["period_start"], mtd["period_end"]
+        aws_spend_days_elapsed = (end - _month_start).days + 1
+        aws_spend_period = (
+            start.strftime("%-d")
+            if start == end
+            else f"{start.strftime('%-d')}–{end.strftime('%-d')}"
+        )
+        total_cost_period = f"{aws_spend_period} {end.strftime('%b')} · month-to-date"
+        # Projection: run-rate over the days collected, scaled to the month.
+        aws_spend_eur = total_cost_eur / aws_spend_days_elapsed * _days_in_month
 
-        # Per-service breakdown of the whole window, for the click-through
-        # modal: same shape as aws_spend_detail, no date filter.
+        # Projection delta vs last month's full bill.
+        cursor.execute("""
+            SELECT COALESCE(SUM(cost), 0) as prev_eur, COUNT(*) as prev_rows
+            FROM cloud_costs_raw
+            WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+              AND usage_date <  DATE_TRUNC('month', CURRENT_DATE)
+        """)
+        prev = cursor.fetchone()
+        if prev["prev_rows"] > 0 and float(prev["prev_eur"]) > 0:
+            aws_spend_delta_pct = (
+                (aws_spend_eur - float(prev["prev_eur"])) / float(prev["prev_eur"]) * 100
+            )
+
+        # Per-service breakdown of the current month (MTD): Total Cost's modal
+        # shows these actuals; AWS Spend's modal shows the same actuals as the
+        # basis its projection is scaled from.
         cursor.execute("""
             SELECT service, SUM(cost) as eur
             FROM cloud_costs_raw
+            WHERE usage_date >= DATE_TRUNC('month', CURRENT_DATE)
             GROUP BY service
             ORDER BY eur DESC
         """)
+        _mtd_services = [
+            {
+                "service": r["service"],
+                "eur": float(r["eur"]),
+                "pct": float(r["eur"]) / total_cost_eur * 100 if total_cost_eur else 0,
+            }
+            for r in cursor.fetchall()
+        ]
         total_cost_detail = {
-            "start": first.isoformat(),
-            "end": last.isoformat(),
-            "days_covered": total_row["days_covered"],
-            "services": [
-                {
-                    "service": r["service"],
-                    "eur": float(r["eur"]),
-                    "pct": float(r["eur"]) / total_cost_eur * 100 if total_cost_eur else 0,
-                }
-                for r in cursor.fetchall()
-            ],
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days_covered": mtd["days_covered"],
+            "services": _mtd_services,
+        }
+        aws_spend_detail = {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days_covered": mtd["days_covered"],
+            "days_in_month": _days_in_month,
+            "projected": round(aws_spend_eur, 2),
+            "services": _mtd_services,
         }
 
-    # Monthly cost by service (Cost Explorer console-style stacked chart):
-    # every collected month, the 7 biggest services named, the tail folded
-    # into "Other" (categorical palette ceiling), partial months starred.
-    cost_chart = None
-    if total_cost_eur is not None:
-        cursor.execute("""
-            SELECT DATE_TRUNC('month', usage_date)::date AS month,
-                   service,
-                   SUM(cost) AS eur,
-                   COUNT(DISTINCT usage_date) AS days_covered
-            FROM cloud_costs_raw
-            GROUP BY 1, 2
-            ORDER BY 1
-        """)
-        rows = cursor.fetchall()
-        months = sorted({r["month"] for r in rows})
-        totals_by_service: dict = {}
-        for r in rows:
-            totals_by_service[r["service"]] = totals_by_service.get(r["service"], 0.0) + float(
-                r["eur"]
-            )
-        top_services = [
-            s for s, _ in sorted(totals_by_service.items(), key=lambda kv: kv[1], reverse=True)[:7]
-        ]
-        series_names = top_services + (
-            ["Other"] if len(totals_by_service) > len(top_services) else []
-        )
-        cells: dict = {}
-        days_by_month: dict = {}
-        for r in rows:
-            name = r["service"] if r["service"] in top_services else "Other"
-            cells[(r["month"], name)] = cells.get((r["month"], name), 0.0) + float(r["eur"])
-            days_by_month[r["month"]] = max(
-                days_by_month.get(r["month"], 0), int(r["days_covered"])
-            )
-        labels = []
-        for m in months:
-            next_month = (m.replace(day=28) + timedelta(days=4)).replace(day=1)
-            days_in_month = (next_month - m).days
-            partial = days_by_month.get(m, 0) < days_in_month
-            labels.append(m.strftime("%b") + ("*" if partial else ""))
-        cost_chart = {
-            "labels": labels,
-            "series": [
-                {
-                    "name": name,
-                    "data": [round(cells.get((m, name), 0.0), 2) for m in months],
-                }
-                for name in series_names
-            ],
-        }
+    # Cost-by-service stacked chart (Cost Explorer console style), now
+    # range-aware via the 7d/30d/90d/1y pills. The default view is the last
+    # 12 months by month; the /api/dashboard/cost endpoint redraws in place
+    # for the other ranges. Both paths go through fetch_cost_series, so the
+    # server render and the AJAX redraw can never drift. `costrange` lets a
+    # no-JS reload land on the same range the pill would have shown.
+    cost_range = costrange if costrange in TREND_RANGES else "1y"
+    cost_chart = fetch_cost_series(cursor, cost_range) if total_cost_eur is not None else None
 
     # Upcoming deadlines, merged and sorted: scheduled executions still in
     # their grace-period veto window (the authoritative, cancellable list
@@ -864,11 +871,14 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d"):
             "aws_spend_prev_month": aws_spend_prev_month,
             "aws_spend_delta_pct": aws_spend_delta_pct,
             "aws_spend_period": aws_spend_period,
+            "aws_spend_days_elapsed": aws_spend_days_elapsed,
+            "aws_spend_days_in_month": aws_spend_days_in_month,
             "aws_spend_detail": aws_spend_detail,
             "total_cost_eur": total_cost_eur,
             "total_cost_period": total_cost_period,
             "total_cost_detail": total_cost_detail,
             "cost_chart": cost_chart,
+            "cost_range": cost_range,
             "upcoming": upcoming,
             "next_verification": next_verification,
         },
@@ -917,6 +927,15 @@ def api_dashboard_trend(conn=Depends(get_db), range: str = "30d"):
         "subtitle": subtitle,
         "points": [{"date": str(r["date"]), "total": float(r["total_waste"] or 0)} for r in rows],
     }
+
+
+@router.get("/api/dashboard/cost")
+def api_dashboard_cost(conn=Depends(get_db), range: str = "30d"):
+    """Cost-by-service series for a range key — feeds the dashboard cost chart via AJAX."""
+    cursor = conn.cursor()
+    series = fetch_cost_series(cursor, range)
+    cursor.close()
+    return series
 
 
 # In-process cache for the Resources-by-Region sweep: 4 regions x ~6 AWS
