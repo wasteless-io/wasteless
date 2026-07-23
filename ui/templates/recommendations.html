@@ -203,7 +203,7 @@
         background-image: linear-gradient(90deg, transparent 30%, #3ed598 50%, transparent 70%);
         background-size: 220% 100%; background-repeat: no-repeat;
         box-shadow: 0 0 8px rgba(62, 213, 152, 0.5);
-        animation: estate-sweep 3.4s linear infinite; pointer-events: none; z-index: 5;
+        animation: estate-sweep 3s ease-in-out infinite alternate; pointer-events: none; z-index: 5;
     }
     .estate-chat.open::before { animation: none; opacity: 0; }
     @keyframes estate-sweep { from { background-position: 160% 0; } to { background-position: -60% 0; } }
