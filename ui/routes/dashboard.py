@@ -86,7 +86,7 @@ def _llm_provider(models):
 def fetch_waste_trend(cursor, trend: str):
     """Waste trend points from waste_snapshots for a given range key.
 
-    Returns (trend, granularity, subtitle, rows) — daily points for
+    Returns (trend, granularity, subtitle, rows), daily points for
     7d/30d/90d, monthly averages for 1y.
     """
     if trend not in TREND_RANGES:
@@ -169,36 +169,27 @@ def fetch_cost_series(cursor, range_key: str):
     if range_key not in TREND_RANGES:
         range_key = "30d"
     days, granularity, _ = TREND_RANGES[range_key]
-    bucket_sql = (
-        "DATE_TRUNC('month', usage_date)::date" if granularity == "month" else "usage_date"
+    bucket_sql = "DATE_TRUNC('month', usage_date)::date" if granularity == "month" else "usage_date"
+    # bucket_sql is one of two hardcoded expressions, never user input, so the
+    # interpolation is safe (noqa: S608).
+    query = (
+        f"SELECT {bucket_sql} AS bucket, service, SUM(cost) AS eur, "  # noqa: S608
+        "COUNT(DISTINCT usage_date) AS days_covered "
+        "FROM cloud_costs_raw "
+        "WHERE usage_date >= CURRENT_DATE - %s * INTERVAL '1 day' "
+        "GROUP BY 1, 2 ORDER BY 1"
     )
-    cursor.execute(
-        f"""
-        SELECT {bucket_sql} AS bucket,
-               service,
-               SUM(cost) AS eur,
-               COUNT(DISTINCT usage_date) AS days_covered
-        FROM cloud_costs_raw
-        WHERE usage_date >= CURRENT_DATE - %s * INTERVAL '1 day'
-        GROUP BY 1, 2
-        ORDER BY 1
-        """,
-        (days,),
-    )
+    cursor.execute(query, (days,))
     rows = cursor.fetchall()
 
     buckets = sorted({r["bucket"] for r in rows})
     totals_by_service: dict = {}
     for r in rows:
-        totals_by_service[r["service"]] = totals_by_service.get(r["service"], 0.0) + float(
-            r["eur"]
-        )
+        totals_by_service[r["service"]] = totals_by_service.get(r["service"], 0.0) + float(r["eur"])
     top_services = [
         s for s, _ in sorted(totals_by_service.items(), key=lambda kv: kv[1], reverse=True)[:7]
     ]
-    series_names = top_services + (
-        ["Other"] if len(totals_by_service) > len(top_services) else []
-    )
+    series_names = top_services + (["Other"] if len(totals_by_service) > len(top_services) else [])
     cells: dict = {}
     days_by_bucket: dict = {}
     for r in rows:
@@ -255,6 +246,72 @@ def fetch_cost_series(cursor, range_key: str):
         "range": range_key,
         "total": round(sum(totals_by_service.values()), 2),
         "service_count": len(totals_by_service),
+    }
+
+
+def build_waste_heatmap(cursor, weeks: int = 53) -> Dict[str, Any]:
+    """GitHub-style daily-waste calendar for the last ~year, from the SAME
+    waste_snapshots that feed the trend curve. Returns week columns (each 7
+    days Mon..Sun, `None` for future days) with a 0-4 intensity level per day,
+    plus the max daily value. The two views read the same data, differently:
+    the curve shows the level over time, the calendar shows which days carried
+    waste and how much."""
+    today = date.today()
+    start = today - timedelta(days=today.weekday()) - timedelta(weeks=weeks - 1)
+    cursor.execute(
+        "SELECT snapshot_date, COALESCE(SUM(total_eur), 0) AS total "
+        "FROM waste_snapshots WHERE snapshot_date >= %s GROUP BY snapshot_date",
+        (start,),
+    )
+    by_date = {r["snapshot_date"]: float(r["total"]) for r in cursor.fetchall()}
+    mx = max(by_date.values(), default=0.0)
+
+    # Honesty (same rule as the trend subtitle): snapshots older than the
+    # first real detection are age-based reconstruction, not measured waste.
+    # They are marked so the calendar never passes an estimate off as a fact.
+    cursor.execute("SELECT MIN(created_at)::date AS first_real FROM waste_detected")
+    row = cursor.fetchone()
+    first_real = row["first_real"] if row else None
+
+    def level(v: float) -> int:
+        if v <= 0 or mx <= 0:
+            return 0
+        r = v / mx
+        return 1 if r < 0.10 else 2 if r < 0.35 else 3 if r < 0.70 else 4
+
+    week_cols = []
+    prev_month = None
+    reconstructed_days = 0
+    for w in range(weeks):
+        monday = start + timedelta(weeks=w)
+        month = None
+        if monday.month != prev_month:
+            month = monday.strftime("%b")
+            prev_month = monday.month
+        days = []
+        for wd in range(7):
+            day = monday + timedelta(days=wd)
+            if day > today:
+                days.append(None)
+            else:
+                v = by_date.get(day, 0.0)
+                recon = first_real is not None and day < first_real and v > 0
+                if recon:
+                    reconstructed_days += 1
+                days.append(
+                    {
+                        "date": day.isoformat(),
+                        "value": round(v, 2),
+                        "level": level(v),
+                        "recon": recon,
+                    }
+                )
+        week_cols.append({"month": month, "days": days})
+    return {
+        "weeks": week_cols,
+        "max": round(mx, 2),
+        "days_with_data": len(by_date),
+        "reconstructed_days": reconstructed_days,
     }
 
 
@@ -517,6 +574,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d", costra
     # Trend: active-waste totals from waste_snapshots (stable history written
     # by detector runs + one-shot backfill)
     trend, trend_granularity, trend_subtitle, waste_trend = fetch_waste_trend(cursor, trend)
+    waste_heatmap = build_waste_heatmap(cursor)
 
     # LLM spend over the last 30 days: totals averaged per day actually
     # covered (dividing by 30 would understate the rate when tracking just
@@ -792,6 +850,7 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d", costra
             "waste_by_type": waste_by_type,
             "last_scan_hours_ago": last_scan_hours_ago,
             "waste_trend": waste_trend,
+            "waste_heatmap": waste_heatmap,
             "trend_range": trend,
             "trend_granularity": trend_granularity,
             "trend_subtitle": trend_subtitle,
@@ -858,7 +917,7 @@ def chat_about_costs(body: AskQuestionRequest, conn=Depends(get_db)):
 
 @router.get("/api/dashboard/trend")
 def api_dashboard_trend(conn=Depends(get_db), range: str = "30d"):
-    """Waste trend points for a range key — feeds the dashboard chart via AJAX."""
+    """Waste trend points for a range key, feeds the dashboard chart via AJAX."""
     cursor = conn.cursor()
     trend, granularity, subtitle, rows = fetch_waste_trend(cursor, range)
     cursor.close()

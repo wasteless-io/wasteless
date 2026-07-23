@@ -663,8 +663,13 @@ def _log_schedule_action(resource_id, action_type, status, dry_run, error=None):
                     "dry_run, error_message, executed_by, metadata) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                     (
-                        resource_id, "ec2_instance", action_type, status,
-                        dry_run, error, "scheduler",
+                        resource_id,
+                        "ec2_instance",
+                        action_type,
+                        status,
+                        dry_run,
+                        error,
+                        "scheduler",
                         _json.dumps({"source": "instance_schedule"}),
                     ),
                 )
@@ -729,13 +734,14 @@ def reschedule_instance_jobs():
     circular import."""
     from state import scheduler
     from apscheduler.triggers.cron import CronTrigger
+    from apscheduler.jobstores.base import JobLookupError
 
     cfg = _config_manager.get_instance_schedule()
     for jid in ("instance_stop", "instance_start"):
         try:
             scheduler.remove_job(jid)
-        except Exception:
-            pass
+        except JobLookupError:
+            pass  # not scheduled yet (first run, or schedule was off) — nothing to remove
     if not cfg.get("enabled"):
         logger.info("instance schedule: disabled (no cron jobs)")
         return
@@ -746,14 +752,21 @@ def reschedule_instance_jobs():
     scheduler.add_job(
         schedule_stop_job,
         CronTrigger(day_of_week=dow, hour=int(sh), minute=int(sm), timezone=tz),
-        id="instance_stop", replace_existing=True, misfire_grace_time=3600,
+        id="instance_stop",
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
     scheduler.add_job(
         schedule_start_job,
         CronTrigger(day_of_week=dow, hour=int(bh), minute=int(bm), timezone=tz),
-        id="instance_start", replace_existing=True, misfire_grace_time=3600,
+        id="instance_start",
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
     logger.info(
         "instance schedule: stop %s, start %s on [%s] (%s)",
-        cfg["stop_time"], cfg["start_time"], dow, tz,
+        cfg["stop_time"],
+        cfg["start_time"],
+        dow,
+        tz,
     )

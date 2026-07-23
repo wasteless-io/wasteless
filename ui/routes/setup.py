@@ -13,13 +13,13 @@ from pathlib import Path
 
 import boto3
 from botocore.config import Config
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from schemas import AwsSetupRequest
-from state import templates, _aws_status, check_aws_reachable
+from schemas import AwsDisconnectRequest, AwsSetupRequest
+from state import templates, _aws_status, check_aws_reachable, get_db
 from utils.collect import start_background_collection
-from utils.env_files import apply_to_env, write_env_files
+from utils.env_files import apply_to_env, clear_env_keys, write_env_files
 from utils.logger import get_logger
 
 router = APIRouter()
@@ -51,7 +51,7 @@ _STS_CONFIG = Config(connect_timeout=5, read_timeout=5, retries={"max_attempts":
 
 def _account_id() -> str:
     """AWS_ACCOUNT_ID from the environment (ui/.env), falling back to the
-    root .env — installs made before the mirror wrote it only there.
+    root .env, installs made before the mirror wrote it only there.
     Returns '' unless it looks like a real 12-digit account ID."""
     acct = os.getenv("AWS_ACCOUNT_ID", "")
     if not acct:
@@ -61,6 +61,73 @@ def _account_id() -> str:
                 if line.startswith("AWS_ACCOUNT_ID="):
                     acct = line.split("=", 1)[1].strip()
     return acct if ACCOUNT_ID_RE.match(acct) else ""
+
+
+# Credential keys owned by /setup: what a successful save writes and what
+# Disconnect clears from both env files and the process. AWS_REGION is left
+# alone (it is a harmless default, not a credential).
+AWS_CREDENTIAL_KEYS = [
+    "AWS_ACCOUNT_ID",
+    "AWS_ROLE_ARN",
+    "AWS_WRITE_ROLE_ARN",
+    "AWS_EXTERNAL_ID",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+]
+
+# Data collected from the connected account, truncated on a wipe. CASCADE
+# handles the recommendations -> waste_detected FK and anything hanging off
+# it; RESTART IDENTITY resets the serial ids so the next account starts
+# clean. Deliberately NOT wiped: budget_settings (a user preference, not
+# account data) and llm_usage (this app's own AI-spend ledger).
+_ACCOUNT_DATA_TABLES = (
+    "ec2_metrics",
+    "waste_detected",
+    "recommendations",
+    "actions_log",
+    "rollback_snapshots",
+    "savings_realized",
+    "cloud_costs_raw",
+    "waste_snapshots",
+    "daily_briefings",
+    "collection_runs",
+)
+
+
+def _repair_hint(error_msg: str, payload: AwsSetupRequest) -> str | None:
+    """Map a raw AWS/botocore error to one plain next step. The botocore
+    message is accurate but jargon; the person onboarding needs to know
+    which field to fix, not what STS returned."""
+    m = error_msg.lower()
+    if "unable to locate credentials" in m or "you must specify a region" in m:
+        return (
+            "No credentials reached AWS. Fill the access key ID and secret, "
+            "or run the CloudFormation stack (step 1) and paste the role ARN."
+        )
+    if "invalidclienttokenid" in m or "signaturedoesnotmatch" in m or "the security token" in m:
+        return "The access key ID or secret is wrong. Re-copy both from the IAM user."
+    if "not authorized to perform: sts:assumerole" in m or "access denied" in m:
+        if payload.external_id:
+            return (
+                "The role refused the assume-role. Check the External ID matches the "
+                "one on the role's trust policy, and that this identity is the trusted "
+                "principal."
+            )
+        return (
+            "The role refused the assume-role. If the CloudFormation stack was created "
+            "with an External ID, paste it below; otherwise confirm this identity is the "
+            "role's trusted principal."
+        )
+    if "does not exist" in m or "nosuchentity" in m or "cannot be found" in m:
+        return (
+            "That role ARN does not exist yet. Create the CloudFormation stack (step 1) "
+            "first, or fix the account ID / role name in the ARN."
+        )
+    if "expired" in m:
+        return "The credentials have expired. Generate a fresh access key or re-run the stack."
+    if "could not connect" in m or "timed out" in m or "connect timeout" in m:
+        return "Could not reach AWS. Check the region and this machine's network."
+    return None
 
 
 def _validation_error(payload: AwsSetupRequest) -> str | None:
@@ -146,7 +213,11 @@ def _test_connection(payload: AwsSetupRequest) -> dict:
         try:
             sts.assume_role(**kwargs)
         except Exception as e:
-            kind = "not_ready" if _aws_error_code(e) in ("AccessDenied", "AccessDeniedException") else "config"
+            kind = (
+                "not_ready"
+                if _aws_error_code(e) in ("AccessDenied", "AccessDeniedException")
+                else "config"
+            )
             raise SetupError(str(e), kind) from e
 
     if payload.role_arn:
@@ -205,6 +276,12 @@ def setup_page(request: Request):
             "current_role_arn": os.getenv("AWS_ROLE_ARN", ""),
             "current_write_role_arn": os.getenv("AWS_WRITE_ROLE_ARN", ""),
             "has_access_keys": bool(os.getenv("AWS_ACCESS_KEY_ID")),
+            # Credentials wasteless itself holds (written by this page into the
+            # env files) can be cleared by Disconnect. When the account is
+            # reachable but none of these are set, the credentials come from
+            # the ambient chain (~/.aws, instance profile, SSO) and wasteless
+            # cannot revoke them, the disconnect zone says so.
+            "creds_managed": bool(os.getenv("AWS_ROLE_ARN") or os.getenv("AWS_ACCESS_KEY_ID")),
             "account_id": account_id,
             "suggested_role_arn": f"{suggested_arn}-readonly" if suggested_arn else "",
             "suggested_write_role_arn": f"{suggested_arn}-remediation" if suggested_arn else "",
@@ -217,19 +294,39 @@ def setup_page(request: Request):
 
 @router.post("/api/aws-setup/test")
 def api_aws_setup_test(payload: AwsSetupRequest):
-    """Dry connection test — touches AWS, never writes anything."""
+    """Dry connection test, touches AWS, never writes anything."""
     error = _validation_error(payload)
     if error:
-        return JSONResponse({"success": False, "error": error, "error_kind": "config"}, status_code=400)
+        return JSONResponse(
+            {"success": False, "error": error, "error_kind": "config"}, status_code=400
+        )
     try:
         result = _test_connection(payload)
     except SetupError as e:
-        # error_kind lets the page poll on 'not_ready' and only alarm on the rest.
+        # error_kind lets the page poll on 'not_ready' and only alarm on the rest;
+        # hint adds one plain repair step for the cases that stay red.
         return JSONResponse(
-            {"success": False, "error": str(e), "error_kind": e.kind}, status_code=400
+            {
+                "success": False,
+                "error": str(e),
+                "error_kind": e.kind,
+                "hint": _repair_hint(str(e), payload),
+            },
+            status_code=400,
         )
     except Exception as e:
-        return JSONResponse({"success": False, "error": str(e), "error_kind": "config"}, status_code=400)
+        # Unexpected (non-SetupError) failure: default the poll category to
+        # 'config' and still attach a plain repair step when the raw botocore
+        # message maps to one. Accurate but jargon message, no secrets in it.
+        return JSONResponse(
+            {
+                "success": False,
+                "error": str(e),
+                "error_kind": "config",
+                "hint": _repair_hint(str(e), payload),
+            },
+            status_code=400,
+        )
     return {"success": True, **result}
 
 
@@ -238,15 +335,31 @@ def api_aws_setup_save(payload: AwsSetupRequest):
     """Test, then persist to both env files and apply to this process."""
     error = _validation_error(payload)
     if error:
-        return JSONResponse({"success": False, "error": error, "error_kind": "config"}, status_code=400)
+        return JSONResponse(
+            {"success": False, "error": error, "error_kind": "config"}, status_code=400
+        )
     try:
         result = _test_connection(payload)
     except SetupError as e:
         return JSONResponse(
-            {"success": False, "error": str(e), "error_kind": e.kind}, status_code=400
+            {
+                "success": False,
+                "error": str(e),
+                "error_kind": e.kind,
+                "hint": _repair_hint(str(e), payload),
+            },
+            status_code=400,
         )
     except Exception as e:
-        return JSONResponse({"success": False, "error": str(e), "error_kind": "config"}, status_code=400)
+        return JSONResponse(
+            {
+                "success": False,
+                "error": str(e),
+                "error_kind": "config",
+                "hint": _repair_hint(str(e), payload),
+            },
+            status_code=400,
+        )
 
     values = {
         "AWS_REGION": payload.region,
@@ -266,3 +379,43 @@ def api_aws_setup_save(payload: AwsSetupRequest):
         f"collection={'started' if collection_started else 'not started'})"
     )
     return {"success": True, "collection_started": collection_started, **result}
+
+
+def _wipe_account_data(conn) -> int:
+    """Truncate every table holding data collected from the account being
+    disconnected. Returns the row count erased (for the confirmation)."""
+    cur = conn.cursor()
+    # Table names are the hardcoded _ACCOUNT_DATA_TABLES constant, never user
+    # input, the interpolated SQL below is safe (noqa: S608 on each line).
+    parts = [f"SELECT COUNT(*) AS n FROM {t}" for t in _ACCOUNT_DATA_TABLES]  # noqa: S608
+    union = " UNION ALL ".join(parts)
+    count_sql = f"SELECT COALESCE(SUM(n), 0) AS total FROM ({union}) s"  # noqa: S608
+    cur.execute(count_sql)
+    row = cur.fetchone()
+    erased = int(row["total"] if isinstance(row, dict) else row[0])
+    tables = ", ".join(_ACCOUNT_DATA_TABLES)
+    cur.execute(f"TRUNCATE {tables} RESTART IDENTITY CASCADE")  # noqa: S608
+    conn.commit()
+    return erased
+
+
+@router.post("/api/aws-setup/disconnect")
+def api_aws_setup_disconnect(payload: AwsDisconnectRequest, conn=Depends(get_db)):
+    """Disconnect the current AWS account: clear its credentials from both
+    env files and the process, optionally wipe the data collected from it,
+    and refresh the reachability status. Leaves the form ready for a new
+    account (the Switch account flow)."""
+    erased = 0
+    if payload.wipe_data:
+        erased = _wipe_account_data(conn)
+
+    clear_env_keys(AWS_CREDENTIAL_KEYS)
+    from utils.aws_clients import reset_cache
+
+    reset_cache()
+    _aws_status["reachable"] = check_aws_reachable()
+
+    logger.info(
+        f"AWS disconnected via /setup (data {'wiped: ' + str(erased) + ' rows' if payload.wipe_data else 'kept'})"
+    )
+    return {"success": True, "wiped_rows": erased, "data_wiped": payload.wipe_data}

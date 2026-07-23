@@ -3,16 +3,16 @@
 Tests for the /setup onboarding endpoints (routes/setup.py).
 
 Three layers:
-1. Input validation — bad region/ARN formats and incoherent
+1. Input validation, bad region/ARN formats and incoherent
    combinations are rejected before any AWS call.
-2. Test endpoint — success path returns the source identity and the
+2. Test endpoint, success path returns the source identity and the
    assumed role; botocore failures surface as a 400 with the AWS
    message, never a 500.
-3. Save endpoint — writes BOTH env files (root .env and ui/.env),
+3. Save endpoint, writes BOTH env files (root .env and ui/.env),
    chmods them to 600, applies the values to the process and never
    persists anything when the connection test fails.
 
-boto3 is mocked throughout — no test here talks to AWS.
+boto3 is mocked throughout, no test here talks to AWS.
 """
 
 import sys
@@ -137,7 +137,7 @@ class TestEndpoints(unittest.TestCase):
 
     def test_test_endpoint_validates_write_role(self):
         """A pre-filled remediation ARN that cannot be assumed must fail the
-        test — saving it silently would break remediation much later."""
+        test, saving it silently would break remediation much later."""
 
         def assume(RoleArn, **kwargs):
             if RoleArn.endswith("-remediation"):
@@ -299,6 +299,129 @@ class TestWriteEnvFiles(unittest.TestCase):
             # Empty submission never erases an existing value
             self.assertIn("AWS_EXTERNAL_ID=keep-me", text)
             self.assertIn("AWS_REGION=eu-west-1", text)
+
+
+class TestClearEnvKeys(unittest.TestCase):
+    """Disconnect path: unsetting keys the save path only ever adds."""
+
+    def test_clears_named_keys_from_files_and_process(self):
+        from utils.env_files import clear_env_keys
+
+        with tempfile.TemporaryDirectory() as tmp:
+            env = Path(tmp) / ".env"
+            env.write_text("DB_HOST=localhost\nAWS_ROLE_ARN=x\nAWS_REGION=eu-west-1\n")
+            with patch.dict(setup_module.os.environ, {"AWS_ROLE_ARN": "x"}, clear=False):
+                clear_env_keys(["AWS_ROLE_ARN"], files=[env])
+                self.assertNotIn("AWS_ROLE_ARN", setup_module.os.environ)
+            text = env.read_text()
+            self.assertNotIn("AWS_ROLE_ARN", text)
+            # Untargeted keys survive, region default is preserved
+            self.assertIn("DB_HOST=localhost", text)
+            self.assertIn("AWS_REGION=eu-west-1", text)
+
+    def test_missing_file_and_key_are_noops(self):
+        from utils.env_files import clear_env_keys
+
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.env"
+            # No file, key absent from process, must not raise
+            clear_env_keys(["AWS_SECRET_ACCESS_KEY"], files=[missing])
+
+
+class TestWipeAccountData(unittest.TestCase):
+    """The wipe helper in isolation, against a pure mock connection so no
+    real table is ever truncated by the suite."""
+
+    def test_counts_then_truncates_and_commits(self):
+        conn = MagicMock()
+        cur = MagicMock()
+        cur.fetchone.return_value = {"total": 42}
+        conn.cursor.return_value = cur
+
+        erased = setup_module._wipe_account_data(conn)
+
+        self.assertEqual(erased, 42)
+        statements = [str(c.args[0]) for c in cur.execute.call_args_list]
+        self.assertTrue(any(s.startswith("TRUNCATE") for s in statements))
+        conn.commit.assert_called_once()
+
+
+class TestDisconnect(unittest.TestCase):
+    """Disconnect endpoint: clears creds, optionally wipes data. The wipe
+    helper, the .env writer and the reachability check are all patched so
+    the endpoint test can never truncate a live table or clobber the
+    developer's real credentials (an earlier version did exactly that)."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            from fastapi.testclient import TestClient
+            from main import app
+        except Exception as e:
+            raise unittest.SkipTest(f"app non importable ({e})") from e
+        cls.client = TestClient(app)
+
+    def test_disconnect_keeps_data_clears_creds(self):
+        with (
+            patch.object(setup_module, "clear_env_keys") as clear,
+            patch.object(setup_module, "_wipe_account_data") as wipe,
+            patch.object(setup_module, "check_aws_reachable", return_value=False),
+        ):
+            resp = self.client.post("/api/aws-setup/disconnect", json={"wipe_data": False})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["success"])
+        self.assertFalse(data["data_wiped"])
+        clear.assert_called_once_with(setup_module.AWS_CREDENTIAL_KEYS)
+        wipe.assert_not_called()
+
+    def test_disconnect_wipes_data_when_requested(self):
+        with (
+            patch.object(setup_module, "clear_env_keys"),
+            patch.object(setup_module, "_wipe_account_data", return_value=42) as wipe,
+            patch.object(setup_module, "check_aws_reachable", return_value=False),
+        ):
+            resp = self.client.post("/api/aws-setup/disconnect", json={"wipe_data": True})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["data_wiped"])
+        self.assertEqual(data["wiped_rows"], 42)
+        wipe.assert_called_once()
+
+
+class TestRepairHint(unittest.TestCase):
+    """Raw AWS errors map to one plain repair step (routes.setup._repair_hint)."""
+
+    def test_missing_credentials(self):
+        h = setup_module._repair_hint("Unable to locate credentials", _payload())
+        self.assertIsNotNone(h)
+        self.assertIn("access key", h.lower())
+
+    def test_external_id_branch(self):
+        msg = "not authorized to perform: sts:AssumeRole on resource"
+        with_id = setup_module._repair_hint(msg, _payload(external_id="secret"))
+        without = setup_module._repair_hint(msg, _payload())
+        self.assertIn("External ID", with_id)
+        # Both non-empty, but the no-external-id case guides to add one
+        self.assertIn("External ID", without)
+
+    def test_missing_role(self):
+        h = setup_module._repair_hint("Role arn:... does not exist", _payload())
+        self.assertIn("CloudFormation", h)
+
+    def test_unmapped_error_returns_none(self):
+        self.assertIsNone(setup_module._repair_hint("some brand new error", _payload()))
+
+    def test_test_endpoint_includes_hint(self):
+        from fastapi.testclient import TestClient
+        from main import app
+
+        client = TestClient(app)
+        session = _fake_session(assume_error=Exception("not authorized to perform: sts:AssumeRole"))
+        with patch.object(setup_module.boto3, "Session", return_value=session):
+            resp = client.post("/api/aws-setup/test", json={"role_arn": VALID_ROLE})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIsNotNone(resp.json().get("hint"))
 
 
 if __name__ == "__main__":
