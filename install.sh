@@ -1412,6 +1412,7 @@ case ":$PATH:" in
     *)
         if [ -n "$SHELL_RC" ] && ! grep -q '\.local/bin' "$SHELL_RC" 2>/dev/null; then
             printf '\n# WasteLess CLI\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$SHELL_RC"
+            # shellcheck disable=SC2088  # literal ~ shown to the user, not a path to expand
             print_step "~/.local/bin ajoute au PATH dans $SHELL_RC"
         elif [ -z "$SHELL_RC" ]; then
             print_warning "Shell non detecte. Ajoutez ~/.local/bin au PATH:"

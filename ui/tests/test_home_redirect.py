@@ -70,13 +70,17 @@ class TestAwsConnectionConfigured(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertTrue(self._configured(tmp, AWS_ROLE_ARN="arn:aws:iam::123456789012:role/x"))
 
-    def test_shared_credentials_file(self):
+    def test_shared_credentials_file_is_not_enough(self):
+        """A bare ~/.aws/credentials must NOT count as configured: it may be
+        unrelated to wasteless, so a first run still lands on /setup where the
+        wizard can adopt it. Only wasteless's own config (role/key in the
+        env, or a collection that has run) flips the gate."""
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / ".aws").mkdir()
             (Path(tmp) / ".aws" / "credentials").touch()
-            self.assertTrue(self._configured(tmp))
+            self.assertFalse(self._configured(tmp))
 
 
 if __name__ == "__main__":
