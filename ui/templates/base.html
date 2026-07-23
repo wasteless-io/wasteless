@@ -572,7 +572,10 @@
         body.transitions-ready .main { transition: margin-left 0.2s ease; }
 
         @media (min-width: 769px) {
-            body.sidebar-collapsed .sidebar { width: 68px; padding-left: 0.5rem; padding-right: 0.5rem; overflow: visible; }
+            /* z-index lifts the whole sidebar (and its hover bubbles) above the
+               positioned main-content cards (e.g. the AI console, z-index:1)
+               that were painting over the bubbles; stays below modals/popovers. */
+            body.sidebar-collapsed .sidebar { width: 68px; padding-left: 0.5rem; padding-right: 0.5rem; overflow: visible; z-index: 200; }
             body.sidebar-collapsed .main { margin-left: 68px; }
             body.sidebar-collapsed .sidebar-header .logo { justify-content: center; }
             body.sidebar-collapsed .logo-mark { display: none; }
