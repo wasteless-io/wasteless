@@ -178,6 +178,9 @@ templates.env.globals["get_auto_remediation_enabled"] = _config_manager.get_auto
 # calls AWS during a page render. Tri-state: True / False / None (unknown,
 # banner hidden until the first check completes).
 templates.env.globals["aws_reachable"] = lambda: _aws_status.get("reachable")
+# Connected account ID for the sidebar card (ui/.env is loaded at startup; the
+# /setup save applies it to the process too). Empty string when not set.
+templates.env.globals["aws_account_id"] = lambda: os.getenv("AWS_ACCOUNT_ID", "")
 
 # Scheduler instance (jobs registered by main.py's lifespan)
 scheduler = AsyncIOScheduler()

@@ -1047,7 +1047,7 @@
                 <span class="aws-avatar" style="background:#e3f1e4;color:#256b2d;">AWS</span>
                 <div style="min-width:0;">
                     <div style="font-size:0.8rem;font-weight:600;color:#1d1d1f;">AWS Account</div>
-                    <div style="font-size:0.72rem;color:#86868b;">Connected</div>
+                    <div style="font-size:0.72rem;color:#86868b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{% if aws_account_id() %}<span style="font-family:var(--font-mono);">{{ aws_account_id() }}</span> &middot; Connected{% else %}Connected{% endif %}</div>
                 </div>
             </div>
             {% elif aws_reachable() is sameas false %}
