@@ -372,7 +372,7 @@ _collect() {
     # at most once per day (data refreshes ~1x/day anyway). Kept OUT of the
     # numbered detector sweep and out of _FAILED_STEPS on purpose: a Cost
     # Explorer hiccup must not mark the whole run "failed" and so drop it from
-    # the last_sync freshness query (see routes/home.py). Without this step
+    # the last_sync freshness query (see ui/routes/home.py). Without this step
     # cloud_costs_raw stays empty forever and the TOTAL COST / AWS SPEND /
     # AWS SERVICES tiles never leave their "appears after the first collection"
     # placeholder.
