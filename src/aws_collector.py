@@ -334,13 +334,16 @@ def already_collected_today():
     usage_date : Cost Explorer accuse un délai de facturation d'un ou deux
     jours, la dernière usage_date n'est jamais aujourd'hui."""
     connection = get_db_connection()
+    cursor = None
     try:
         cursor = connection.cursor()
         cursor.execute(
-            "SELECT 1 FROM cloud_costs_raw WHERE created_at >= CURRENT_DATE LIMIT 1"
+            "SELECT 1 FROM cloud_costs_raw WHERE provider = 'aws' AND created_at >= CURRENT_DATE LIMIT 1"
         )
         return cursor.fetchone() is not None
     finally:
+        if cursor is not None:
+            cursor.close()
         release_connection(connection)
 
 
