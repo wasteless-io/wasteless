@@ -1655,7 +1655,9 @@
                 const txt = el.getAttribute('data-tip') || el.getAttribute('title');
                 if (!txt) return;
                 el.setAttribute('data-tip-card', txt);
-                if (!el.getAttribute('aria-label') && !el.textContent.trim()) {
+                const isIconOnly = (el.tagName === 'BUTTON' || el.tagName === 'A') && !el.textContent.trim();
+                const isLabeled = el.getAttribute('aria-labelledby') || (el.labels && el.labels.length);
+                if (!el.getAttribute('aria-label') && isIconOnly && !isLabeled) {
                     el.setAttribute('aria-label', txt);
                 }
                 el.removeAttribute('data-tip');
