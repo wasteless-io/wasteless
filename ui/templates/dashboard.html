@@ -194,9 +194,10 @@
         margin-bottom: 0.75rem;
     }
     .chart-title { margin: 0; font-size: 1rem; }
-    /* Info sentences keep their case (uppercase prose would shout), the
-       mono face alone carries the chrome register */
-    .chart-subtitle { font-family: var(--font-mono); font-size: 0.68rem; color: var(--ink-secondary); }
+    /* Info sentences are readable content, so they use the content (sans) font,
+       not the mono chrome register; they also keep their case (uppercase prose
+       would shout). */
+    .chart-subtitle { font-family: var(--font-sans); font-size: 0.68rem; color: var(--ink-secondary); }
     .chart-unit { font-size: 0.78rem; color: var(--ink-secondary); }
     .chart-area { height: 180px; position: relative; }
     .chart-empty {
@@ -350,8 +351,7 @@
     .estate-chat { background-color: #0b0e0c; border-radius: 0; color: #f2f5f3; background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px); background-size: 22px 22px; box-shadow: 5px 5px 0 0 rgba(62,213,152,0.22); padding: 0.9rem 1.1rem; position: relative; z-index: 1; }
     .estate-chat .ec-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0; cursor: pointer; user-select: none; }
     .estate-chat.open .ec-head { margin-bottom: 0.65rem; }
-    .estate-chat .ec-name { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; font-weight: 700; display: inline-flex; align-items: center; gap: 0.5rem; }
-    .estate-chat .ec-name::before { content: ""; width: 7px; height: 7px; background: #3ed598; }
+    .estate-chat .ec-name { font-family: var(--font-sans); font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; font-weight: 700; display: inline-flex; align-items: center; gap: 0.5rem; }
     .estate-chat .ec-tag { margin-left: auto; font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: #8b948e; }
     .estate-chat .ec-caret { display: inline-flex; color: #8b948e; transition: transform 0.3s ease; }
     .estate-chat.open .ec-caret { transform: rotate(180deg); }
@@ -441,23 +441,27 @@
         </div>
         {# Live clock, Europe/Paris, same wall clock as the DB stamps #}
         <time id="hero-clock" class="sysbar-clock">
-            <span class="sysbar-beat{% if last_scan_hours_ago is none %} is-muted{% elif last_scan_hours_ago >= 48 %} is-danger{% elif last_scan_hours_ago >= 24 %} is-warn{% endif %}" aria-hidden="true"></span>
             <span class="sysbar-time" id="hero-clock-time"></span>
             <span aria-hidden="true">&middot;</span>
             <span id="hero-clock-date"></span>
         </time>
 </header>
 
-{# Last-scan stamp under the hero, same placement as the Last-sync line on
-   the recommendations page. Relative freshness first, clock time as
-   detail; turns amber past 24h and red past 48h. #}
-<div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 1rem;">
+{# Live-refresh (Last-scan freshness), top-right. Continuously spinning,
+   clickable to reload the latest scan. #}
+<div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
     {% if kpis.last_analysis %}
     {% set hours_ago = last_scan_hours_ago %}
     {% set days_ago = (hours_ago / 24) | int %}
-    <span class="status-pill{% if hours_ago >= 48 %} is-danger{% elif hours_ago >= 24 %} is-warn{% endif %}">Last scan: {{ kpis.last_analysis | localtime }} · {% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}{% if hours_ago >= 48 %} · overdue{% elif hours_ago >= 24 %} · stale{% endif %}</span>
+    <button type="button" class="live-refresh{% if hours_ago >= 48 %} is-danger{% elif hours_ago >= 24 %} is-warn{% endif %}" onclick="refreshData()" title="Refresh — reload the latest scan">
+        <span class="lr-spin" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+        <span>Live · scanned {{ kpis.last_analysis | localtime }} · {% if hours_ago < 1 %}just now{% elif hours_ago < 24 %}{{ hours_ago }}h ago{% else %}{{ days_ago }}d ago{% endif %}{% if hours_ago >= 48 %} · overdue{% elif hours_ago >= 24 %} · stale{% endif %}</span>
+    </button>
     {% else %}
-    <span class="status-pill is-muted">Last scan: none yet</span>
+    <button type="button" class="live-refresh is-muted" onclick="refreshData()" title="Refresh">
+        <span class="lr-spin" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+        <span>Not scanned yet</span>
+    </button>
     {% endif %}
 </div>
 
@@ -772,7 +776,6 @@
             <a href="/history">View History</a>
             <a href="/settings">Settings</a>
         </div>
-        <button onclick="refreshData()" class="btn btn-outline btn-sm">Refresh</button>
     </div>
 </div>
 
@@ -961,6 +964,7 @@
     </div>
 </div>
 {% endif %}
+
 {% endblock %}
 
 {% block extra_js %}

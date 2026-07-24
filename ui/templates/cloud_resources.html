@@ -130,7 +130,7 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
     cursor: pointer; transition: opacity 0.15s;
 }
 .tag-apply:disabled { opacity: 0.45; cursor: not-allowed; }
-.tag-result { font-family: var(--font-mono); font-size: 0.68rem; margin-top: 0.7rem; }
+.tag-result { font-family: var(--font-sans); font-size: 0.68rem; margin-top: 0.7rem; }
 .tag-result.ok { color: #15803d; }
 .tag-result.err { color: var(--danger, #b91c1c); }
 </style>
@@ -141,7 +141,6 @@ tbody tr:has(.tag-check:checked) { background: rgba(21,128,61,0.06); box-shadow:
         <button onclick="location.reload()" class="cr-refresh"><span aria-hidden="true">&#8635;</span> Refresh</button>
         {# Live clock, Europe/Paris — same wall clock as the DB stamps. #}
         <time id="hero-clock" class="sysbar-clock" style="margin-left: 0;">
-            <span class="sysbar-beat" aria-hidden="true"></span>
             <span class="sysbar-time" id="hero-clock-time"></span>
             <span aria-hidden="true">&middot;</span>
             <span id="hero-clock-date"></span>

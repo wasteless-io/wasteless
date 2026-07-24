@@ -10,7 +10,19 @@
 #   wasteless collect     Run the complete collection and detection pipeline
 #
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve this script's real directory even when invoked through a symlink.
+# Scheduled jobs run us via ~/.local/bin/wasteless (a symlink to this file);
+# a naive dirname lands in ~/.local/bin (no venv there), so `collect` died
+# with "Virtual environment not found". Follow the symlink chain instead.
+# Portable (no `readlink -f`, so macOS/launchd keeps working).
+_src="${BASH_SOURCE[0]}"
+while [ -L "$_src" ]; do
+    _dir="$(cd -P "$(dirname "$_src")" >/dev/null 2>&1 && pwd)"
+    _src="$(readlink "$_src")"
+    [ "${_src#/}" = "$_src" ] && _src="$_dir/$_src"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$_src")" >/dev/null 2>&1 && pwd)"
+unset _src _dir
 
 # Stable launcher for scheduled jobs. The installed symlink (~/.local/bin/
 # wasteless) sits at a fixed path, so moving the repo + re-running install.sh
@@ -479,6 +491,7 @@ PLIST
 
 _schedule_systemd() {
     mkdir -p "$SYSTEMD_USER_DIR"
+    local mins=$(( COLLECT_INTERVAL_SEC / 60 ))
     cat > "$SYSTEMD_USER_DIR/${SYSTEMD_UNIT}.service" <<UNIT
 [Unit]
 Description=WasteLess AWS collection & waste detection
@@ -493,8 +506,12 @@ UNIT
 Description=Run WasteLess collection every 5 minutes
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=${COLLECT_INTERVAL_SEC}
+# Wall-clock schedule (every ${mins} min). Robust across reboots, timer
+# restarts/reinstalls and laptop suspend/resume. The old OnBootSec +
+# OnUnitActiveSec pair was a self-perpetuating monotonic chain: any restart
+# while already booted left it with NextElapse=infinity (never fires again)
+# until the next reboot, and Persistent= has no effect on monotonic timers.
+OnCalendar=*:0/${mins}
 Persistent=true
 
 [Install]
