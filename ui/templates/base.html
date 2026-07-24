@@ -62,6 +62,11 @@
             --black: #000000;
             --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            /* Canonical UI font: every page (app, landing, print) uses this same
+               system stack so text renders identically across all surfaces.
+               Bi-register contract: content in --font-sans, chrome/resource ids
+               in --font-mono, wordmark in --font-display. */
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
         }
 
         * {
@@ -71,7 +76,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: var(--font-sans);
             background: #f5f5f7;
             color: var(--ink);
             line-height: 1.6;
@@ -243,6 +248,28 @@
             opacity: 1;
         }
 
+        /* Nav count pill (replaces the old notification bell): a small green
+           badge on the Recommendations row, fed by the shared
+           .js-pending-badge poller. Right-aligned when the sidebar is
+           expanded; a corner dot when it is collapsed. */
+        .nav-links a .nav-badge {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 1.2rem;
+            height: 1.2rem;
+            padding: 0 0.4rem;
+            border-radius: 999px;
+            background: #22c55e;
+            color: #ffffff;
+            font-family: var(--font-mono);
+            font-size: 0.66rem;
+            font-weight: 700;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
         .nav-bottom {
             border-top: 1px solid rgba(0, 0, 0, 0.07);
             padding-top: 0.75rem;
@@ -386,7 +413,7 @@
             color: var(--ink-secondary);
             margin-top: 0.35rem;
         }
-        .fin-tiles .kpi-sub { font-family: var(--font-mono); font-size: 0.66rem; color: var(--ink-secondary); margin-top: 0.25rem; }
+        .fin-tiles .kpi-sub { font-family: var(--font-sans); font-size: 0.66rem; color: var(--ink-secondary); margin-top: 0.25rem; }
         .fin-tiles .is-muted { color: var(--gray-500); }
         /* Text-safe status colors (WCAG on white), same values as the
            dashboard's --success-text/--danger-text */
@@ -410,10 +437,40 @@
             background: var(--white);
             color: #15803d;
         }
-        .status-pill::before { content: ""; width: 7px; height: 7px; background: currentColor; flex-shrink: 0; }
         .status-pill.is-warn { color: #b45309; }
         .status-pill.is-danger { color: #b91c1c; }
         .status-pill.is-muted { color: var(--gray-500); }
+
+        /* Live-refresh indicator: replaces the per-page sync/refresh buttons
+           and the Last-collection/sync/scan pills. A continuously spinning
+           mark + a freshness message; still a button, so a click triggers the
+           page's manual refresh. Colour follows freshness (green/amber/red). */
+        .live-refresh {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: none;
+            border: none;
+            padding: 0.25rem 0.15rem;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.06em;
+            color: var(--ink);
+            transition: opacity 0.15s ease;
+        }
+        .live-refresh:hover { opacity: 0.65; }
+        .live-refresh:disabled { cursor: default; opacity: 0.75; }
+        .live-refresh .lr-spin {
+            display: inline-flex;
+            color: var(--ink);
+            animation: live-spin 1.4s linear infinite;
+        }
+        /* Freshness classes kept on the markup but rendered uniformly black. */
+        @keyframes live-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+            .live-refresh .lr-spin { animation: none; }
+        }
 
         /* System bar (landing chrome): replaces the beige title cards.
            Breadcrumb + page signal on the left, live clock on the right
@@ -467,10 +524,6 @@
             white-space: nowrap;
         }
         .sysbar-clock .sysbar-time { color: var(--ink); font-weight: 700; }
-        .sysbar-beat { width: 7px; height: 7px; background: #15803d; flex-shrink: 0; }
-        .sysbar-beat.is-warn { background: #b45309; }
-        .sysbar-beat.is-danger { background: #b91c1c; }
-        .sysbar-beat.is-muted { background: var(--gray-400); }
 
         /* Honesty footnote (landing identity): the circled-i line that
            states what the figures are and are not */
@@ -613,6 +666,18 @@
             body.sidebar-collapsed .nav-links a:focus-visible .nav-label,
             body.sidebar-collapsed .sidebar-toggle:hover .nav-label,
             body.sidebar-collapsed .sidebar-toggle:focus-visible .nav-label { opacity: 1; }
+            /* Collapsed: the count shrinks to a green corner dot on the icon. */
+            body.sidebar-collapsed .nav-links a .nav-badge {
+                position: absolute;
+                top: 6px;
+                right: 10px;
+                margin: 0;
+                min-width: 0;
+                width: 8px;
+                height: 8px;
+                padding: 0;
+                font-size: 0;
+            }
         }
 
         @media (max-width: 768px) {
@@ -1100,12 +1165,6 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div id="mobileNavBackdrop" class="mobile-nav-backdrop" onclick="closeMobileNav()"></div>
-    {# Notification bell: pinned to the top-right of the viewport (opposite the
-       top-left burger), out of the sidebar so collapsing it never moves it. #}
-    <button type="button" id="notif-bell" class="notif-bell" aria-label="Notifications — recommendations awaiting review" onclick="toggleNotifPopover(event)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-        <span class="notif-badge js-pending-badge" style="display: none;">0</span>
-    </button>
     <div class="layout">
         <aside class="sidebar" id="appSidebar">
             <div class="sidebar-header">
@@ -1123,6 +1182,9 @@
                     <li><a href="/recommendations" class="{% if request.url.path == '/recommendations' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
                         <span class="nav-label">Recommendations</span>
+                        {# Pending-recommendations count — replaces the old notification bell.
+                           The .js-pending-badge class wires it to the shared 60s poller. #}
+                        <span class="nav-badge js-pending-badge" style="display: none;">0</span>
                     </a></li>
                     <li><a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
@@ -1208,13 +1270,6 @@
              carry — so a tooltip reads as part of the same family. Every legacy
              data-tip and native `title` is folded onto it (script below). -->
         <div id="appTip" style="position: fixed; z-index: 3000; display: none; max-width: 280px; padding: 0.5rem 0.72rem; background: #ffffff; color: var(--ink); border: 1px solid var(--hairline); border-radius: 8px; box-shadow: 2px 2px 0 rgba(62,213,152,0.20), 0 8px 22px rgba(11,14,12,0.13); font-size: 0.76rem; line-height: 1.5; white-space: normal; pointer-events: none;"></div>
-
-        <div id="notif-popover" class="notif-popover" role="dialog" aria-label="Notifications">
-            <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem;">Notifications</div>
-            <div id="notif-body" style="font-size: 0.82rem; color: var(--ink-secondary); line-height: 1.5; white-space: nowrap;">Loading…</div>
-            <div id="notif-list" style="margin-top: 0.5rem;"></div>
-            <a href="/recommendations" id="notif-link" style="display: none; margin-top: 0.6rem; font-size: 0.82rem; font-weight: 600; color: var(--primary); text-decoration: none;">Review recommendations &rarr;</a>
-        </div>
 
         <main class="main">
             {# Global AWS banner, two states: onboarding (nothing was ever

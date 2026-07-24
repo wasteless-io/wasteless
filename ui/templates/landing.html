@@ -28,10 +28,13 @@
             --gray-900: #18181b;
             --success: #22c55e;
             --danger: #ef4444;
+            /* Same canonical UI font stack as the app (base.html --font-sans),
+               so the landing renders in the identical face. */
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: var(--font-sans);
             color: var(--gray-900);
             line-height: 1.6;
             background: var(--white);

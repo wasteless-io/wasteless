@@ -106,6 +106,31 @@
     .setup-danger .actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
     .btn-danger { background: #b91c1c; color: #fff; border: none; border-radius: 0; font-weight: 600; }
     .btn-danger:hover { background: #991b1b; }
+
+    /* Success-overlay CTA: solid mint slab on the near-black plane — the app's
+       "go" signature. Square, mono, with a mint drop-shadow that lifts on hover
+       (the same idiom as the Daily Briefing / btn-terminal--mint hover). */
+    .setup-success-cta {
+        display: inline-block;
+        background: #3ed598;
+        color: #0b0e0c;
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        border: 1px solid #3ed598;
+        border-radius: 0;
+        padding: 0.6rem 1.4rem;
+        margin-bottom: 0.85rem;
+        transition: box-shadow 0.18s ease, transform 0.05s ease, background 0.18s ease;
+    }
+    .setup-success-cta:hover { background: #34c489; box-shadow: 4px 4px 0 rgba(62, 213, 152, 0.35); }
+    .setup-success-cta:active { transform: translate(1px, 1px); box-shadow: 2px 2px 0 rgba(62, 213, 152, 0.35); }
+    .setup-success-cta:focus-visible { outline: 2px solid #eafff5; outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) {
+        .setup-success-cta { transition: none; }
+    }
 </style>
 {% endblock %}
 
@@ -257,7 +282,7 @@
     </label>
     <div class="actions">
         <button class="btn btn-danger" onclick="setupDisconnect()">Disconnect</button>
-        <span id="setup-disconnect-result" style="font-size: 0.85rem; font-family: var(--font-mono);"></span>
+        <span id="setup-disconnect-result" style="font-size: 0.85rem; font-family: var(--font-sans);"></span>
     </div>
 </div>
 {% endif %}
@@ -265,19 +290,23 @@
 <!-- Success overlay: shown by Test & save on success. This is the formal
      conclusion of the onboarding: an unmissable confirmation, then an
      automatic hand-off to the Overview (which greets with ?welcome=1). -->
-<div id="setup-success" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 1rem;">
-    <div style="background: white; border-radius: 16px; max-width: 480px; width: 100%; padding: 2rem; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.25);">
-        <div style="width: 56px; height: 56px; border-radius: 50%; background: #dcfce7; color: #166534; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+<div id="setup-success" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); z-index: 500; align-items: center; justify-content: center; padding: 1rem;">
+    <!-- Terminal-voice success signature: near-black plane, dotted texture and
+         the mint slab shadow used by the app's dark cards; mono-caps eyebrow,
+         square corners, WasteLess mint accent. -->
+    <div style="background: #0b0e0c; color: #f2f5f3; max-width: 460px; width: 100%; padding: 2rem 2rem 1.6rem; text-align: center; border: 1px solid #1c2620; border-top: 2px solid #3ed598; background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px); background-size: 22px 22px; box-shadow: 8px 8px 0 0 rgba(62,213,152,0.28);">
+        <div style="width: 52px; height: 52px; background: #3ed598; color: #0b0e0c; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.1rem auto;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
-        <h2 style="margin: 0 0 0.5rem 0;">Connection verified</h2>
-        <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">
-            AWS account <strong id="setup-success-account"></strong> is connected
-            with the permissions wasteless needs.
+        <div style="font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.18em; text-transform: uppercase; color: #3ed598; margin-bottom: 0.6rem;">Connection verified</div>
+        <p style="margin: 0 0 0.5rem 0; font-size: 0.92rem; line-height: 1.5; color: #d7ddd9;">
+            AWS account
+            <strong id="setup-success-account" style="font-family: var(--font-mono); color: #f2f5f3;"></strong>
+            is connected with the permissions wasteless needs.
         </p>
-        <p class="text-muted" id="setup-success-collection" style="margin: 0 0 1.25rem 0; font-size: 0.85rem;"></p>
-        <a href="/?welcome=1" class="btn btn-primary" style="margin-bottom: 0.75rem;">Go to Overview &rarr;</a>
-        <p class="text-muted" style="margin: 0; font-size: 0.75rem;">Taking you to the Overview in a few seconds…</p>
+        <p id="setup-success-collection" style="margin: 0 0 1.4rem 0; font-size: 0.85rem; line-height: 1.5; color: #8b948e;"></p>
+        <a href="/?welcome=1" class="setup-success-cta">Go to Overview &rarr;</a>
+        <p style="margin: 0; font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: #6b746e;">Taking you to the Overview in a few seconds…</p>
     </div>
 </div>
 
