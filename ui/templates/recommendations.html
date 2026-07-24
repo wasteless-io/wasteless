@@ -220,11 +220,10 @@
     }
     .estate-chat.open .ec-head { margin-bottom: 0.65rem; }
     .estate-chat .ec-name {
-        font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.15em;
+        font-family: var(--font-sans); font-size: 0.68rem; letter-spacing: 0.15em;
         text-transform: uppercase; font-weight: 700;
         display: inline-flex; align-items: center; gap: 0.5rem;
     }
-    .estate-chat .ec-name::before { content: ""; width: 7px; height: 7px; background: #3ed598; }
     .estate-chat .ec-tag { margin-left: auto; font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: #8b948e; }
     .estate-chat .ec-caret { display: inline-flex; color: #8b948e; transition: transform 0.3s ease; }
     .estate-chat.open .ec-caret { transform: rotate(180deg); }
@@ -408,18 +407,18 @@
         </div>
         {# Live clock, Europe/Paris — same wall clock as the DB stamps. #}
         <time id="hero-clock" class="sysbar-clock">
-            <span class="sysbar-beat{% if not aws_sync_at %} is-muted{% endif %}" aria-hidden="true"></span>
             <span class="sysbar-time" id="hero-clock-time"></span>
             <span aria-hidden="true">&middot;</span>
             <span id="hero-clock-date"></span>
         </time>
 </header>
 
-{# Sync AWS + last-sync stamp, moved out of the old page title row #}
-<div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-bottom: 1rem;">
-    <span id="lastSyncStamp" class="status-pill"{% if not aws_sync_at %} style="display: none;"{% endif %}>Last sync: {% if aws_sync_at %}{{ aws_sync_at.strftime('%d %b, %H:%M') }}{% endif %}</span>
-    <button type="button" onclick="syncWithAWS()" class="sync-btn" id="syncBtn">
-        <span id="syncIcon">&#8635;</span> Sync AWS
+{# Live-refresh (Last-sync freshness), top-right. Continuously spinning,
+   clickable to sync recommendations with AWS. #}
+<div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+    <button type="button" id="syncBtn" class="live-refresh" onclick="syncWithAWS()" title="Refresh — sync recommendations with AWS">
+        <span class="lr-spin" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+        <span id="lastSyncStamp">{% if aws_sync_at %}Live · synced {{ aws_sync_at.strftime('%d %b, %H:%M') }}{% else %}Live · not synced yet{% endif %}</span>
     </button>
 </div>
 
@@ -1659,41 +1658,36 @@
     }
 
     async function syncWithAWS() {
+        // The Sync AWS control is now the live-refresh indicator: keep its
+        // spinner and structure, only swap the message span (#lastSyncStamp).
         const btn = document.getElementById('syncBtn');
-        const icon = document.getElementById('syncIcon');
+        const stamp = document.getElementById('lastSyncStamp');
 
-        // Disable button and show loading
-        btn.disabled = true;
-        icon.style.animation = 'spin 1s linear infinite';
-        btn.innerHTML = '<span id="syncIcon" style="animation: spin 1s linear infinite;">&#8635;</span> Syncing...';
+        if (btn) btn.disabled = true;
+        if (stamp) stamp.textContent = 'Syncing…';
 
         try {
             const response = await api('/api/sync-aws', { method: 'POST' });
 
-            // The sync succeeded, so the server just re-stamped
-            // _aws_status — mirror it here without waiting for a reload
-            // (the no-obsolete branch below doesn't reload the page).
-            const stamp = document.getElementById('lastSyncStamp');
-            if (stamp) {
-                const now = new Date();
-                stamp.textContent = 'Last sync: '
-                    + now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-                    + ', ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                stamp.style.display = '';
-            }
+            // The sync succeeded, so the server just re-stamped _aws_status —
+            // mirror it here without waiting for a reload (the no-obsolete
+            // branch below doesn't reload the page).
+            const now = new Date();
+            const t = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                + ', ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            if (stamp) stamp.textContent = 'Live · synced ' + t;
 
             if (response.obsolete > 0) {
                 alert(`Sync complete!\n\n${response.obsolete} recommendation(s) marked as obsolete.\n${response.synced} instance(s) updated.\n\nPage will refresh.`);
                 refreshData();
             } else {
                 alert(`Sync complete!\n\nAll ${response.total_checked} recommendations are up to date.`);
-                btn.disabled = false;
-                btn.innerHTML = '<span id="syncIcon">&#8635;</span> Sync AWS';
+                if (btn) btn.disabled = false;
             }
         } catch (error) {
             alert('Sync error: ' + error.message);
-            btn.disabled = false;
-            btn.innerHTML = '<span id="syncIcon">&#8635;</span> Sync AWS';
+            if (stamp) stamp.textContent = 'Live · sync failed';
+            if (btn) btn.disabled = false;
         }
     }
 

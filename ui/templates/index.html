@@ -58,7 +58,6 @@
         letter-spacing: 0.16em;
         text-transform: uppercase;
     }
-    #briefing-card h3::before { content: ""; width: 7px; height: 7px; background: #3ed598; flex-shrink: 0; }
     #briefing-card .briefing-toggle { color: #3ed598; }
     #briefing-card .briefing-toggle:hover,
     #briefing-card .briefing-toggle:focus-visible { color: #8b948e; }
@@ -141,30 +140,6 @@
     @media (prefers-reduced-motion: reduce) {
         .pending-blink { animation: none; }
     }
-    /* Pending-recommendations pill, above the hero: white pill, amber
-       dot, ink border on hover like the cards. Only rendered when
-       something is actually pending. */
-    .pending-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.45rem;
-        padding: 0.3rem 0.7rem;
-        border: 1px solid var(--hairline);
-        border-radius: 999px;
-        background: white;
-        color: #92400e;
-        font-family: var(--font-mono);
-        font-size: 0.64rem;
-        font-weight: 600;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        text-decoration: none;
-        transition: border-color 0.2s ease;
-    }
-    /* Landing identity: square status dot, amber = awaiting a decision */
-    .pending-pill::before { content: ""; width: 7px; height: 7px; background: currentColor; flex-shrink: 0; }
-    .pending-pill:hover { border-color: var(--ink); }
-
     /* Landing identity: table chrome in mono caps */
     .table-mono-head thead th {
         font-family: var(--font-mono);
@@ -275,18 +250,21 @@
    collection state (green = healthy, amber = stale, gray = never ran). #}
 <header class="sysbar mb-1">
     <h1 class="sysbar-crumb" style="margin: 0;">Wasteless <span class="path">/ Overview</span></h1>
-    {% if (metrics.pending_count or 0) > 0 %}
-    <a href="/recommendations" class="pending-pill pending-blink">
-        {{ metrics.pending_count }} recommendation{{ 's' if metrics.pending_count > 1 }} pending
-    </a>
-    {% endif %}
     <time id="hero-clock" class="sysbar-clock">
-        <span class="sysbar-beat{% if not last_sync %} is-muted{% elif collection_stale %} is-warn{% endif %}" aria-hidden="true"></span>
         <span class="sysbar-time" id="hero-clock-time"></span>
         <span aria-hidden="true">&middot;</span>
         <span id="hero-clock-date"></span>
     </time>
 </header>
+
+{# Live-refresh (Last-collection freshness), top-right. Continuously spinning,
+   clickable to reload the freshly-collected figures. #}
+<div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+    <button type="button" class="live-refresh{% if not last_sync %} is-muted{% elif collection_stale %} is-warn{% endif %}" onclick="location.reload()" title="Refresh the collected figures">
+        <span class="lr-spin" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+        <span>{% if not last_sync %}Not collected yet{% elif collection_stale %}Live · collected {{ last_sync|localtime }} · stale{% else %}Live · collected {{ last_sync|localtime }}{% endif %}</span>
+    </button>
+</div>
 
 {# Coherence line: total estimated waste exceeds the real cloud bill.
    Surfaced (not hidden) so the list-price overstatement is honest — see
@@ -314,16 +292,7 @@
        and is only claimed while it is actually being honoured: next to
        a stale timestamp it would contradict itself. #}
     <div style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; font-size: 0.72rem; color: var(--gray-400); margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px solid var(--gray-100);">
-        {% if not last_sync %}
-        <span class="status-pill is-muted">No collection yet</span>
-        <span>Run <code style="background: rgba(0,0,0,0.06); padding: 0.05rem 0.3rem; border-radius: 3px;">wasteless collect</code> to populate these figures.</span>
-        {% elif collection_stale %}
-        <span class="status-pill is-warn">Last collection: {{ last_sync|localtime }}</span>
-        <span>No successful collection since then: the 5-minute loop is stopped, or it runs but cannot reach AWS (see /logs).</span>
-        {% else %}
-        <span class="status-pill kpi-hover" tabindex="0" data-tip="Waste figures are collected automatically every 5 minutes">Last collection: {{ last_sync|localtime }}</span>
-        {% endif %}
-        <span class="honest-note" style="margin-left: auto;">All figures in USD, as billed by AWS · estimates from on-demand list prices</span>
+        <span class="honest-note">All figures in USD, as billed by AWS · estimates from on-demand list prices</span>
     </div>
 </div>
 
