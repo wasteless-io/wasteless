@@ -14,7 +14,9 @@ on:
 jobs:
   integration:
     name: Integration suite (moto + Postgres)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which no longer ships
+    # postgresql-client-16 (the client must match the postgres:16 service).
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
@@ -66,7 +68,9 @@ jobs:
 
   live-aws:
     name: Live AWS sandbox (opt-in, gated on secret)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which no longer ships
+    # postgresql-client-16 (the client must match the postgres:16 service).
+    runs-on: ubuntu-24.04
     # Only runs when a sandbox role is configured in repo secrets. Until then
     # this job is skipped, so the workflow never touches a real account by
     # accident. Wire tests marked `-m live_aws` here once the sandbox exists.

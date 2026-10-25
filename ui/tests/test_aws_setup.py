@@ -15,6 +15,8 @@ Three layers:
 boto3 is mocked throughout, no test here talks to AWS.
 """
 
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -209,8 +211,23 @@ class TestEndpoints(unittest.TestCase):
             # ui/.env created from scratch with the same values
             self.assertIn(f"AWS_ROLE_ARN={VALID_ROLE}", ui_env.read_text())
             # Secrets-grade permissions on both
-            self.assertEqual(root_env.stat().st_mode & 0o777, 0o600)
-            self.assertEqual(ui_env.stat().st_mode & 0o777, 0o600)
+            for env in (root_env, ui_env):
+                self.assert_owner_only(env)
+
+    def assert_owner_only(self, path):
+        """chmod 600 on POSIX; on Windows (where chmod only toggles the
+        read-only flag) an ACL with inheritance cut and one full-control
+        entry — `(I)` marks inherited entries in icacls output."""
+        if os.name != "nt":
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            return
+        # errors="replace": icacls prints in the OEM code page (accents in
+        # localized account names), not UTF-8
+        acl = subprocess.run(
+            ["icacls", str(path)], capture_output=True, text=True, errors="replace"
+        ).stdout
+        self.assertNotIn("(I)", acl)
+        self.assertEqual(acl.count("(F)"), 1)
 
     def test_save_failure_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
