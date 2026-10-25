@@ -19,11 +19,18 @@ click>=8.1.7
 litellm>=1.40
 
 # anyio est transitif (httpx, openai via litellm) mais doit rester aligne
-# avec le lock UI, ou starlette (fastapi) le plafonne a 4.14.1 : la CI
-# installe requirements.lock ET ui/requirements.lock dans le meme env, et
-# deux versions d'anyio y sont irreconciliables. Sans starlette ici, la
-# racine choisirait sinon 4.14.2 toute seule.
-anyio<4.14.2
+# avec le lock UI : la CI installe requirements.lock ET ui/requirements.lock
+# dans le meme env, et deux versions d'anyio y sont irreconciliables.
+# Plancher 4.14.2 : correctifs PYSEC-2026-4023/4024/4025. starlette >= 1.10
+# (fastapi >= 0.162) l'accepte ; les anciens starlette le plafonnaient a
+# 4.14.1, d'ou l'ancien `anyio<4.14.2`. Apres regeneration, verifier que
+# les deux locks epinglent la meme version d'anyio.
+anyio>=4.14.2
+
+# filelock est transitif (litellm, huggingface-hub) : sans plancher, la
+# resolution garde une 3.x vulnerable (CVE-2026-112907/112913/112940,
+# corrigees en 4.2.1). Meme plancher dans ui/requirements.txt.
+filelock>=4.2.1
 
 # Testing
 pytest>=8.0.0
