@@ -237,11 +237,15 @@ class TestEndpoints(unittest.TestCase):
         self.assertTrue(sddl.startswith("D:P"), sddl)
         aces = [ace.split(";") for ace in re.findall(r"\(([^)]*)\)", sddl)]
         user_sid = env_files_module._current_user_sid()
+        # SDDL prints the built-in Administrator account (RID 500, the CI
+        # runner's user) as the LA alias instead of its SID
+        user_ids = {user_sid, "LA"} if user_sid.endswith("-500") else {user_sid}
         for ace_type, flags, _rights, _, _, sid in aces:
             self.assertEqual(ace_type, "A", sddl)
             self.assertNotIn("ID", flags, sddl)
-            self.assertIn(sid, {user_sid, "SY", "BA"}, sddl)
-        self.assertIn((user_sid, "FA"), {(a[5], a[2]) for a in aces}, sddl)
+            self.assertIn(sid, user_ids | {"SY", "BA"}, sddl)
+        user_rights = {a[2] for a in aces if a[5] in user_ids}
+        self.assertIn("FA", user_rights, sddl)
 
     def test_save_failure_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
