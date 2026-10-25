@@ -615,6 +615,7 @@ if [ "$IS_WSL" -eq 1 ]; then
             print_error "Le projet est sur le disque Windows ($PWD)"
             print_info "Clonez-le dans le systeme de fichiers Linux, par exemple:"
             print_info "  cd ~ && git clone <repo> && cd wasteless && ./install.sh"
+            print_info "Ou installez nativement sous Windows : install.cmd depuis un terminal Windows"
             exit 1
             ;;
     esac

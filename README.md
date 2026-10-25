@@ -53,9 +53,9 @@ matrix and [AWS setup](docs/AWS_SETUP.md) for the IAM model.
 
 ### Requirements
 
-- macOS, Linux, or Windows through WSL2
+- macOS, Linux, Windows 10/11 (native or through WSL2)
 - Python 3.11 or newer
-- Docker with Docker Compose
+- Docker with Docker Compose (Docker Desktop on Windows)
 - Git
 
 AWS CLI is optional. Steampipe is also optional, but the ELB, NAT, VPC, gp2,
@@ -69,6 +69,16 @@ git clone https://github.com/wasteless-io/wasteless.git
 cd wasteless
 ./install.sh
 ```
+
+On native Windows, run the installer from the cloned folder in a regular
+(non-admin) terminal instead:
+
+```bat
+install.cmd
+```
+
+`install.cmd -InstallSystemDeps` also installs a missing Python or Docker
+Desktop through `winget`.
 
 The installer creates both Python environments, starts PostgreSQL, configures
 the local CLI, offers to install scheduled collection, and starts the web UI.
@@ -115,7 +125,9 @@ Then open <http://localhost:8888/recommendations>.
 | `wasteless unschedule` | Remove OS-level collection |
 
 If the alias is not available in the current terminal yet, use
-`./wasteless.sh <command>` or open a new terminal.
+`./wasteless.sh <command>` (`wasteless.cmd <command>` on native Windows) or
+open a new terminal. On native Windows, `wasteless schedule` registers a
+Task Scheduler task that runs while you are logged on.
 
 ## How it works
 
@@ -146,7 +158,7 @@ technical decisions.
 | macOS | Supported |
 | Linux | Supported |
 | Windows through WSL2 | Supported; keep the repository in the Linux filesystem |
-| Native Windows | Not supported |
+| Native Windows | Supported (`install.cmd`); Steampipe has no Windows build, so the ELB, NAT, VPC, gp2, AMI and RDS detectors are skipped. Use WSL2 for full coverage |
 
 One installation currently manages one AWS account. Native multi-account
 operation, S3, EKS, Azure and GCP are not currently supported. Follow

@@ -14,6 +14,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from utils.dates import strftime
+
 from dotenv import load_dotenv
 from psycopg2 import pool as pg_pool
 from psycopg2.extras import RealDictCursor
@@ -157,10 +159,12 @@ def _localtime(dt, fmt: str = "%d %b, %H:%M") -> str:
         return ""
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(DISPLAY_TZ).strftime(fmt)
+    return strftime(dt.astimezone(DISPLAY_TZ), fmt)
 
 
 templates.env.filters["localtime"] = _localtime
+# `{{ d | strftime('%b %-d') }}`: plain .strftime() rejects %-d on Windows
+templates.env.filters["strftime"] = strftime
 
 # Add config_manager to template globals for mode badge
 from utils.config_manager import ConfigManager

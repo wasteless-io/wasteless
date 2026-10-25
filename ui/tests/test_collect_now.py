@@ -40,6 +40,11 @@ class TestCollectNowEndpoint(unittest.TestCase):
 
 class TestStartBackgroundCollection(unittest.TestCase):
 
+    def setUp(self):
+        patcher = patch.object(collect_module, "IS_WINDOWS", False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_launches_wasteless_collect(self):
         with tempfile.TemporaryDirectory() as tmp:
             script = Path(tmp) / "wasteless.sh"
@@ -58,6 +63,51 @@ class TestStartBackgroundCollection(unittest.TestCase):
             (Path(tmp) / "wasteless.sh").write_text("#!/bin/bash\n")
             with patch.object(collect_module.subprocess, "Popen", side_effect=OSError("nope")):
                 self.assertFalse(collect_module.start_background_collection(Path(tmp)))
+
+
+class TestStartBackgroundCollectionWindows(unittest.TestCase):
+    """Native Windows: no bash, the run goes through src/run_collection.py
+    with the root venv's windowless interpreter."""
+
+    def setUp(self):
+        patcher = patch.object(collect_module, "IS_WINDOWS", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @staticmethod
+    def _make_install(root: Path, interpreter: str = "pythonw.exe") -> Path:
+        (root / "src").mkdir()
+        (root / "src" / "run_collection.py").write_text("")
+        scripts = root / "venv" / "Scripts"
+        scripts.mkdir(parents=True)
+        python = scripts / interpreter
+        python.write_text("")
+        return python
+
+    def test_launches_run_collection_with_pythonw(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            python = self._make_install(Path(tmp))
+            with patch.object(collect_module.subprocess, "Popen") as popen:
+                self.assertTrue(collect_module.start_background_collection(Path(tmp)))
+            cmd = popen.call_args.args[0]
+            runner = Path(tmp) / "src" / "run_collection.py"
+            self.assertEqual(cmd[:2], [str(python), str(runner)])
+            self.assertEqual(cmd[2], "--log")
+            self.assertIn("creationflags", popen.call_args.kwargs)
+            self.assertNotIn("start_new_session", popen.call_args.kwargs)
+
+    def test_falls_back_to_python_exe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            python = self._make_install(Path(tmp), "python.exe")
+            with patch.object(collect_module.subprocess, "Popen") as popen:
+                self.assertTrue(collect_module.start_background_collection(Path(tmp)))
+            self.assertEqual(popen.call_args.args[0][0], str(python))
+
+    def test_without_venv_returns_false(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "src").mkdir()
+            (Path(tmp) / "src" / "run_collection.py").write_text("")
+            self.assertFalse(collect_module.start_background_collection(Path(tmp)))
 
 
 if __name__ == "__main__":

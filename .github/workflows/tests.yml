@@ -72,7 +72,9 @@ jobs:
 
   backend:
     name: Backend (pytest)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which no longer ships
+    # postgresql-client-16 (the client must match the postgres:16 service).
+    runs-on: ubuntu-24.04
     # Real Postgres so tests/integration/ (test_ui_coherence.py,
     # test_db_backup_restore.py) actually run instead of skipping —
     # without this, "CI green" only proves the unit tests pass.
@@ -154,7 +156,9 @@ jobs:
 
   ui:
     name: UI (unittest)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which no longer ships
+    # postgresql-client-16 (the client must match the postgres:16 service).
+    runs-on: ubuntu-24.04
     # Same reasoning as the backend job: several ui/tests/*.py need a real
     # Postgres (test_action_status_guards.py, test_page_truncation_totals.py,
     # test_sync_ec2_states.py) and otherwise just skip in CI.
@@ -210,9 +214,95 @@ jobs:
         working-directory: ui
         run: python run_tests.py
 
+  windows:
+    name: Native Windows (unit tests, PowerShell scripts, run_collection smoke)
+    runs-on: windows-latest
+    # Native Windows install path: install.ps1 / wasteless.ps1 and
+    # src/run_collection.py instead of the bash scripts. Windows runners
+    # can't run Linux service containers, so the job starts the PostgreSQL
+    # preinstalled on the image (stopped by default) instead. PYTHONUTF8
+    # mirrors what the PowerShell launchers set for every Python process.
+    env:
+      PYTHONUTF8: "1"
+      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_REGION: eu-west-1
+      AWS_ACCOUNT_ID: "000000000000"
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: wasteless
+      DB_USER: wasteless
+      DB_PASSWORD: wasteless_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.lock
+            ui/requirements.lock
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.lock -r ui/requirements.lock
+          pip install -e .
+      # Windows PowerShell 5.1 (`shell: powershell`), the version every
+      # Windows machine ships with — not pwsh 7.
+      - name: Parse PowerShell scripts
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($f in 'install.ps1', 'wasteless.ps1', 'uninstall.ps1') {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$null, [ref]$errors) | Out-Null
+            foreach ($e in $errors) { Write-Host "$f`:$($e.Extent.StartLineNumber): $($e.Message)"; $failed = $true }
+            if (Select-String -Path $f -Pattern '[^\x00-\x7F]' -Quiet) { Write-Host "$f contains non-ASCII characters (garbled by PowerShell 5.1)"; $failed = $true }
+          }
+          if ($failed) { exit 1 }
+      # The image ships PostgreSQL as a disabled service, with PGBIN set and
+      # the superuser password in PGPASSWORD (runner-images defaults).
+      - name: Start preinstalled PostgreSQL and apply the schema
+        shell: powershell
+        run: |
+          $svc = Get-Service -Name 'postgresql*' | Select-Object -First 1
+          if (-not $svc) { throw 'No preinstalled PostgreSQL service on this image' }
+          Set-Service -Name $svc.Name -StartupType Manual
+          Start-Service -Name $svc.Name
+          $psql = Join-Path $env:PGBIN 'psql.exe'
+          # SUPERUSER like POSTGRES_USER in the postgres:16 image the other
+          # jobs use (sql/init.sql creates the metabase database)
+          & $psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "CREATE USER wasteless WITH SUPERUSER PASSWORD 'wasteless_ci';"
+          if ($LASTEXITCODE) { exit 1 }
+          & $psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE wasteless OWNER wasteless;"
+          if ($LASTEXITCODE) { exit 1 }
+          $env:PGPASSWORD = 'wasteless_ci'
+          $files = @('sql/init.sql', 'sql/ec2_metrics.sql') + @(Get-ChildItem sql/migrations/*.sql | Sort-Object Name | ForEach-Object { $_.FullName })
+          foreach ($f in $files) {
+            & $psql -h localhost -U wasteless -d wasteless -v ON_ERROR_STOP=1 -q -f $f
+            if ($LASTEXITCODE) { Write-Host "Migration failed: $f"; exit 1 }
+          }
+      - name: Backend unit tests
+        run: pytest -q tests/unit
+      - name: UI tests
+        working-directory: ui
+        run: python run_tests.py
+      - name: Smoke test (run_collection.py, no AWS creds, no steampipe)
+        shell: powershell
+        run: |
+          python src/run_collection.py --log collect.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-Content collect.log
+          if (-not (Select-String -Path collect.log -Pattern 'steampipe CLI not found' -Quiet)) { exit 1 }
+          # Same assertion as the bash smoke test: the run is recorded as partial
+          $env:PGPASSWORD = 'wasteless_ci'
+          $row = & (Join-Path $env:PGBIN 'psql.exe') -h localhost -U wasteless -d wasteless -tAc "SELECT full_run, skipped_steps FROM collection_runs ORDER BY ran_at DESC LIMIT 1"
+          Write-Host "collection_runs row: $row"
+          if ("$row".Trim() -ne 'f|{elb_unused,nat_gateway_unused,vpc_unused,ebs_gp2_migration,ami_orphan,rds_stopped,rds_idle,rds_snapshot_orphan}') { exit 1 }
+
   smoke-collect:
     name: Smoke test (wasteless.sh collect, no AWS creds, no steampipe)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which no longer ships
+    # postgresql-client-16 (the client must match the postgres:16 service).
+    runs-on: ubuntu-24.04
     # GitHub-hosted runners don't have the steampipe CLI installed, and this
     # job deliberately doesn't set AWS_* creds -- so this exercises exactly
     # the partial-run path (steps 7-10 skipped) that used to be invisible

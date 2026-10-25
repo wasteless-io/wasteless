@@ -80,7 +80,7 @@
         {% else %}
         <div class="kpi-value is-muted">—</div>
         <div class="kpi-label">Verified Savings</div>
-        <div class="kpi-sub">{% if next_verification %}first measurement expected ~{{ next_verification.strftime('%b %-d') }}{% else %}Appears after your first verified action{% endif %}</div>
+        <div class="kpi-sub">{% if next_verification %}first measurement expected ~{{ next_verification | strftime('%b %-d') }}{% else %}Appears after your first verified action{% endif %}</div>
         {% endif %}
     </div>
 
