@@ -28,6 +28,7 @@ sys.path.insert(0, str(UI_DIR))
 
 from schemas import AwsSetupRequest
 from routes import setup as setup_module
+from utils import env_files as env_files_module
 from routes.setup import _account_id, _validation_error, _write_env_files
 
 VALID_ROLE = "arn:aws:iam::123456789012:role/wasteless-readonly"
@@ -215,19 +216,33 @@ class TestEndpoints(unittest.TestCase):
                 self.assert_owner_only(env)
 
     def assert_owner_only(self, path):
-        """chmod 600 on POSIX; on Windows (where chmod only toggles the
-        read-only flag) an ACL with inheritance cut and one full-control
-        entry — `(I)` marks inherited entries in icacls output."""
+        """chmod 600 on POSIX. On Windows (where chmod only toggles the
+        read-only flag): no inherited entry, full control for the current
+        user, and nobody else but SYSTEM / Administrators — an elevated
+        process (CI runner) gets those two as explicit entries on new files.
+        Read as SIDs: account names are localized."""
         if os.name != "nt":
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             return
-        # errors="replace": icacls prints in the OEM code page (accents in
-        # localized account names), not UTF-8
-        acl = subprocess.run(
-            ["icacls", str(path)], capture_output=True, text=True, errors="replace"
+        script = (
+            f"(Get-Acl -LiteralPath '{path}').Access | ForEach-Object {{ "
+            "$_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value"
+            " + '|' + $_.IsInherited + '|' + $_.FileSystemRights }"
+        )
+        out = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", script],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=True,
         ).stdout
-        self.assertNotIn("(I)", acl)
-        self.assertEqual(acl.count("(F)"), 1)
+        entries = [line.split("|") for line in out.splitlines() if line.strip()]
+        user_sid = env_files_module._current_user_sid()
+        self.assertTrue(entries)
+        for sid, inherited, _ in entries:
+            self.assertEqual(inherited, "False")
+            self.assertIn(sid, {user_sid, "S-1-5-18", "S-1-5-32-544"})
+        self.assertIn([user_sid, "False", "FullControl"], entries)
 
     def test_save_failure_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:

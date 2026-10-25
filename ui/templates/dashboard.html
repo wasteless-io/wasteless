@@ -422,11 +422,11 @@
                 {% for u in upcoming %}
                 <div class="upcoming-row">
                     {% if u.kind == 'execution' %}
-                    <strong>{{ u.when.strftime('%b %-d, %H:%M') }}</strong> · {{ u.action }}
+                    <strong>{{ u.when | strftime('%b %-d, %H:%M') }}</strong> · {{ u.action }}
                     <div><span style="font-family: var(--font-mono); font-size: 0.78rem;" title="{{ u.resource_id }}">{{ u.label }}</span> · {{ eur(u.amount) }}/mo</div>
                     <a href="/recommendations" class="kpi-link">Cancel window open &rarr;</a>
                     {% else %}
-                    <strong>~{{ u.when.strftime('%b %-d') }}</strong> · {{ u.label }}
+                    <strong>~{{ u.when | strftime('%b %-d') }}</strong> · {{ u.label }}
                     <div class="u-meta">automatic · needs 7 days of billing data</div>
                     {% endif %}
                 </div>
@@ -596,7 +596,7 @@
             {% endif %}
         </div>
         <div class="stat-sub">
-            since {{ saved_since.strftime('%b %-d, %Y') }}{% if saved_daily > 0 %} · {{ eur(saved_daily) }}/day now{% endif %}
+            since {{ saved_since | strftime('%b %-d, %Y') }}{% if saved_daily > 0 %} · {{ eur(saved_daily) }}/day now{% endif %}
         </div>
     </div>
     <div class="card-footnote">
@@ -919,7 +919,7 @@
 <div id="savedModal" role="dialog" aria-modal="true" aria-labelledby="savedModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeCostModal('savedModal')">
     <div style="background: white; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
-            <h3 id="savedModalTitle" style="margin: 0; font-size: 1rem;">Saved so far · since {{ saved_since.strftime('%b %-d, %Y') }}</h3>
+            <h3 id="savedModalTitle" style="margin: 0; font-size: 1rem;">Saved so far · since {{ saved_since | strftime('%b %-d, %Y') }}</h3>
             <button type="button" data-modal-close aria-label="Close" onclick="closeCostModal('savedModal')" style="border: none; background: none; font-size: 1.2rem; cursor: pointer; line-height: 1; color: var(--gray-500);">&times;</button>
         </div>
         <div style="background: var(--gray-200); border: 1px solid var(--gray-300); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;">
