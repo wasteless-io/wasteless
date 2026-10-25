@@ -268,7 +268,9 @@ jobs:
           Set-Service -Name $svc.Name -StartupType Manual
           Start-Service -Name $svc.Name
           $psql = Join-Path $env:PGBIN 'psql.exe'
-          & $psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "CREATE USER wasteless WITH PASSWORD 'wasteless_ci';"
+          # SUPERUSER like POSTGRES_USER in the postgres:16 image the other
+          # jobs use (sql/init.sql creates the metabase database)
+          & $psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "CREATE USER wasteless WITH SUPERUSER PASSWORD 'wasteless_ci';"
           if ($LASTEXITCODE) { exit 1 }
           & $psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE wasteless OWNER wasteless;"
           if ($LASTEXITCODE) { exit 1 }
