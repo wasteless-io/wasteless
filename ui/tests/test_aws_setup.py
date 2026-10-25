@@ -16,6 +16,7 @@ boto3 is mocked throughout, no test here talks to AWS.
 """
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -220,29 +221,27 @@ class TestEndpoints(unittest.TestCase):
         read-only flag): no inherited entry, full control for the current
         user, and nobody else but SYSTEM / Administrators — an elevated
         process (CI runner) gets those two as explicit entries on new files.
-        Read as SIDs: account names are localized."""
+        Read as SDDL (`icacls /save`, UTF-16): locale-independent, unlike
+        the account names icacls prints, e.g.
+        D:PAI(A;;FA;;;S-1-5-21-...)  — P: protected DACL, ID: inherited ACE,
+        FA: full access, SY / BA: SYSTEM / Administrators."""
         if os.name != "nt":
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             return
-        script = (
-            f"(Get-Acl -LiteralPath '{path}').Access | ForEach-Object {{ "
-            "$_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value"
-            " + '|' + $_.IsInherited + '|' + $_.FileSystemRights }"
-        )
-        out = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-Command", script],
-            capture_output=True,
-            text=True,
-            errors="replace",
-            check=True,
-        ).stdout
-        entries = [line.split("|") for line in out.splitlines() if line.strip()]
+        with tempfile.TemporaryDirectory() as tmp:
+            saved = Path(tmp) / "acl.txt"
+            subprocess.run(
+                ["icacls", str(path), "/save", str(saved)], capture_output=True, check=True
+            )
+            sddl = saved.read_bytes().decode("utf-16-le").splitlines()[1]
+        self.assertTrue(sddl.startswith("D:P"), sddl)
+        aces = [ace.split(";") for ace in re.findall(r"\(([^)]*)\)", sddl)]
         user_sid = env_files_module._current_user_sid()
-        self.assertTrue(entries)
-        for sid, inherited, _ in entries:
-            self.assertEqual(inherited, "False")
-            self.assertIn(sid, {user_sid, "S-1-5-18", "S-1-5-32-544"})
-        self.assertIn([user_sid, "False", "FullControl"], entries)
+        for ace_type, flags, _rights, _, _, sid in aces:
+            self.assertEqual(ace_type, "A", sddl)
+            self.assertNotIn("ID", flags, sddl)
+            self.assertIn(sid, {user_sid, "SY", "BA"}, sddl)
+        self.assertIn((user_sid, "FA"), {(a[5], a[2]) for a in aces}, sddl)
 
     def test_save_failure_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
