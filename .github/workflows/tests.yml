@@ -210,6 +210,56 @@ jobs:
         working-directory: ui
         run: python run_tests.py
 
+  windows:
+    name: Native Windows (unit tests, PowerShell scripts, run_collection smoke)
+    runs-on: windows-latest
+    # Native Windows install path: install.ps1 / wasteless.ps1 and
+    # src/run_collection.py instead of the bash scripts. Windows runners
+    # can't run Postgres service containers, so DB-backed tests skip here
+    # (the Linux jobs above cover them). PYTHONUTF8 mirrors what the
+    # PowerShell launchers set for every Python process they start.
+    env:
+      PYTHONUTF8: "1"
+      AWS_EC2_METADATA_DISABLED: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.lock
+            ui/requirements.lock
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.lock -r ui/requirements.lock
+          pip install -e .
+      # Windows PowerShell 5.1 (`shell: powershell`), the version every
+      # Windows machine ships with — not pwsh 7.
+      - name: Parse PowerShell scripts
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($f in 'install.ps1', 'wasteless.ps1', 'uninstall.ps1') {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$null, [ref]$errors) | Out-Null
+            foreach ($e in $errors) { Write-Host "$f`:$($e.Extent.StartLineNumber): $($e.Message)"; $failed = $true }
+            if (Select-String -Path $f -Pattern '[^\x00-\x7F]' -Quiet) { Write-Host "$f contains non-ASCII characters (garbled by PowerShell 5.1)"; $failed = $true }
+          }
+          if ($failed) { exit 1 }
+      - name: Backend unit tests
+        run: pytest -q tests/unit
+      - name: UI tests
+        working-directory: ui
+        run: python run_tests.py
+      - name: Smoke test (run_collection.py, no AWS creds, no DB, no steampipe)
+        shell: powershell
+        run: |
+          python src/run_collection.py --log collect.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-Content collect.log
+          if (-not (Select-String -Path collect.log -Pattern 'steampipe CLI not found' -Quiet)) { exit 1 }
+
   smoke-collect:
     name: Smoke test (wasteless.sh collect, no AWS creds, no steampipe)
     runs-on: ubuntu-latest
