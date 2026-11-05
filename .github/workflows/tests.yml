@@ -72,7 +72,9 @@ jobs:
 
   backend:
     name: Backend (pytest)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which no longer ships
+    # postgresql-client-16 (the client must match the postgres:16 service).
+    runs-on: ubuntu-24.04
     # Real Postgres so tests/integration/ (test_ui_coherence.py,
     # test_db_backup_restore.py) actually run instead of skipping —
     # without this, "CI green" only proves the unit tests pass.
@@ -154,7 +156,9 @@ jobs:
 
   ui:
     name: UI (unittest)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which no longer ships
+    # postgresql-client-16 (the client must match the postgres:16 service).
+    runs-on: ubuntu-24.04
     # Same reasoning as the backend job: several ui/tests/*.py need a real
     # Postgres (test_action_status_guards.py, test_page_truncation_totals.py,
     # test_sync_ec2_states.py) and otherwise just skip in CI.
@@ -212,7 +216,9 @@ jobs:
 
   smoke-collect:
     name: Smoke test (wasteless.sh collect, no AWS creds, no steampipe)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which no longer ships
+    # postgresql-client-16 (the client must match the postgres:16 service).
+    runs-on: ubuntu-24.04
     # GitHub-hosted runners don't have the steampipe CLI installed, and this
     # job deliberately doesn't set AWS_* creds -- so this exercises exactly
     # the partial-run path (steps 7-10 skipped) that used to be invisible
