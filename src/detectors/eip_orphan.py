@@ -17,7 +17,7 @@ import sys
 import json
 import logging
 from datetime import date
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 from core.database import get_db_connection, release_connection
 
 from core.pricing import stamp_pricing
+from core.region_scan import scanned_results
 
 load_dotenv()
 
@@ -43,7 +44,8 @@ from constants import AWS_SCAN_REGIONS
 REGIONS = AWS_SCAN_REGIONS
 
 
-def _fetch_unassociated_eips(region: str) -> List[Dict[str, Any]]:
+def _fetch_unassociated_eips(region: str) -> Optional[List[Dict[str, Any]]]:
+    """The region's unassociated EIPs, or None when the scan failed."""
     try:
         from core.aws_clients import get_client
 
@@ -66,7 +68,7 @@ def _fetch_unassociated_eips(region: str) -> List[Dict[str, Any]]:
         return result
     except Exception as e:
         logger.warning(f"  {region}: error — {e}")
-        return []
+        return None
 
 
 class EIPOrphanDetector:
@@ -86,7 +88,8 @@ class EIPOrphanDetector:
         logger.info("Scanning for unassociated Elastic IPs across regions...")
         with ThreadPoolExecutor(max_workers=len(REGIONS)) as executor:
             results = list(executor.map(_fetch_unassociated_eips, REGIONS))
-        eips = [e for region_list in results for e in region_list]
+        scanned = scanned_results(results, REGIONS, "unassociated Elastic IPs")
+        eips = [e for region_list in scanned for e in region_list]
         logger.info(f"Total unassociated EIPs found: {len(eips)}")
         return eips
 

@@ -16,7 +16,7 @@ import sys
 import json
 import logging
 from datetime import date, datetime, timezone
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 from core.database import get_db_connection, release_connection
 
 from core.pricing import stamp_pricing
+from core.region_scan import scanned_results
 
 load_dotenv()
 
@@ -58,7 +59,8 @@ def _volume_monthly_cost(size_gb: int, vol_type: str) -> float:
     return round(size_gb * price, 2)
 
 
-def _fetch_orphaned_volumes(region: str) -> List[Dict[str, Any]]:
+def _fetch_orphaned_volumes(region: str) -> Optional[List[Dict[str, Any]]]:
+    """The region's orphaned volumes, or None when the scan failed."""
     try:
         from core.aws_clients import get_client
 
@@ -96,7 +98,7 @@ def _fetch_orphaned_volumes(region: str) -> List[Dict[str, Any]]:
         return result
     except Exception as e:
         logger.warning(f"  {region}: error — {e}")
-        return []
+        return None
 
 
 class EBSOrphanDetector:
@@ -116,7 +118,8 @@ class EBSOrphanDetector:
         logger.info("Scanning for orphaned EBS volumes across regions...")
         with ThreadPoolExecutor(max_workers=len(REGIONS)) as executor:
             results = list(executor.map(_fetch_orphaned_volumes, REGIONS))
-        volumes = [v for region_list in results for v in region_list]
+        scanned = scanned_results(results, REGIONS, "orphaned EBS volumes")
+        volumes = [v for region_list in scanned for v in region_list]
         logger.info(f"Total orphaned volumes found: {len(volumes)}")
         return volumes
 

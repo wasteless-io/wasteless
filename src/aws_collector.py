@@ -50,6 +50,10 @@ class AWSCostCollector:
             SystemExit: Si des variables d'environnement sont manquantes
                        ou si la connexion AWS échoue
         """
+        # Dernière erreur API ou base, lue par main() : un DataFrame vide ne
+        # distingue pas "aucun coût sur la période" de "collecte en échec".
+        self.collection_error = None
+
         # Charger les variables d'environnement depuis .env
         load_dotenv()
 
@@ -158,6 +162,7 @@ class AWSCostCollector:
 
         except Exception as e:
             print(f"❌ Erreur lors de la collecte des coûts: {e}")
+            self.collection_error = e
             return pd.DataFrame()
 
     def _display_collection_stats(self, df):
@@ -253,6 +258,7 @@ class AWSCostCollector:
         except Exception as e:
             print(f"❌ Erreur lors de la sauvegarde PostgreSQL: {e}")
             print("💡 Vérifiez la configuration de la base de données")
+            self.collection_error = e
 
     def export_to_csv(self, df):
         """
@@ -402,6 +408,10 @@ def main():
         days = refresh_days if cost_history_days() >= backfill_days else backfill_days
         collector = AWSCostCollector()
         collector.run(days=days, save_to_db=True, export_csv=not daily)
+        # Code non nul : le pipeline `collect` annonce alors l'échec au lieu de
+        # "[OK] Done" (l'étape reste hors de failed_steps, voir wasteless.sh).
+        if collector.collection_error:
+            sys.exit(1)
     except KeyboardInterrupt:
         print("\n⚠️  Collecte interrompue par l'utilisateur")
     except Exception as e:

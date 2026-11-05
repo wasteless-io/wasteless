@@ -17,7 +17,7 @@ import sys
 import json
 import logging
 from datetime import date, datetime, timezone
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 from core.database import get_db_connection, release_connection
 
 from core.pricing import stamp_pricing
+from core.region_scan import scanned_results
 
 load_dotenv()
 
@@ -59,7 +60,8 @@ def _fetch_ami_snapshot_ids(ec2_client) -> set:
     return ami_snap_ids
 
 
-def _fetch_old_snapshots(region: str) -> tuple:
+def _fetch_old_snapshots(region: str) -> Optional[tuple]:
+    """(old snapshots, AMI-backed snapshot ids), or None when the scan failed."""
     try:
         from core.aws_clients import get_client
 
@@ -120,7 +122,7 @@ def _fetch_old_snapshots(region: str) -> tuple:
         return result, ami_snap_ids
     except Exception as e:
         logger.warning(f"  {region}: error — {e}")
-        return [], set()
+        return None
 
 
 class SnapshotOrphanDetector:
@@ -140,8 +142,9 @@ class SnapshotOrphanDetector:
         logger.info(f"Scanning for old EBS snapshots (>{SNAPSHOT_AGE_DAYS} days) across regions...")
         with ThreadPoolExecutor(max_workers=len(REGIONS)) as executor:
             results = list(executor.map(_fetch_old_snapshots, REGIONS))
-        snapshots = [s for snaps, _ in results for s in snaps]
-        all_ami_snap_ids = set().union(*[ids for _, ids in results])
+        scanned = scanned_results(results, REGIONS, "old EBS snapshots")
+        snapshots = [s for snaps, _ in scanned for s in snaps]
+        all_ami_snap_ids = set().union(*[ids for _, ids in scanned])
         logger.info(
             f"Total old snapshots found: {len(snapshots)} "
             f"({len(all_ami_snap_ids)} AMI-backed excluded)"

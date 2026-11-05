@@ -13,6 +13,7 @@ Nothing here talks to AWS for detection logic itself — that lives in
 | `pricing.py` | `stamp_pricing()` — attaches provenance metadata (unit price, source, as-of date) to a detection so recommendations never show a monthly saving without a traceable price behind it. |
 | `finops_invariants/` | Arithmetic/business guard-rails on every number that reaches a human: forecast math, CTO-safe wording (`validate_claim_wording`, `generate_cto_safe_summary`), realized-vs-potential savings, confidence scoring. Package, not a single file — see its own README before adding a new numeric claim anywhere in reports or the UI. |
 | `llm.py` | Provider-agnostic AI insights via `litellm` (`generate_insight`, `answer_estate_question`, `enrich_recommendations`). No-ops silently (`is_enabled()` returns `False`) when `WASTELESS_LLM_MODEL` isn't configured — never blocks the pipeline. Usage is metered via `record_usage()` → `llm_usage` table. |
+| `region_scan.py` | `scanned_results()` — tells "nothing found" from "nothing could be scanned": a boto3 detector fails when every region failed, so the run does not report zero waste. |
 | `snapshots.py` | `snapshot_active_waste()` — writes one row per resource type per day into `waste_snapshots`, the source for the dashboard's waste trend and waste-by-resource charts (see `ui/main.py:fetch_waste_by_resource`). |
 
 `config.py`'s `RemediationConfig` and `finops_invariants/`'s validators are

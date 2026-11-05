@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
+import aws_collector
 from aws_collector import AWSCostCollector
 
 
@@ -106,6 +107,51 @@ class TestGetCostsLastNDays:
         df = collector.get_costs_last_n_days(days=1)
 
         assert len(df) == 0
+        assert collector.collection_error is not None
+
+    def test_no_data_is_not_an_error(self):
+        collector = _collector_with_response({"ResultsByTime": []})
+
+        collector.get_costs_last_n_days(days=1)
+
+        assert collector.collection_error is None
+
+
+class TestMainExitCode:
+    """The `collect` pipeline reads the exit code to announce OK or a failure."""
+
+    def _run_main(self, collector):
+        with (
+            patch("aws_collector.AWSCostCollector", return_value=collector),
+            patch("aws_collector.already_collected_today", return_value=False),
+            patch("aws_collector.cost_history_days", return_value=0),
+            patch.object(sys, "argv", ["aws_collector.py", "--daily"]),
+        ):
+            aws_collector.main()
+
+    def test_failed_collection_exits_nonzero(self):
+        collector = _collector_with_response({})
+        collector.ce_client.get_cost_and_usage.side_effect = Exception("no credentials")
+
+        with pytest.raises(SystemExit) as exc:
+            self._run_main(collector)
+
+        assert exc.value.code == 1
+
+    def test_failed_save_exits_nonzero(self):
+        response = _api_response([("2026-01-01", [("EC2", "12.5", "1")])])
+        collector = _collector_with_response(response)
+
+        with (
+            patch("aws_collector.get_db_connection", side_effect=Exception("db down")),
+            pytest.raises(SystemExit) as exc,
+        ):
+            self._run_main(collector)
+
+        assert exc.value.code == 1
+
+    def test_no_data_exits_zero(self):
+        self._run_main(_collector_with_response({"ResultsByTime": []}))
 
 
 class TestInit:
