@@ -5,6 +5,7 @@
 #   wasteless             Start the web UI in background (default)
 #   wasteless stop        Stop the web UI
 #   wasteless logs        View server logs (follow)
+#   wasteless logs collect  View collection logs (follow)
 #   wasteless status      Check if server + auto-collection are running
 #   wasteless collect     Run the complete collection and detection pipeline
 #   wasteless schedule    Install auto-collection every 5 min (Task Scheduler)
@@ -14,7 +15,7 @@
 # in the ANSI code page, so any accent would be garbled.
 #
 
-param([string]$Command = "start")
+param([string]$Command = "start", [string]$Target = "")
 
 $ErrorActionPreference = "Stop"
 
@@ -23,6 +24,10 @@ $HomeDir = $env:USERPROFILE
 
 $PidFile = Join-Path $HomeDir ".wasteless.pid"
 $LogFile = Join-Path $HomeDir ".wasteless.log"
+# Separate from $LogFile, unlike wasteless.sh: the cmd.exe redirection that
+# appends the UI output keeps that file locked for writing while the UI runs,
+# so a collection run could not open it (PermissionError before step 1).
+$CollectLogFile = Join-Path $HomeDir ".wasteless-collect.log"
 $CollectorPidFile = Join-Path $HomeDir ".wasteless-collector.pid"
 $CollectLockDir = Join-Path $HomeDir ".wasteless-collect.lock.d"
 
@@ -196,7 +201,7 @@ function Start-CollectorLoop {
         Write-Warn "venv\Scripts\pythonw.exe not found - auto-collection not started (run install.cmd)"
         return
     }
-    $collectorArgs = "`"$Runner`" --log `"$LogFile`" --every $CollectIntervalSec"
+    $collectorArgs = "`"$Runner`" --log `"$CollectLogFile`" --every $CollectIntervalSec"
     $proc = Start-Process -FilePath $RootPythonW -ArgumentList $collectorArgs -WorkingDirectory $ScriptDir -PassThru
     Set-Content -Path $CollectorPidFile -Value $proc.Id -Encoding ascii
     Write-Host "  Auto-collection started (in-process, every 5 min)" -ForegroundColor Cyan
@@ -235,8 +240,9 @@ function Invoke-Stop {
 # logs / status
 # ---------------------------------------------------------------------------
 function Invoke-Logs {
-    if (Test-Path $LogFile) { Get-Content $LogFile -Tail 50 -Wait }
-    else { Write-Host "No log file found at $LogFile" }
+    $file = if ($Target -eq "collect") { $CollectLogFile } else { $LogFile }
+    if (Test-Path $file) { Get-Content $file -Tail 50 -Wait }
+    else { Write-Host "No log file found at $file" }
 }
 
 function Invoke-Status {
@@ -255,6 +261,11 @@ function Invoke-Status {
         $info = $task | Get-ScheduledTaskInfo
         Write-Host "  Active" -ForegroundColor Green -NoNewline
         Write-Host " - $TaskName (state: $($task.State), last run: $($info.LastRunTime), next: $($info.NextRunTime))"
+        # 267009 = running, 267011 = not run yet. pythonw.exe has no console,
+        # so this exit code is the only sign of a run that failed at startup.
+        if ($info.LastTaskResult -notin 0, 267009, 267011) {
+            Write-Warn "Last scheduled run failed (exit code $($info.LastTaskResult)). Run 'wasteless collect' to see the error."
+        }
     } elseif (Get-LivePid $CollectorPidFile) {
         Write-Host "  In-process loop running (stops with 'wasteless stop'; 'wasteless schedule' to persist)"
     } else {
@@ -285,7 +296,7 @@ function Invoke-Schedule {
     }
     # pythonw.exe: no console window popping up every 5 minutes.
     $action = New-ScheduledTaskAction -Execute $RootPythonW `
-        -Argument "`"$Runner`" --log `"$LogFile`"" -WorkingDirectory $ScriptDir
+        -Argument "`"$Runner`" --log `"$CollectLogFile`"" -WorkingDirectory $ScriptDir
     # Repeats every 5 min indefinitely (no -RepetitionDuration) from now on,
     # plus a run at each logon so a reboot does not wait for the next slot.
     $every = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
@@ -333,7 +344,7 @@ switch ($Command) {
         Write-Host "Commands:"
         Write-Host "  start        Start the web UI in background (default)"
         Write-Host "  stop         Stop the web UI"
-        Write-Host "  logs         View server logs (follow)"
+        Write-Host "  logs         View server logs (follow); 'logs collect' for collection logs"
         Write-Host "  status       Check if server + auto-collection are running"
         Write-Host "  collect      Run the complete collection and detection pipeline once"
         Write-Host "  schedule     Install auto-collection every 5 min (Task Scheduler, survives reboot)"

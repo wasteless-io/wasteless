@@ -74,6 +74,7 @@ if (Test-Path $wastelessPs1) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $wastelessPs1 stop
 }
 $logFile = Join-Path $env:USERPROFILE ".wasteless.log"
+Remove-Item (Join-Path $env:USERPROFILE ".wasteless-collect.log") -ErrorAction SilentlyContinue
 foreach ($f in ".wasteless.pid", ".wasteless-collector.pid") {
     Remove-Item (Join-Path $env:USERPROFILE $f) -ErrorAction SilentlyContinue
 }
