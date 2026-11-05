@@ -95,9 +95,9 @@ class TestFetchOrphanedVolumes:
         )
         assert result[0]["age_days"] == 10
 
-    def test_api_error_degrades_to_empty(self):
+    def test_api_error_marks_the_region_as_not_scanned(self):
         with patch("core.aws_clients.get_client", side_effect=Exception("no creds")):
-            assert _fetch_orphaned_volumes("eu-west-1") == []
+            assert _fetch_orphaned_volumes("eu-west-1") is None
 
 
 class TestSave:

@@ -122,11 +122,9 @@ class TestFetchOldSnapshots:
         result, _ = self._run([snap])
         assert len(result) == 1
 
-    def test_api_error_degrades_to_empty(self):
+    def test_api_error_marks_the_region_as_not_scanned(self):
         with patch("core.aws_clients.get_client", side_effect=Exception("no creds")):
-            result, ami_ids = _fetch_old_snapshots("eu-west-1")
-        assert result == []
-        assert ami_ids == set()
+            assert _fetch_old_snapshots("eu-west-1") is None
 
 
 class TestSaveConfidence:
