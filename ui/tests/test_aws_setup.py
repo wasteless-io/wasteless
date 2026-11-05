@@ -15,6 +15,9 @@ Three layers:
 boto3 is mocked throughout, no test here talks to AWS.
 """
 
+import os
+import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,6 +29,7 @@ sys.path.insert(0, str(UI_DIR))
 
 from schemas import AwsSetupRequest
 from routes import setup as setup_module
+from utils import env_files as env_files_module
 from routes.setup import _account_id, _validation_error, _write_env_files
 
 VALID_ROLE = "arn:aws:iam::123456789012:role/wasteless-readonly"
@@ -209,8 +213,39 @@ class TestEndpoints(unittest.TestCase):
             # ui/.env created from scratch with the same values
             self.assertIn(f"AWS_ROLE_ARN={VALID_ROLE}", ui_env.read_text())
             # Secrets-grade permissions on both
-            self.assertEqual(root_env.stat().st_mode & 0o777, 0o600)
-            self.assertEqual(ui_env.stat().st_mode & 0o777, 0o600)
+            for env in (root_env, ui_env):
+                self.assert_owner_only(env)
+
+    def assert_owner_only(self, path):
+        """chmod 600 on POSIX. On Windows (where chmod only toggles the
+        read-only flag): no inherited entry, full control for the current
+        user, and nobody else but SYSTEM / Administrators — an elevated
+        process (CI runner) gets those two as explicit entries on new files.
+        Read as SDDL (`icacls /save`, UTF-16): locale-independent, unlike
+        the account names icacls prints, e.g.
+        D:PAI(A;;FA;;;S-1-5-21-...)  — P: protected DACL, ID: inherited ACE,
+        FA: full access, SY / BA: SYSTEM / Administrators."""
+        if os.name != "nt":
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            saved = Path(tmp) / "acl.txt"
+            subprocess.run(
+                ["icacls", str(path), "/save", str(saved)], capture_output=True, check=True
+            )
+            sddl = saved.read_bytes().decode("utf-16-le").splitlines()[1]
+        self.assertTrue(sddl.startswith("D:P"), sddl)
+        aces = [ace.split(";") for ace in re.findall(r"\(([^)]*)\)", sddl)]
+        user_sid = env_files_module._current_user_sid()
+        # SDDL prints the built-in Administrator account (RID 500, the CI
+        # runner's user) as the LA alias instead of its SID
+        user_ids = {user_sid, "LA"} if user_sid.endswith("-500") else {user_sid}
+        for ace_type, flags, _rights, _, _, sid in aces:
+            self.assertEqual(ace_type, "A", sddl)
+            self.assertNotIn("ID", flags, sddl)
+            self.assertIn(sid, user_ids | {"SY", "BA"}, sddl)
+        user_rights = {a[2] for a in aces if a[5] in user_ids}
+        self.assertIn("FA", user_rights, sddl)
 
     def test_save_failure_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -8,12 +8,54 @@ point: the manual "mirror the root .env" convention lost users.
 """
 
 import os
+import subprocess
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent.parent  # ui/
 ROOT_DIR = APP_DIR.parent  # repo root
 
 ENV_FILES = [ROOT_DIR / ".env", APP_DIR / ".env"]
+
+
+def _current_user_sid() -> str | None:
+    """SID of the current Windows user (locale-independent, unlike names)."""
+    try:
+        out = subprocess.run(
+            ["whoami", "/user", "/fo", "csv", "/nh"],
+            capture_output=True,
+            text=True,
+            errors="replace",  # OEM code page output; the SID itself is ASCII
+            timeout=10,
+            check=True,
+        ).stdout
+        return out.strip().split(",")[-1].strip('"') or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def restrict_to_owner(path: Path) -> None:
+    """Secrets-grade permissions: chmod 600 on POSIX. On Windows, chmod
+    only toggles the read-only flag, so the equivalent is an NTFS ACL with
+    inheritance cut and a single entry for the current user — the same
+    icacls call install.ps1 makes."""
+    if os.name != "nt":
+        os.chmod(path, 0o600)
+        return
+    sid = _current_user_sid()
+    grantee = f"*{sid}" if sid else os.environ.get("USERNAME", "")
+    if not grantee:
+        return
+    try:
+        subprocess.run(
+            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{grantee}:F"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        # Never fail the save over this: the values are written, and files
+        # under the user profile inherit ACLs that already exclude other
+        # standard users.
+        pass
 
 
 def write_env_files(values: dict, files: list | None = None) -> None:
@@ -33,7 +75,7 @@ def write_env_files(values: dict, files: list | None = None) -> None:
                 out.append(line)
         out.extend(f"{k}={v}" for k, v in remaining.items())
         path.write_text("\n".join(out) + "\n")
-        os.chmod(path, 0o600)
+        restrict_to_owner(path)
 
 
 def apply_to_env(values: dict) -> None:
@@ -59,6 +101,6 @@ def clear_env_keys(keys: list, files: list | None = None) -> None:
             if (line.split("=", 1)[0] if "=" in line else None) not in keyset
         ]
         path.write_text("\n".join(out) + ("\n" if out else ""))
-        os.chmod(path, 0o600)
+        restrict_to_owner(path)
     for key in keyset:
         os.environ.pop(key, None)

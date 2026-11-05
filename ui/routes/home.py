@@ -11,6 +11,7 @@ from state import (
     DAYS_PER_MONTH,
     aws_connection_configured,
 )
+from utils.dates import strftime
 
 router = APIRouter()
 
@@ -250,9 +251,9 @@ def home(request: Request, conn=Depends(get_db), welcome: str = ""):
         start, end = mtd["period_start"], mtd["period_end"]
         aws_spend_days_elapsed = (end - _month_start).days + 1
         aws_spend_period = (
-            start.strftime("%-d")
+            strftime(start, "%-d")
             if start == end
-            else f"{start.strftime('%-d')}–{end.strftime('%-d')}"
+            else f"{strftime(start, '%-d')}–{strftime(end, '%-d')}"
         )
         total_cost_period = f"{aws_spend_period} {end.strftime('%b')} · month-to-date"
         # Projection: run-rate over the days actually collected, scaled to the

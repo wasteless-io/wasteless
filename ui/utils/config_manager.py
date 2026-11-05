@@ -11,9 +11,13 @@ import yaml
 from typing import Dict, Any, Optional
 import logging
 import threading
-import fcntl
 from contextlib import contextmanager, suppress
 import time
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +27,46 @@ _config_lock = threading.Lock()
 # Lock timeout in seconds
 _LOCK_TIMEOUT = 10.0
 
+# Windows byte-range locks are mandatory: locking real content would make
+# other processes' plain reads (the collector loading the policy) fail with
+# PermissionError instead of waiting. Lock one byte far past EOF instead —
+# Windows allows it, and only cooperating _file_lock callers ever touch it.
+_WIN_LOCK_OFFSET = 0x7FFFFFFF
+
+
+def _try_lock(file_obj, exclusive: bool) -> None:
+    """Non-blocking lock attempt; raises BlockingIOError when held elsewhere.
+    Windows has no shared mode, so readers lock exclusively there too."""
+    if os.name == "nt":
+        fd = file_obj.fileno()
+        os.lseek(fd, _WIN_LOCK_OFFSET, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError as e:
+            raise BlockingIOError(str(e)) from None
+        finally:
+            os.lseek(fd, 0, os.SEEK_SET)
+    else:
+        lock_type = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+        fcntl.flock(file_obj.fileno(), lock_type | fcntl.LOCK_NB)
+
+
+def _unlock(file_obj) -> None:
+    if os.name == "nt":
+        file_obj.flush()
+        os.lseek(file_obj.fileno(), _WIN_LOCK_OFFSET, os.SEEK_SET)
+        msvcrt.locking(file_obj.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(file_obj.fileno(), fcntl.LOCK_UN)
+
 
 @contextmanager
 def _file_lock(filepath: str, mode: str = "r", exclusive: bool = False):
     """
     Context manager for file operations with file locking.
 
-    Uses fcntl for cross-process file locking (Unix/macOS).
-    Combined with threading.Lock for in-process thread safety.
+    Uses fcntl (Unix/macOS) or msvcrt (Windows) for cross-process file
+    locking. Combined with threading.Lock for in-process thread safety.
 
     Args:
         filepath: Path to the file
@@ -44,8 +80,6 @@ def _file_lock(filepath: str, mode: str = "r", exclusive: bool = False):
         TimeoutError: If lock cannot be acquired within timeout
         IOError: If file operations fail
     """
-    lock_type = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
-
     # First, acquire thread lock for in-process synchronization
     acquired = _config_lock.acquire(timeout=_LOCK_TIMEOUT)
     if not acquired:
@@ -53,14 +87,14 @@ def _file_lock(filepath: str, mode: str = "r", exclusive: bool = False):
 
     file_obj = None
     try:
-        # Open file
-        file_obj = open(filepath, mode)
+        # Open file (explicit UTF-8: Windows would default to cp1252)
+        file_obj = open(filepath, mode, encoding="utf-8")
 
         # Try to acquire file lock with timeout using non-blocking approach
         start_time = time.time()
         while True:
             try:
-                fcntl.flock(file_obj.fileno(), lock_type | fcntl.LOCK_NB)
+                _try_lock(file_obj, exclusive)
                 break  # Lock acquired successfully
             except BlockingIOError:
                 if time.time() - start_time > _LOCK_TIMEOUT:
@@ -76,7 +110,7 @@ def _file_lock(filepath: str, mode: str = "r", exclusive: bool = False):
         if file_obj is not None:
             # Ignore unlock/close errors — the lock dies with the fd anyway
             with suppress(Exception):
-                fcntl.flock(file_obj.fileno(), fcntl.LOCK_UN)
+                _unlock(file_obj)
             with suppress(Exception):
                 file_obj.close()
 

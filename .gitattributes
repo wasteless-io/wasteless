@@ -8,6 +8,12 @@
 Makefile text eol=lf
 Brewfile text eol=lf
 
+# Lanceurs Windows natifs : cmd.exe attend du CRLF (en LF, les sauts et
+# etiquettes de batch se comportent mal). Les .ps1 en CRLF aussi, la
+# convention Windows (PowerShell accepte les deux).
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
 # Binaires : jamais de conversion.
 *.png binary
 *.jpg binary

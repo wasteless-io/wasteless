@@ -19,6 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from utils.dates import strftime
+
 try:
     import psycopg2
     from psycopg2.extras import RealDictCursor
@@ -336,7 +338,7 @@ class TestDashboardCoherence(unittest.TestCase):
         body = self._page_body()
         self.assertIn("Upcoming", body)
         self.assertIn("i-coherence-upcoming", body)
-        self.assertIn(execute_after.strftime("%b %-d, %H:%M"), body)
+        self.assertIn(strftime(execute_after, "%b %-d, %H:%M"), body)
         # The veto window must link back to the cancellable list
         self.assertIn("Cancel window open", body)
 
@@ -384,9 +386,9 @@ class TestDashboardCoherence(unittest.TestCase):
         # Sub-label = route's total_cost_period: "<day span> <mon> · month-to-date"
         # (single day number when first == last).
         if row["f"] == row["l"]:
-            day_span = row["f"].strftime("%-d")
+            day_span = strftime(row["f"], "%-d")
         else:
-            day_span = f"{row['f'].strftime('%-d')}–{row['l'].strftime('%-d')}"
+            day_span = f"{strftime(row['f'], '%-d')}–{strftime(row['l'], '%-d')}"
         period = f"{day_span} {row['l'].strftime('%b')} · month-to-date"
 
         body = self._page_body()

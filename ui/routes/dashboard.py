@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from schemas import AskQuestionRequest
 from state import get_db, templates, CLOUD_REGIONS, DAYS_PER_MONTH, TREND_RANGES
+from utils.dates import strftime
 
 router = APIRouter()
 
@@ -138,9 +139,9 @@ def fetch_waste_trend(cursor, trend: str):
                 subtitle = f"{label} · {forecast_part}"
         elif first > expected_start + timedelta(days=1):
             if first.year == last.year:
-                label = f"{first.strftime('%-d %b')} – {last.strftime('%-d %b %Y')}"
+                label = f"{strftime(first, '%-d %b')} – {strftime(last, '%-d %b %Y')}"
             else:
-                label = f"{first.strftime('%-d %b %Y')} – {last.strftime('%-d %b %Y')}"
+                label = f"{strftime(first, '%-d %b %Y')} – {strftime(last, '%-d %b %Y')}"
             subtitle = f"{label} · {forecast_part}"
 
     # Honesty rule twin: snapshots older than the first detection ever
@@ -208,7 +209,7 @@ def fetch_cost_series(cursor, range_key: str):
                 b.strftime("%b") + ("*" if days_by_bucket.get(b, 0) < days_in_month else "")
             )
         else:
-            labels.append(b.strftime("%-d %b"))
+            labels.append(strftime(b, "%-d %b"))
 
     series = [
         {"name": name, "data": [round(cells.get((b, name), 0.0), 2) for b in buckets]}
@@ -229,9 +230,9 @@ def fetch_cost_series(cursor, range_key: str):
             else:
                 span = f"{first.strftime('%b %Y')} – {last.strftime('%b %Y')}"
         elif first == last:
-            span = first.strftime("%-d %b")
+            span = strftime(first, "%-d %b")
         else:
-            span = f"{first.strftime('%-d %b')} – {last.strftime('%-d %b %Y')}"
+            span = f"{strftime(first, '%-d %b')} – {strftime(last, '%-d %b %Y')}"
         subtitle = f"{span} · by service · {unit}"
         if "*" in "".join(labels):
             subtitle += " · * partial month"
@@ -457,9 +458,9 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d", costra
         start, end = mtd["period_start"], mtd["period_end"]
         aws_spend_days_elapsed = (end - _month_start).days + 1
         aws_spend_period = (
-            start.strftime("%-d")
+            strftime(start, "%-d")
             if start == end
-            else f"{start.strftime('%-d')}–{end.strftime('%-d')}"
+            else f"{strftime(start, '%-d')}–{strftime(end, '%-d')}"
         )
         total_cost_period = f"{aws_spend_period} {end.strftime('%b')} · month-to-date"
         # Projection: run-rate over the days collected, scaled to the month.
@@ -742,16 +743,16 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d", costra
                     "resource_id": r["resource_id"],
                     "label": _short_resource_label(r["resource_id"]),
                     "action": r["action_type"].replace("_", " "),
-                    "date": r["action_date"].strftime("%b %-d"),
+                    "date": strftime(r["action_date"], "%b %-d"),
                     "monthly_rate": float(r["monthly_rate"]),
                     "accrued": accrued,
                     "pct": accrued / saved_total_f * 100,
                     "still_counting": r["still_counting"],
                     "lifetime_days": round(float(r["lifetime_days"] or 0)),
-                    "cap_until": r["cap_end"].strftime("%b %-d, %H:%M"),
+                    "cap_until": strftime(r["cap_end"], "%b %-d, %H:%M"),
                     "stop_reason": stop_reason,
                     "stopped_on": (
-                        None if r["still_counting"] else r["accrual_end"].strftime("%b %-d")
+                        None if r["still_counting"] else strftime(r["accrual_end"], "%b %-d")
                     ),
                 }
             )
@@ -816,9 +817,9 @@ def dashboard(request: Request, conn=Depends(get_db), trend: str = "30d", costra
         # than the window (honesty rule shared with the Total Cost tile)
         first, last = llm_row["first_call"], llm_row["last_call"]
         ai_period = (
-            first.strftime("%-d %b")
+            strftime(first, "%-d %b")
             if first == last
-            else f"{first.strftime('%-d %b')} to {last.strftime('%-d %b')}"
+            else f"{strftime(first, '%-d %b')} to {strftime(last, '%-d %b')}"
         )
         ai_usage = {
             "cost_eur": float(llm_row["cost_usd"]),
