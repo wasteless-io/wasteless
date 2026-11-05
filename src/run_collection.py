@@ -201,23 +201,47 @@ def main() -> int:
     args = parser.parse_args()
 
     while True:
-        run_once(args.log)
+        code = run_once(args.log)
         if not args.every:
-            return 0
+            return code
         time.sleep(args.every)
 
 
-def run_once(log: str | None) -> None:
+def run_once(log: str | None) -> int:
     if not acquire_lock():
-        return
+        return 0
     try:
         if log:
             with open(log, "a", encoding="utf-8") as out:
-                run_pipeline(out)
-        else:
-            run_pipeline(sys.stdout)
+                return run_if_database_ready(out)
+        return run_if_database_ready(sys.stdout)
     finally:
         release_lock()
+
+
+def database_ready() -> bool:
+    sys.path.insert(0, str(ROOT_DIR / "src"))
+    try:
+        from core.database import health_check
+
+        return health_check()
+    except Exception:
+        return False
+
+
+def run_if_database_ready(out) -> int:
+    """Nonzero without a database (typically Docker not started after a reboot):
+    every step would fail for that one reason and the run could not be recorded.
+    The exit code is what `wasteless status` reports for the scheduled task."""
+    if not database_ready():
+        print(
+            f"[ERROR] {datetime.now():%Y-%m-%d %H:%M:%S} Database unreachable, collection "
+            "skipped. Start it with `wasteless` (Docker Desktop must be able to run).",
+            file=out,
+            flush=True,
+        )
+        return 1
+    return run_pipeline(out)
 
 
 if __name__ == "__main__":
