@@ -93,6 +93,8 @@ class TestStartBackgroundCollectionWindows(unittest.TestCase):
             runner = Path(tmp) / "src" / "run_collection.py"
             self.assertEqual(cmd[:2], [str(python), str(runner)])
             self.assertEqual(cmd[2], "--log")
+            # The UI holds ~/.wasteless.log locked for writing on Windows
+            self.assertEqual(Path(cmd[3]).name, ".wasteless-collect.log")
             self.assertIn("creationflags", popen.call_args.kwargs)
             self.assertNotIn("start_new_session", popen.call_args.kwargs)
 

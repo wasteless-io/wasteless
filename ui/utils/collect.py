@@ -34,7 +34,9 @@ def _windows_command(root: Path) -> list | None:
     python = next((p for p in candidates if p.exists()), None)
     if python is None or not runner.exists():
         return None
-    log_file = Path.home() / ".wasteless.log"
+    # Not ~/.wasteless.log: on Windows, the UI's cmd.exe redirection keeps that
+    # file locked for writing while this process runs (see wasteless.ps1).
+    log_file = Path.home() / ".wasteless-collect.log"
     return [str(python), str(runner), "--log", str(log_file)]
 
 
