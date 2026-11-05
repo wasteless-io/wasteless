@@ -78,7 +78,9 @@ install.cmd
 ```
 
 `install.cmd -InstallSystemDeps` also installs a missing Python or Docker
-Desktop through `winget`.
+Desktop through `winget`. If Docker does not start, `install.cmd --doctor`
+explains what is blocking it (BIOS virtualization, WSL components, a pending
+restart) and which command to run, without changing anything.
 
 The installer creates both Python environments, starts PostgreSQL, configures
 the local CLI, offers to install scheduled collection, and starts the web UI.

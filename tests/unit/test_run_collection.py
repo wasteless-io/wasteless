@@ -103,3 +103,28 @@ class TestPipeline:
         ):
             assert run_collection.run_pipeline(out) == 0
         assert "could not record collection_runs status" in out.getvalue()
+
+
+class TestDatabaseCheck:
+    def test_unreachable_database_skips_the_steps_and_exits_nonzero(self):
+        out = io.StringIO()
+        with (
+            patch.object(run_collection, "database_ready", return_value=False),
+            patch.object(run_collection, "run_pipeline") as pipeline,
+        ):
+            assert run_collection.run_if_database_ready(out) == 1
+        pipeline.assert_not_called()
+        assert "Database unreachable" in out.getvalue()
+
+    def test_reachable_database_runs_the_pipeline(self):
+        out = io.StringIO()
+        with (
+            patch.object(run_collection, "database_ready", return_value=True),
+            patch.object(run_collection, "run_pipeline", return_value=0) as pipeline,
+        ):
+            assert run_collection.run_if_database_ready(out) == 0
+        pipeline.assert_called_once_with(out)
+
+    def test_database_error_counts_as_not_ready(self):
+        with patch("core.database.health_check", side_effect=RuntimeError("no config")):
+            assert run_collection.database_ready() is False

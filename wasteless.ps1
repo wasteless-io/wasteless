@@ -104,6 +104,58 @@ function Test-ScheduledTaskInstalled {
     return $null -ne (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)
 }
 
+# Redirection inside cmd: see Stop-Tree.
+function Test-NativeCommand([string]$CommandLine) {
+    & cmd.exe /c "$CommandLine >nul 2>&1"
+    return ($LASTEXITCODE -eq 0)
+}
+
+# After a reboot, Docker Desktop may not be running, which leaves the UI
+# without its database and every page in error. Bring both back, or stop here
+# with the reason. A database outside this machine is not ours to manage.
+function Confirm-Database([string]$UiEnv) {
+    $dbHost = Get-EnvVar "DB_HOST" $UiEnv
+    if ($dbHost -and $dbHost -notin "localhost", "127.0.0.1", "::1") { return }
+    $dbPort = Get-EnvVar "DB_PORT" $UiEnv
+    if (-not $dbPort) { $dbPort = "5432" }
+    if (Test-PortOpen ([int]$dbPort)) { return }
+
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        Write-Err "PostgreSQL does not answer on port $dbPort and Docker was not found. Run install.cmd --doctor."
+        exit 1
+    }
+    if (-not (Test-NativeCommand "docker info")) {
+        $exe = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
+        if (Test-Path $exe) {
+            Write-Host "  Starting Docker Desktop (up to 3 min)..." -ForegroundColor Yellow
+            Start-Process $exe
+        }
+        $dockerUp = $false
+        for ($i = 0; $i -lt 90 -and -not $dockerUp; $i++) {
+            $dockerUp = Test-NativeCommand "docker info"
+            if (-not $dockerUp) { Start-Sleep -Seconds 2 }
+        }
+        if (-not $dockerUp) {
+            Write-Err "Docker does not answer. Open Docker Desktop to see why, or run install.cmd --doctor."
+            exit 1
+        }
+    }
+    Write-Host "  Starting PostgreSQL..." -ForegroundColor Yellow
+    # Retried: right after Docker Desktop starts, `docker start` can fail while
+    # the engine settles or brings the container back through its restart policy.
+    for ($i = 0; $i -lt 30; $i++) {
+        if (Test-NativeCommand "docker exec wasteless-postgres pg_isready") { return }
+        $null = Test-NativeCommand "docker start wasteless-postgres"
+        Start-Sleep -Seconds 2
+    }
+    if (-not (Test-NativeCommand "docker inspect wasteless-postgres")) {
+        Write-Err "The wasteless-postgres container does not exist. Run install.cmd to recreate it."
+        exit 1
+    }
+    Write-Err "PostgreSQL did not become ready. See: docker logs wasteless-postgres"
+    exit 1
+}
+
 # ---------------------------------------------------------------------------
 # start
 # ---------------------------------------------------------------------------
@@ -138,6 +190,7 @@ function Invoke-Start {
         exit 1
     }
 
+    Confirm-Database $uiEnv
     Start-CollectorLoop
 
     Write-Host ""

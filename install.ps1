@@ -63,6 +63,8 @@ $env:PYTHONUTF8 = "1"
 $VenvPython = Join-Path $Root "venv\Scripts\python.exe"
 $UiVenvPython = Join-Path $Root "ui\venv\Scripts\python.exe"
 
+. (Join-Path $Root "scripts\windows_diagnostics.ps1")
+
 # =============================================================================
 # FONCTIONS UTILITAIRES
 # =============================================================================
@@ -216,7 +218,7 @@ function Test-DockerUp {
 function Start-DockerDesktop {
     $exe = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
     if (-not (Test-Path $exe)) { return $false }
-    Write-Info "Demarrage de Docker Desktop (jusqu'a 3 min au premier lancement)..."
+    Write-Info "Demarrage de Docker Desktop (jusqu'a 3 min). Au premier lancement, acceptez sa licence dans sa fenetre."
     Start-Process $exe | Out-Null
     for ($i = 0; $i -lt 90; $i++) {
         if (Test-DockerUp) { return $true }
@@ -225,8 +227,21 @@ function Start-DockerDesktop {
     return $false
 }
 
+# Explique ce qui empeche Docker Desktop de tourner ; $true si un probleme
+# est identifie. Ne modifie rien : la correction reste a l'utilisateur.
+function Show-VirtualizationIssue {
+    $issue = Get-VirtualizationIssue (Get-VirtualizationState)
+    if (-not $issue) { return $false }
+    Write-Err $issue.Message
+    Write-Info "A faire : $($issue.Fix)"
+    return $true
+}
+
 function Initialize-Docker {
     if (-not (Test-Command docker)) {
+        # Non bloquant : Docker Desktop peut s'installer, il ne demarrera
+        # simplement qu'une fois ce probleme regle.
+        Show-VirtualizationIssue | Out-Null
         if (-not (Confirm-SystemChange "Docker est absent. Le script peut installer Docker Desktop via winget (droits administrateur demandes).")) {
             Write-Err "Docker requis. Installez Docker Desktop (https://www.docker.com/products/docker-desktop/) puis relancez."
             return $false
@@ -246,6 +261,9 @@ function Initialize-Docker {
         }
     }
     if (-not (Test-DockerUp)) {
+        # Cause connue : inutile d'attendre 3 minutes un moteur qui ne peut
+        # pas demarrer.
+        if (Show-VirtualizationIssue) { return $false }
         if (-not (Start-DockerDesktop)) {
             Write-Err "Docker installe mais non demarre."
             Write-Info "Lancez Docker Desktop, attendez 'Engine running', puis relancez install.cmd"
@@ -412,9 +430,10 @@ if ($Doctor) {
         if ($LASTEXITCODE -eq 0) { Write-Step "Docker Compose detecte" }
         else { Write-Warn "Docker Compose introuvable"; $MissingDeps = $true }
     } elseif (Test-Command docker) {
-        Write-Warn "Docker installe mais non demarre (lancez Docker Desktop)"
+        if (-not (Show-VirtualizationIssue)) { Write-Warn "Docker installe mais non demarre (lancez Docker Desktop)" }
         $MissingDeps = $true
     } else {
+        Show-VirtualizationIssue | Out-Null
         Write-Warn "Docker absent (relancez avec -InstallSystemDeps pour installer Docker Desktop)"
         $MissingDeps = $true
     }
